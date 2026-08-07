@@ -1,0 +1,47 @@
+# Local infrastructure for Atlas.
+#
+# Phase 0 runs the backend directly under uv (fast reloads, native debugging) and
+# containerizes only its dependencies. The `backend` service — using
+# backend/Dockerfile, which already exists — is added in a later phase.
+#
+# Credentials here are local-development defaults and match .env.example. They are
+# not secrets and are not intended to leave your machine.
+
+services:
+  postgres:
+    image: pgvector/pgvector:pg16
+    container_name: atlas-postgres
+    environment:
+      POSTGRES_USER: atlas
+      POSTGRES_PASSWORD: atlas
+      POSTGRES_DB: atlas
+    ports:
+      - "5432:5432"
+    volumes:
+      # Named volume, not a bind mount: a bind-mounted PGDATA hits permission
+      # failures on Windows hosts.
+      - postgres_data:/var/lib/postgresql/data
+      # Relative path with forward slashes — resolves correctly under Docker
+      # Desktop's WSL 2 backend on Windows. Scripts here run once, on first
+      # initialization of the volume above.
+      - ./docker/init-db:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U atlas -d atlas"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
+
+  redis:
+    image: redis:7-alpine
+    container_name: atlas-redis
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+volumes:
+  postgres_data:

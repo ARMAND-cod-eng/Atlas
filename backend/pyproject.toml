@@ -1,0 +1,72 @@
+[project]
+name = "atlas-backend"
+version = "0.1.0"
+description = "Atlas — production multi-agent research platform (backend)"
+requires-python = ">=3.12,<3.13"
+dependencies = [
+    "fastapi>=0.115",
+    "uvicorn[standard]>=0.32",
+    "pydantic>=2.9",
+    "pydantic-settings>=2.6",
+    "langgraph>=0.2.45",
+    "langchain-core>=0.3.15",
+    "langchain-anthropic>=0.3",
+    "langchain-openai>=0.2",
+    "langgraph-checkpoint-postgres>=2.0",
+    "psycopg[binary,pool]>=3.2",
+    "sqlalchemy>=2.0",
+    "redis>=5.2",
+    "python-dotenv>=1.0",
+]
+
+[dependency-groups]
+dev = [
+    "pytest>=8.3",
+    "pytest-asyncio>=0.24",
+    # Linters are pinned exactly: a new rule in a point release must not turn a
+    # green CI run red without an explicit, reviewed bump.
+    "ruff==0.14.4",
+    "mypy==1.19.1",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["atlas"]
+
+# --- Lint ----------------------------------------------------------------------
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B", "ANN", "RUF", "ASYNC"]
+
+[tool.ruff.lint.per-file-ignores]
+# Fixtures and monkeypatch shims read better without full return annotations.
+"tests/*" = ["ANN401"]
+
+# --- Types ---------------------------------------------------------------------
+
+[tool.mypy]
+strict = true
+python_version = "3.12"
+files = ["atlas"]
+# Without this plugin mypy has no idea BaseSettings populates itself from the
+# environment, and reports every required field as a missing __init__ argument.
+plugins = ["pydantic.mypy"]
+
+# Narrowly scoped: these two packages ship incomplete type information. This is
+# not a blanket relaxation — everything else is checked under --strict.
+[[tool.mypy.overrides]]
+module = ["langchain_anthropic.*", "langchain_openai.*"]
+ignore_missing_imports = true
+
+# --- Tests ---------------------------------------------------------------------
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests"]
