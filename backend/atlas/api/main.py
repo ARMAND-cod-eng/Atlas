@@ -7,6 +7,7 @@ request, which is the kind of thing that looks fine until it is under load.
 
 from __future__ import annotations
 
+import asyncio
 import json
 import logging
 from collections.abc import AsyncIterator
@@ -22,6 +23,34 @@ from atlas.api.routes import router
 from atlas.config import get_settings
 from atlas.db.session import dispose_engine
 from atlas.graph.builder import build_graph
+
+
+def loop_factory() -> asyncio.AbstractEventLoop:
+    """Build a SelectorEventLoop. Referenced by import path, for Windows only.
+
+    psycopg's async driver refuses to run on ProactorEventLoop::
+
+        InterfaceError: Psycopg cannot use the 'ProactorEventLoop' to run in
+        async mode.
+
+    and uvicorn picks exactly that loop on Windows for any run without
+    subprocesses (``uvicorn/loops/asyncio.py``: ``win32 and not use_subprocess ->
+    ProactorEventLoop``). The checkpointer pool then never opens a connection and
+    the failure surfaces as ``PoolTimeout: pool initialization incomplete after
+    30.0 sec`` — which points at the database rather than at the event loop, and
+    costs an afternoon to track down.
+
+    Setting the event loop *policy* does not help: uvicorn 0.36+ passes an
+    explicit ``loop_factory`` to ``asyncio.run``, bypassing the policy entirely.
+    The supported override is ``--loop <module>:<attr>``, which is what
+    ``atlas/__main__.py`` wires up. It also explains why ``--reload`` appeared to
+    work: the reloader uses subprocesses, so uvicorn already chose Selector there.
+
+    Not used off Windows — see ``atlas/__main__.py``, which keeps ``loop="auto"``
+    there so uvloop is still picked up in the container.
+    """
+    return asyncio.SelectorEventLoop()
+
 
 # Attributes the stdlib puts on every LogRecord. Anything outside this set was
 # passed by the caller via `extra=` and belongs in the structured output.

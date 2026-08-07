@@ -89,10 +89,24 @@ uv sync
 **4. Run the API.**
 
 ```powershell
-uv run uvicorn atlas.api.main:app --reload --port 8000
+uv run python -m atlas --reload
 ```
 
 Interactive docs at <http://localhost:8000/docs>.
+
+> **Do not launch with bare `uvicorn atlas.api.main:app` on Windows.** It starts,
+> then fails after 30 seconds with `PoolTimeout: pool initialization incomplete`.
+> uvicorn selects `ProactorEventLoop` on Windows for runs without subprocesses, and
+> psycopg's async driver cannot use it — so the checkpointer pool never opens. The
+> error names the database, but the database is fine. `python -m atlas` passes the
+> right loop factory for you. If you want raw uvicorn, pass it yourself:
+>
+> ```powershell
+> uv run uvicorn atlas.api.main:app --loop atlas.api.main:loop_factory
+> ```
+>
+> Confusingly, bare `uvicorn ... --reload` *does* work — the reloader uses
+> subprocesses, for which uvicorn already picks a Selector loop. Don't rely on it.
 
 ## Verifying it works
 
@@ -119,7 +133,7 @@ the primary provider and check that an answer still comes back via GPT-4o.
 
 ```powershell
 $env:ANTHROPIC_API_KEY = "sk-ant-deliberately-invalid"
-uv run uvicorn atlas.api.main:app --port 8000
+uv run python -m atlas
 ```
 
 Then from a second terminal:

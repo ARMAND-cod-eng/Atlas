@@ -41,4 +41,6 @@ ENV PATH="/app/.venv/bin:$PATH" \
 USER atlas
 EXPOSE 8000
 
-CMD ["uvicorn", "atlas.api.main:app", "--host", "0.0.0.0", "--port", "8000"]
+# Via the module entrypoint so loop selection stays in one place. On Linux this
+# resolves to loop="auto", so uvloop is used.
+CMD ["python", "-m", "atlas", "--host", "0.0.0.0", "--port", "8000"]
