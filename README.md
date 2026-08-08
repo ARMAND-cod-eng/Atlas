@@ -76,8 +76,13 @@ Confirm both services are healthy and that pgvector was enabled by the init scri
 
 ```powershell
 docker compose ps
-docker compose exec postgres psql -U atlas -d atlas -c "\dx vector"
+docker compose exec -T postgres psql -U atlas -d atlas -c "\dx vector"
 ```
+
+> Keep the `-T`. Without it, `docker compose exec` allocates a TTY and psql pipes
+> its output through `less` inside the container — leaving your terminal stuck at
+> `(END)` with every subsequent keystroke going to the pager instead of the shell.
+> `-T` prints straight to stdout.
 
 **3. Install dependencies.**
 
