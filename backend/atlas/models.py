@@ -26,8 +26,20 @@ PRIMARY_TIMEOUT_SECONDS = 60.0
 FALLBACK_MAX_RETRIES = 2
 
 
-def get_llm(temperature: float = 0.0) -> Runnable[LanguageModelInput, BaseMessage]:
+def get_llm(temperature: float | None = None) -> Runnable[LanguageModelInput, BaseMessage]:
     """Return the primary model with the fallback model attached behind it.
+
+    ``temperature`` defaults to ``None``, meaning *do not send the field at all*.
+    This is not cosmetic. Current Claude models reject an explicit temperature::
+
+        400 invalid_request_error: `temperature` is deprecated for this model.
+
+    An earlier default of ``0.0`` therefore made **every** primary call fail — and
+    the failure was invisible, because the fallback answered and returned a
+    perfectly good response from GPT-4o. A fallback that always fires looks
+    exactly like a system that works. Only pass a value if the configured primary
+    is an older model that still accepts one; both providers omit the field when
+    it is ``None``.
 
     ``max_retries=0`` on the primary is load-bearing, not a stylistic choice.
 

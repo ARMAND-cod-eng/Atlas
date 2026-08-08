@@ -92,6 +92,23 @@ def test_configured_models_are_used(captured_kwargs: dict[str, dict[str, Any]]) 
 def test_temperature_reaches_both_providers(
     captured_kwargs: dict[str, dict[str, Any]],
 ) -> None:
+    """An explicitly requested temperature must still be forwarded."""
     get_llm(temperature=0.7)
     assert captured_kwargs["primary"]["temperature"] == 0.7
     assert captured_kwargs["fallback"]["temperature"] == 0.7
+
+
+def test_default_sends_no_explicit_temperature(
+    captured_kwargs: dict[str, dict[str, Any]],
+) -> None:
+    """Regression: an explicit temperature 400s on current Claude models.
+
+    ``400 invalid_request_error: `temperature` is deprecated for this model.``
+
+    The previous default of 0.0 made every primary call fail, and the fallback
+    masked it completely — GPT-4o answered and the response looked correct. If
+    this assertion ever fails, the primary is silently dead again.
+    """
+    get_llm()
+    assert captured_kwargs["primary"]["temperature"] is None
+    assert captured_kwargs["fallback"]["temperature"] is None
