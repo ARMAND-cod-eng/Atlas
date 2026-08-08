@@ -53,7 +53,17 @@ class Settings(BaseSettings):
 
     # Runtime.
     log_level: str = "INFO"
+
+    # Token budget for one query. Measured and warned on in Phase 1; enforced in
+    # Phase 2, where the critic loop can re-run the fan-out and turn a bounded
+    # cost into an unbounded one. Phase 1 spend is already bounded structurally by
+    # max_subtasks x max_tool_calls_per_researcher.
     max_tokens_per_query: int = 100_000
+
+    # Research graph.
+    max_subtasks: int = 5
+    max_tool_calls_per_researcher: int = 3
+    search_results_per_query: int = 5
 
     @property
     def sqlalchemy_url(self) -> str:

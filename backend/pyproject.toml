@@ -13,6 +13,7 @@ dependencies = [
     "langchain-anthropic>=0.3",
     "langchain-openai>=0.2",
     "langgraph-checkpoint-postgres>=2.0",
+    "langchain-tavily>=0.2",
     "psycopg[binary,pool]>=3.2",
     "sqlalchemy>=2.0",
     "redis>=5.2",

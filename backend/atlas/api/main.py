@@ -15,13 +15,15 @@ from contextlib import asynccontextmanager
 from datetime import UTC, datetime
 from typing import Any
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 from redis.asyncio import Redis
 
 from atlas.api.routes import router
 from atlas.config import get_settings
 from atlas.db.session import dispose_engine
+from atlas.errors import ProviderError, SearchError
 from atlas.graph.builder import build_graph
 
 
@@ -144,6 +146,76 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         log.info("shutdown complete")
 
 
+# Starlette types every handler as Callable[[Request, Exception], Response], so
+# these take Exception and narrow with isinstance. That is what keeps the module
+# free of `type: ignore` — a cast would silence the checker without proving
+# anything, whereas the isinstance is a real guarantee at runtime.
+
+
+async def provider_error_handler(request: Request, exc: Exception) -> JSONResponse:
+    """502, naming the provider and the node that was running.
+
+    A provider being down is an upstream failure, not a bug in Atlas — 502 is the
+    honest status. The body is what matters: Phase 0's bare 500 with an empty body
+    turned every one-step diagnosis into a ten-step one.
+    """
+    if not isinstance(exc, ProviderError):
+        return await unhandled_error_handler(request, exc)
+    logging.getLogger(__name__).error(
+        "provider error",
+        extra={"provider": exc.provider, "node": exc.node, "detail": str(exc)},
+    )
+    return JSONResponse(
+        status_code=502,
+        content={
+            "error": "provider_error",
+            "provider": exc.provider,
+            "node": exc.node,
+            "detail": str(exc),
+        },
+    )
+
+
+async def search_error_handler(request: Request, exc: Exception) -> JSONResponse:
+    """502 for a search backend failure.
+
+    Reached only when a search fails outside a researcher — inside one it is
+    caught and recorded on the ResearchResult, because a single failed branch
+    must never fail the run.
+    """
+    if not isinstance(exc, SearchError):
+        return await unhandled_error_handler(request, exc)
+    logging.getLogger(__name__).error(
+        "search error", extra={"query": exc.query, "detail": str(exc)}
+    )
+    return JSONResponse(
+        status_code=502,
+        content={
+            "error": "search_error",
+            "provider": "tavily",
+            "detail": str(exc),
+            "query": exc.query,
+        },
+    )
+
+
+async def unhandled_error_handler(request: Request, exc: Exception) -> JSONResponse:
+    """500, but with a body and a logged traceback.
+
+    An unhandled exception is a bug rather than a known failure mode, so the
+    response says so plainly instead of leaking internals to the client. The
+    traceback goes to the log, where it belongs.
+    """
+    logging.getLogger(__name__).exception("unhandled error serving %s", request.url.path)
+    return JSONResponse(
+        status_code=500,
+        content={
+            "error": "internal_error",
+            "detail": f"{type(exc).__name__} — see server logs",
+        },
+    )
+
+
 def create_app() -> FastAPI:
     """Build the application."""
     app = FastAPI(
@@ -152,6 +224,9 @@ def create_app() -> FastAPI:
         version="0.1.0",
         lifespan=lifespan,
     )
+    app.add_exception_handler(ProviderError, provider_error_handler)
+    app.add_exception_handler(SearchError, search_error_handler)
+    app.add_exception_handler(Exception, unhandled_error_handler)
     app.add_middleware(
         CORSMiddleware,
         allow_origins=["http://localhost:3000"],
