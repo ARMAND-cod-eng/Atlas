@@ -7,7 +7,9 @@ a FastAPI service, with Postgres+pgvector for state and retrieval and Redis for 
 
 **This repository is currently at Phase 0 — foundations only.** The graph has a single node. The
 planner, researchers, critic, synthesizer, SSE streaming, frontend, and eval suite are not built
-yet; what exists is the verified scaffolding they will sit on.
+yet; what exists is the verified scaffolding they will sit on. See
+[`docs/PHASE-0.md`](docs/PHASE-0.md) for what was built, the defects found along the way, and how
+it was verified.
 
 ## Architecture
 
