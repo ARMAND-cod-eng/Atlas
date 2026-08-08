@@ -113,6 +113,12 @@ Interactive docs at <http://localhost:8000/docs>.
 > Confusingly, bare `uvicorn ... --reload` *does* work — the reloader uses
 > subprocesses, for which uvicorn already picks a Selector loop. Don't rely on it.
 
+> **`--reload` does not cover `.env`.** It watches the `backend` package; `.env`
+> lives at the repository root and is read once at startup, then cached. After
+> editing `.env` — adding an API key, switching `PRIMARY_MODEL` — **stop the server
+> and start it again**. A running server keeps serving with the old values, and a
+> stale key shows up as a `500` from `/query` with nothing pointing back at config.
+
 ## Verifying it works
 
 Health check — both booleans come from live probes, not constants:
