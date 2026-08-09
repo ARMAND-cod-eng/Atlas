@@ -114,19 +114,27 @@ def get_llm(temperature: float | None = None) -> Runnable[LanguageModelInput, Ba
 def get_structured_llm(
     schema: type[BaseModel],
     temperature: float | None = None,
-) -> Runnable[LanguageModelInput, dict[str, Any] | BaseModel]:
+) -> Runnable[LanguageModelInput, dict[Any, Any] | BaseModel]:
     """A fallback-backed model constrained to ``schema``.
 
     ``with_structured_output`` is applied to each model *before* composing, since
     ``RunnableWithFallbacks`` does not have the method. Calling it on the result
     of :func:`get_llm` raises ``AttributeError``.
 
-    The declared return is a union because that is what LangChain declares.
-    :func:`call_structured` narrows it at runtime.
+    ``include_raw=True`` is what keeps provider attribution working. Without it
+    the call returns only the parsed model, which carries no response metadata —
+    so metrics record the provider as "unknown" and a structured call served by
+    the fallback becomes invisible. That is precisely the blind spot this phase
+    exists to close. The cost is that the result is a dict of
+    ``{"raw", "parsed", "parsing_error"}``, unpacked by :func:`call_structured`.
+
+    The declared return keeps LangChain's own union — its signature does not
+    narrow on ``include_raw`` — so the dict shape is verified at runtime rather
+    than asserted with a cast.
     """
-    primary = _build_primary(temperature).with_structured_output(schema)
-    fallback = _build_fallback(temperature).with_structured_output(schema)
-    composed: Runnable[LanguageModelInput, dict[str, Any] | BaseModel] = primary.with_fallbacks(
+    primary = _build_primary(temperature).with_structured_output(schema, include_raw=True)
+    fallback = _build_fallback(temperature).with_structured_output(schema, include_raw=True)
+    composed: Runnable[LanguageModelInput, dict[Any, Any] | BaseModel] = primary.with_fallbacks(
         [fallback]
     )
     return composed
@@ -225,12 +233,37 @@ async def call_structured[SchemaT: BaseModel](
     """
     started = time.perf_counter()
     try:
-        raw = await get_structured_llm(schema, temperature).ainvoke(messages)
+        envelope = await get_structured_llm(schema, temperature).ainvoke(messages)
     except Exception as exc:
         raise ProviderError(
             provider=_provider_for(get_settings().fallback_model),
             message=f"all providers failed: {type(exc).__name__}: {exc}",
             node=node,
         ) from exc
-    _record(metrics, node, raw, time.perf_counter() - started)
-    return schema.model_validate(raw if isinstance(raw, dict) else raw.model_dump())
+
+    # include_raw=True gives {"raw", "parsed", "parsing_error"}. Verified rather
+    # than assumed, so a LangChain behaviour change surfaces here instead of as an
+    # AttributeError three frames deeper.
+    if not isinstance(envelope, Mapping):
+        raise ProviderError(
+            provider=_provider_for(get_settings().primary_model),
+            message=f"expected a structured-output envelope, got {type(envelope).__name__}",
+            node=node,
+        )
+
+    # The raw message carries model name and token usage; metrics read it so a
+    # structured call served by the fallback is still attributed correctly.
+    _record(metrics, node, envelope.get("raw"), time.perf_counter() - started)
+
+    parsing_error = envelope.get("parsing_error")
+    parsed = envelope.get("parsed")
+    if parsing_error is not None or parsed is None:
+        # The model answered but not in the requested shape. Surfacing this as a
+        # ProviderError lets the caller decide — the planner, for instance,
+        # degrades to a single subtask rather than failing the run.
+        raise ProviderError(
+            provider=_provider_for(get_settings().primary_model),
+            message=f"structured output did not parse: {parsing_error}",
+            node=node,
+        )
+    return schema.model_validate(parsed)

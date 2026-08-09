@@ -100,6 +100,33 @@ async def test_degradation_is_visible_in_metrics(
     assert DEGRADED_PLANNER_FALLBACK in result["run_metrics"].degraded
 
 
+def test_json_encoded_subtask_list_is_accepted() -> None:
+    """Observed live: the provider returns the nested list as a JSON string.
+
+    Rejecting it would collapse a perfectly good multi-subtask plan into the
+    single-subtask degraded path — losing the entire fan-out — while the correct
+    content sat in the payload.
+    """
+    encoded = '[{"id": "s0", "question": "q", "rationale": "r"}]'
+    output = PlannerOutput.model_validate({"subtasks": encoded})
+
+    assert len(output.subtasks) == 1
+    assert output.subtasks[0].id == "s0"
+
+
+def test_a_real_list_still_works() -> None:
+    output = PlannerOutput.model_validate(
+        {"subtasks": [{"id": "s0", "question": "q", "rationale": "r"}]}
+    )
+    assert len(output.subtasks) == 1
+
+
+def test_unparseable_string_still_fails_loudly() -> None:
+    """A genuinely broken payload must not be silently swallowed."""
+    with pytest.raises(ValueError):
+        PlannerOutput.model_validate({"subtasks": "not json at all"})
+
+
 async def test_empty_plan_is_passed_through(monkeypatch: pytest.MonkeyPatch) -> None:
     """Zero subtasks is a legitimate outcome; fan_out routes it to synthesis."""
     _patch_planner(monkeypatch, PlannerOutput(subtasks=[]))

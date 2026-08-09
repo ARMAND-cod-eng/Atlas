@@ -78,6 +78,22 @@ async def test_transport_failure_raises_search_error(
     assert "ConnectionError" in str(excinfo.value)
 
 
+async def test_in_band_error_payload_raises(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Tavily reports failures in the payload, not by raising.
+
+    A 401 arrives as {"error": Exception("Error 401: Unauthorized")} with no
+    "results" key. Read naively that is indistinguishable from an honest empty
+    search — every researcher silently reports zero sources and the run completes
+    looking healthy. This is the check that tells them apart.
+    """
+    _patch_tool(monkeypatch, FakeTool(payload={"error": Exception("Error 401: Unauthorized")}))
+
+    with pytest.raises(SearchError) as excinfo:
+        await search_module.search("anything")
+
+    assert "401" in str(excinfo.value)
+
+
 async def test_empty_results_are_not_an_error(monkeypatch: pytest.MonkeyPatch) -> None:
     """ "Nothing found" is information; the researcher decides whether to re-query."""
     _patch_tool(monkeypatch, FakeTool(payload={"results": []}))

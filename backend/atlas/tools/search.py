@@ -41,6 +41,23 @@ def build_search_tool(max_results: int) -> TavilySearch:
     )
 
 
+def _raise_if_error(payload: object, query: str) -> None:
+    """Turn Tavily's in-band error into a real exception.
+
+    TavilySearch catches its own transport and API failures and returns
+    ``{"error": <Exception>}`` instead of raising, so the try/except around
+    ``ainvoke`` never fires. Without this check a 401 arrives as a payload with no
+    ``results`` key and is indistinguishable from an honest "nothing found" —
+    every researcher reports zero sources, the run completes, and the only clue is
+    an answer that quietly admits it had nothing to cite.
+    """
+    if not isinstance(payload, Mapping):
+        return
+    error = payload.get("error")
+    if error:
+        raise SearchError(f"search failed: {error}", query=query)
+
+
 def _coerce_sources(payload: object, limit: int) -> list[Source]:
     """Pull ``Source`` records out of whatever Tavily returned.
 
@@ -94,6 +111,10 @@ async def search(query: str, max_results: int | None = None) -> list[Source]:
             f"search failed: {type(exc).__name__}: {exc}",
             query=query,
         ) from exc
+
+    # Must come before normalization: an error payload has no "results" key and
+    # would otherwise normalize to an empty list, hiding the failure.
+    _raise_if_error(raw, query)
 
     sources = _coerce_sources(raw, limit)
     logger.info("search complete", extra={"result_count": len(sources)})

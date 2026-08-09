@@ -9,12 +9,13 @@ surprise three nodes later; a typo in a field name is a type error now.
 
 from __future__ import annotations
 
+import json
 import operator
 from typing import Annotated, TypedDict
 
 from langchain_core.messages import AnyMessage
 from langgraph.graph.message import add_messages
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 from atlas.metrics import RunMetrics, merge_run_metrics
 
@@ -47,6 +48,29 @@ class PlannerOutput(BaseModel):
     """
 
     subtasks: list[Subtask] = Field(default_factory=list)
+
+    @field_validator("subtasks", mode="before")
+    @classmethod
+    # `object` rather than Any: a "before" validator receives whatever the
+    # provider sent, and object states that honestly without disabling checking.
+    def _accept_json_encoded_list(cls, value: object) -> object:
+        """Tolerate ``subtasks`` arriving as a JSON string instead of an array.
+
+        Observed live against claude-sonnet-5: the structured-output call returns
+        a correct plan whose nested list is double-encoded as a string, and strict
+        validation rejects it. That would degrade the run to a single subtask —
+        losing the whole fan-out — over an encoding wobble, with the right content
+        sitting in the payload. Both structured-output methods produce it
+        intermittently, so this is handled at the schema rather than by picking a
+        method and hoping.
+        """
+        if isinstance(value, str):
+            try:
+                return json.loads(value)
+            except json.JSONDecodeError:
+                # Not JSON either — let pydantic report the real problem.
+                return value
+        return value
 
 
 class ResearchResult(BaseModel):
