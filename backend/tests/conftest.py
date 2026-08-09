@@ -11,6 +11,8 @@ from collections.abc import Iterator
 import pytest
 
 from atlas.config import get_settings
+from atlas.graph.state import AtlasState
+from atlas.metrics import RunMetrics
 
 FAKE_ENV: dict[str, str] = {
     "ANTHROPIC_API_KEY": "sk-ant-test-not-a-real-key",
@@ -34,3 +36,15 @@ def fake_env(monkeypatch: pytest.MonkeyPatch) -> Iterator[None]:
     get_settings.cache_clear()
     yield
     get_settings.cache_clear()
+
+
+def initial_state(query: str = "what is retrieval-augmented generation?") -> AtlasState:
+    """A fresh graph input, matching what the /query route builds."""
+    return {
+        "query": query,
+        "subtasks": [],
+        "research_results": [],
+        "answer": "",
+        "messages": [],
+        "run_metrics": RunMetrics(),
+    }

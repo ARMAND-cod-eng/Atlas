@@ -24,6 +24,10 @@ from pydantic import BaseModel, Field
 DEGRADED_PLANNER_FALLBACK = "planner_fallback_single_subtask"
 DEGRADED_BUDGET_EXCEEDED = "budget_exceeded"
 DEGRADED_RESEARCHER_FAILED = "researcher_failed"
+# The synthesizer cited a URL that appeared in no source. Prompting against this
+# is necessary but not sufficient — a fabricated citation looks checkable and is
+# not, which makes it the worst failure mode a research system has.
+DEGRADED_UNGROUNDED_CITATION = "ungrounded_citation"
 
 
 class LLMCall(BaseModel):
@@ -96,6 +100,4 @@ async def track_node(node: str) -> AsyncIterator[RunMetrics]:
     try:
         yield metrics
     finally:
-        metrics.node_timings.append(
-            NodeTiming(node=node, duration_s=time.perf_counter() - started)
-        )
+        metrics.node_timings.append(NodeTiming(node=node, duration_s=time.perf_counter() - started))

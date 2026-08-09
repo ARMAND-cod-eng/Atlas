@@ -74,12 +74,15 @@ def test_missing_token_counts_do_not_break_totals() -> None:
 
 
 async def test_track_node_records_a_timing() -> None:
+    # Sleep well above Windows' ~15ms timer granularity, and assert against a
+    # threshold below it, so the test measures the mechanism rather than the
+    # platform's clock resolution.
     async with track_node("planner") as metrics:
-        await asyncio.sleep(0.01)
+        await asyncio.sleep(0.05)
 
     assert len(metrics.node_timings) == 1
     assert metrics.node_timings[0].node == "planner"
-    assert metrics.node_timings[0].duration_s >= 0.01
+    assert metrics.node_timings[0].duration_s >= 0.02
 
 
 async def test_track_node_records_timing_even_when_the_body_raises() -> None:

@@ -22,7 +22,15 @@ from psycopg.rows import DictRow, dict_row
 from psycopg_pool import AsyncConnectionPool
 
 from atlas.config import get_settings
-from atlas.graph.nodes import answer_query
+from atlas.graph.nodes import (
+    PLANNER,
+    RESEARCHER,
+    SYNTHESIZER,
+    fan_out,
+    planner,
+    researcher,
+    synthesizer,
+)
 from atlas.graph.state import AtlasState
 
 # These three are not tunables — the checkpointer misbehaves without them.
@@ -58,15 +66,28 @@ class AtlasGraph:
 
 
 def build_state_graph() -> StateGraph[AtlasState, Any, AtlasState, AtlasState]:
-    """Assemble the (uncompiled) graph: ``START -> answer_query -> END``.
+    """Assemble the (uncompiled) research graph.
+
+    ``START -> planner -> [fan_out] -> researcher (parallel) -> synthesizer -> END``
 
     Kept separate from :func:`build_graph` so tests can compile this against an
     in-memory checkpointer and assert on the graph's shape without a database.
     """
     builder: StateGraph[AtlasState, Any, AtlasState, AtlasState] = StateGraph(AtlasState)
-    builder.add_node("answer_query", answer_query)
-    builder.add_edge(START, "answer_query")
-    builder.add_edge("answer_query", END)
+    builder.add_node(PLANNER, planner)
+    builder.add_node(RESEARCHER, researcher)
+    builder.add_node(SYNTHESIZER, synthesizer)
+
+    builder.add_edge(START, PLANNER)
+    # The conditional edge is where parallelism comes from: fan_out returns one
+    # Send per subtask and LangGraph runs them concurrently. path_map lists both
+    # possible destinations, because fan_out short-circuits to the synthesizer
+    # when there is nothing to research.
+    builder.add_conditional_edges(PLANNER, fan_out, [RESEARCHER, SYNTHESIZER])
+    # Every researcher branch converges here. The reducers on research_results and
+    # run_metrics are what let concurrent branches merge instead of colliding.
+    builder.add_edge(RESEARCHER, SYNTHESIZER)
+    builder.add_edge(SYNTHESIZER, END)
     return builder
 
 
