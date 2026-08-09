@@ -5,11 +5,13 @@ subtasks, parallel researcher agents investigate them, a critic reviews the find
 work back for another pass, and a synthesizer writes the final answer. It runs on LangGraph behind
 a FastAPI service, with Postgres+pgvector for state and retrieval and Redis for caching.
 
-**This repository is currently at Phase 0 — foundations only.** The graph has a single node. The
-planner, researchers, critic, synthesizer, SSE streaming, frontend, and eval suite are not built
-yet; what exists is the verified scaffolding they will sit on. See
-[`docs/PHASE-0.md`](docs/PHASE-0.md) for what was built, the defects found along the way, and how
-it was verified.
+**This repository is currently at Phase 1.** The planner, parallel researchers, and synthesizer are
+built and verified against live providers. The critic loop, SSE streaming, frontend, eval suite, and
+Langfuse tracing are not built yet.
+
+Phase notes — what was built, the defects found along the way, and how each was verified:
+[`docs/PHASE-0.md`](docs/PHASE-0.md) (foundations) · [`docs/PHASE-1.md`](docs/PHASE-1.md)
+(fan-out and parallel research).
 
 ## Architecture
 
@@ -21,32 +23,45 @@ graph TD
     API[FastAPI service] --> Graph
 
     subgraph Graph[LangGraph agent graph]
-        Start([START]) --> Answer[answer_query]
-        Answer --> Done([END])
+        Start([START]) --> Planner[planner]
+        Planner -->|Send| R1[researcher]
+        Planner -->|Send| R2[researcher]
+        Planner -->|Send| R3[researcher]
+        R1 --> Synth[synthesizer]
+        R2 --> Synth
+        R3 --> Synth
+        Synth --> Done([END])
 
-        Planner[planner] -.-> R1[researcher]
-        Planner -.-> R2[researcher]
-        Planner -.-> R3[researcher]
-        R1 -.-> Critic[critic]
-        R2 -.-> Critic
-        R3 -.-> Critic
+        Synth -.-> Critic[critic]
         Critic -.retry.-> Planner
-        Critic -.approve.-> Synth[synthesizer]
+        Critic -.approve.-> Done
     end
+
+    R1 --> Tavily[Tavily search]
+    R2 --> Tavily
+    R3 --> Tavily
 
     Graph --> Postgres[(Postgres + pgvector)]
     API --> Redis[(Redis)]
     Graph -.traces.-> Langfuse[Langfuse]
 
-    style Answer fill:#2d6a4f,color:#fff
-    style Planner stroke-dasharray: 5 5
+    style Planner fill:#2d6a4f,color:#fff
+    style R1 fill:#2d6a4f,color:#fff
+    style R2 fill:#2d6a4f,color:#fff
+    style R3 fill:#2d6a4f,color:#fff
+    style Synth fill:#2d6a4f,color:#fff
     style Critic stroke-dasharray: 5 5
-    style Synth stroke-dasharray: 5 5
+    style Langfuse stroke-dasharray: 5 5
+    style Client stroke-dasharray: 5 5
 ```
 
-Phase 0 implements the highlighted path: `START → answer_query → END`, checkpointed to Postgres.
-Its purpose is to prove every seam — config, provider fallback, async execution, state persistence,
-HTTP surface — before any agent logic depends on them.
+The highlighted path is built and verified end to end. The planner decomposes a question into
+independent subtasks, each becomes a parallel researcher via a LangGraph `Send`, and the synthesizer
+merges the findings with citations grounded in the sources actually retrieved. State is checkpointed
+to Postgres, so a `thread_id` resumes a conversation.
+
+Fan-out is genuinely concurrent, not sequential: on a five-branch run the request cost 71.9s while
+the branches summed to 93.4s — the fan-out costs the slowest branch, not the total.
 
 ## Prerequisites
 
