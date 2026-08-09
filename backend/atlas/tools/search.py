@@ -15,8 +15,6 @@ from collections.abc import Mapping, Sequence
 from typing import Any
 
 from langchain_tavily import TavilySearch
-from langchain_tavily.tavily_search import TavilySearchAPIWrapper
-from pydantic import SecretStr
 
 from atlas.config import get_settings
 from atlas.errors import SearchError
@@ -28,16 +26,25 @@ logger = logging.getLogger(__name__)
 def build_search_tool(max_results: int) -> TavilySearch:
     """Construct the Tavily tool with an explicitly injected credential.
 
-    The key is passed through an api_wrapper rather than left to Tavily's
-    environment lookup: pydantic-settings reads the root ``.env`` into
-    :class:`Settings` without exporting anything to ``os.environ``, so the
-    ambient lookup would find nothing and fail at call time with a confusing
-    auth error rather than at startup.
+    The key must be passed here rather than left to Tavily's ambient lookup:
+    pydantic-settings reads the root ``.env`` into :class:`Settings` without
+    exporting anything to ``os.environ``, so the fallback would find nothing.
+    Setting ``os.environ`` from config instead would be a hidden global mutation
+    and is deliberately avoided.
+
+    ``tavily_api_key`` is the supported parameter — ``TavilySearch.__init__``
+    detects it and builds the wrapper itself. Pass a **plain str**, never a
+    ``SecretStr``: the wrapper's ``mode="before"`` validator runs
+    ``get_from_dict_or_env``, which stringifies whatever it is given, and
+    ``str(SecretStr("tvly-..."))`` is ``'**********'``. Wrapping the secret sends
+    ten asterisks as the credential and every search returns 401 against a
+    perfectly valid key. ``test_search`` asserts the key that arrives equals the
+    configured one, because a truthiness check passes on the mask.
     """
     settings = get_settings()
     return TavilySearch(
         max_results=max_results,
-        api_wrapper=TavilySearchAPIWrapper(tavily_api_key=SecretStr(settings.tavily_api_key)),
+        tavily_api_key=settings.tavily_api_key,
     )
 
 

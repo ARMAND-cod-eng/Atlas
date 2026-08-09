@@ -11,6 +11,7 @@ import pytest
 
 from atlas.errors import SearchError
 from atlas.tools import search as search_module
+from tests.conftest import FAKE_ENV
 
 TAVILY_PAYLOAD: dict[str, Any] = {
     "query": "what is RAG",
@@ -78,13 +79,47 @@ async def test_transport_failure_raises_search_error(
     assert "ConnectionError" in str(excinfo.value)
 
 
+# --- the credential actually arriving --------------------------------------
+
+
+def test_configured_key_reaches_the_client() -> None:
+    """The key the tool holds must EQUAL the configured value.
+
+    Not a truthiness check. A truthiness check is exactly what passed while the
+    tool was holding '**********': the previous implementation passed a SecretStr
+    into TavilySearchAPIWrapper, whose mode="before" validator stringifies via
+    get_from_dict_or_env, so str(SecretStr(...)) — the mask — became the
+    credential. Ten asterisks were sent to Tavily and every search 401'd against
+    a perfectly valid key.
+    """
+    tool = search_module.build_search_tool(5)
+    held = tool.api_wrapper.tavily_api_key.get_secret_value()
+
+    assert held == FAKE_ENV["TAVILY_API_KEY"]
+
+
+def test_key_is_not_the_secretstr_mask() -> None:
+    """Name the failure mode so a future re-wrap fails here, not in production."""
+    tool = search_module.build_search_tool(5)
+    held = tool.api_wrapper.tavily_api_key.get_secret_value()
+
+    assert set(held) != {"*"}, "the SecretStr mask is being sent as the credential"
+
+
+def test_max_results_reaches_the_client() -> None:
+    assert search_module.build_search_tool(7).max_results == 7
+
+
+# --- in-band errors -----------------------------------------------------------
+
+
 async def test_in_band_error_payload_raises(monkeypatch: pytest.MonkeyPatch) -> None:
     """Tavily reports failures in the payload, not by raising.
 
-    A 401 arrives as {"error": Exception("Error 401: Unauthorized")} with no
-    "results" key. Read naively that is indistinguishable from an honest empty
-    search — every researcher silently reports zero sources and the run completes
-    looking healthy. This is the check that tells them apart.
+    This is the exact observed shape: an Exception *object* under "error", and no
+    "results" key at all. Read naively it is indistinguishable from an honest
+    empty search — every researcher silently reports zero sources and the run
+    completes looking healthy.
     """
     _patch_tool(monkeypatch, FakeTool(payload={"error": Exception("Error 401: Unauthorized")}))
 
@@ -92,6 +127,33 @@ async def test_in_band_error_payload_raises(monkeypatch: pytest.MonkeyPatch) -> 
         await search_module.search("anything")
 
     assert "401" in str(excinfo.value)
+    assert "Unauthorized" in str(excinfo.value)
+
+
+async def test_error_string_also_raises(monkeypatch: pytest.MonkeyPatch) -> None:
+    """The error value is an Exception today; a plain string must work too."""
+    _patch_tool(monkeypatch, FakeTool(payload={"error": "Error 432: Rate limited"}))
+
+    with pytest.raises(SearchError):
+        await search_module.search("anything")
+
+
+async def test_error_alongside_results_still_raises(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A partial failure must not be read as a success.
+
+    If an error key can be ignored whenever some results came back, a degraded
+    search silently becomes an authoritative one.
+    """
+    payload = {
+        "error": Exception("Error 401: Unauthorized"),
+        "results": [{"url": "https://partial.example", "title": "T", "content": "c"}],
+    }
+    _patch_tool(monkeypatch, FakeTool(payload=payload))
+
+    with pytest.raises(SearchError):
+        await search_module.search("partial")
 
 
 async def test_empty_results_are_not_an_error(monkeypatch: pytest.MonkeyPatch) -> None:

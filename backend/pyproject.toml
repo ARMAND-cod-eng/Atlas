@@ -66,14 +66,6 @@ plugins = ["pydantic.mypy"]
 module = ["langchain_anthropic.*", "langchain_openai.*"]
 ignore_missing_imports = true
 
-# langchain_tavily re-exports TavilySearchAPIWrapper from its public module
-# without listing it in __all__, which --strict rejects. Allowing the implicit
-# re-export for this one package is preferable to importing from its private
-# _utilities module, which would couple us to an internal path.
-[[tool.mypy.overrides]]
-module = ["langchain_tavily.*"]
-implicit_reexport = true
-
 # --- Tests ---------------------------------------------------------------------
 
 [tool.pytest.ini_options]

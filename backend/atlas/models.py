@@ -258,6 +258,22 @@ async def call_structured[SchemaT: BaseModel](
     parsing_error = envelope.get("parsing_error")
     parsed = envelope.get("parsed")
     if parsing_error is not None or parsed is None:
+        # Log the payload before discarding it. A valid five-subtask plan was once
+        # thrown away here — the model had answered correctly but encoded a nested
+        # list as a JSON string — and it was found only by chance while reading
+        # logs. Whatever the model actually said belongs in the record.
+        raw_message = envelope.get("raw")
+        raw_content = getattr(raw_message, "content", raw_message)
+        logger.warning(
+            "structured output failed validation; discarding the response",
+            extra={
+                "node": node,
+                "schema": schema.__name__,
+                "parsing_error": str(parsing_error)[:500],
+                # Truncated so a large plan cannot flood the log.
+                "raw_content": repr(raw_content)[:1000],
+            },
+        )
         # The model answered but not in the requested shape. Surfacing this as a
         # ProviderError lets the caller decide — the planner, for instance,
         # degrades to a single subtask rather than failing the run.
