@@ -27,6 +27,7 @@ from langchain_core.runnables import Runnable
 from langchain_openai import ChatOpenAI
 from pydantic import BaseModel, SecretStr
 
+from atlas.budget import record_spend
 from atlas.config import get_settings
 from atlas.errors import ProviderError
 from atlas.metrics import LLMCall, RunMetrics
@@ -66,7 +67,9 @@ class FallbackWatcher(BaseCallbackHandler):
         )
 
 
-def _build_primary(temperature: float | None = None) -> ChatAnthropic:
+def _build_primary(
+    temperature: float | None = None, max_tokens: int | None = None
+) -> ChatAnthropic:
     """The primary model.
 
     ``max_retries=0`` is load-bearing. LangChain applies retries *inside* the
@@ -81,6 +84,11 @@ def _build_primary(temperature: float | None = None) -> ChatAnthropic:
     every primary call fail, invisibly, because the fallback answered.
     """
     settings = get_settings()
+    kwargs: dict[str, Any] = {}
+    if max_tokens is not None:
+        # Only sent when asked for, so the provider default still applies
+        # everywhere a cap would be arbitrary.
+        kwargs["max_tokens"] = max_tokens
     return ChatAnthropic(
         model=settings.primary_model,
         api_key=SecretStr(settings.anthropic_api_key),
@@ -88,26 +96,33 @@ def _build_primary(temperature: float | None = None) -> ChatAnthropic:
         timeout=PRIMARY_TIMEOUT_SECONDS,
         max_retries=0,  # see docstring — must stay 0 for the fallback to work
         callbacks=[FallbackWatcher()],
+        **kwargs,
     )
 
 
-def _build_fallback(temperature: float | None = None) -> ChatOpenAI:
+def _build_fallback(temperature: float | None = None, max_tokens: int | None = None) -> ChatOpenAI:
     """The fallback model, used only when the primary fails."""
     settings = get_settings()
+    kwargs: dict[str, Any] = {}
+    if max_tokens is not None:
+        kwargs["max_tokens"] = max_tokens
     return ChatOpenAI(
         model=settings.fallback_model,
         api_key=SecretStr(settings.openai_api_key),
         temperature=temperature,
         max_retries=FALLBACK_MAX_RETRIES,
         callbacks=[FallbackWatcher()],
+        **kwargs,
     )
 
 
-def get_llm(temperature: float | None = None) -> Runnable[LanguageModelInput, BaseMessage]:
+def get_llm(
+    temperature: float | None = None, max_tokens: int | None = None
+) -> Runnable[LanguageModelInput, BaseMessage]:
     """The primary model with the fallback attached behind it."""
     composed: Runnable[LanguageModelInput, BaseMessage] = _build_primary(
-        temperature
-    ).with_fallbacks([_build_fallback(temperature)])
+        temperature, max_tokens
+    ).with_fallbacks([_build_fallback(temperature, max_tokens)])
     return composed
 
 
@@ -192,11 +207,25 @@ def _record(
     )
 
 
+async def _charge_budget(metrics: RunMetrics) -> None:
+    """Add the most recent call's tokens to the run's shared counter.
+
+    Charged here rather than in the nodes so no call site can forget. The counter
+    is per-thread and lives in Redis, because parallel branches cannot see each
+    other's spend through graph state. Never raises — see ``atlas.budget``.
+    """
+    if not metrics.llm_calls:
+        return
+    last = metrics.llm_calls[-1]
+    await record_spend((last.input_tokens or 0) + (last.output_tokens or 0))
+
+
 async def call_model(
     node: str,
     messages: LanguageModelInput,
     metrics: RunMetrics,
     temperature: float | None = None,
+    max_tokens: int | None = None,
 ) -> BaseMessage:
     """Invoke the composed model, record metrics, translate failures.
 
@@ -205,7 +234,7 @@ async def call_model(
     """
     started = time.perf_counter()
     try:
-        response = await get_llm(temperature).ainvoke(messages)
+        response = await get_llm(temperature, max_tokens).ainvoke(messages)
     except Exception as exc:
         # Reaching here means the whole chain failed — the fallback's exception is
         # the one that surfaces. The primary's was already logged by FallbackWatcher.
@@ -215,6 +244,7 @@ async def call_model(
             node=node,
         ) from exc
     _record(metrics, node, response, time.perf_counter() - started)
+    await _charge_budget(metrics)
     return response
 
 
@@ -254,6 +284,7 @@ async def call_structured[SchemaT: BaseModel](
     # The raw message carries model name and token usage; metrics read it so a
     # structured call served by the fallback is still attributed correctly.
     _record(metrics, node, envelope.get("raw"), time.perf_counter() - started)
+    await _charge_budget(metrics)
 
     parsing_error = envelope.get("parsing_error")
     parsed = envelope.get("parsed")

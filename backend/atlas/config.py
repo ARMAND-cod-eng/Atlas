@@ -65,6 +65,31 @@ class Settings(BaseSettings):
     max_tool_calls_per_researcher: int = 3
     search_results_per_query: int = 5
 
+    # Critic loop. 2, not 5: the first pass catches most errors and returns
+    # collapse after two or three, while each extra pass costs a re-research plus
+    # a full re-synthesis on top of a 72s baseline.
+    max_critic_iterations: int = 2
+
+    # Output ceiling for the synthesizer. Latency is output-driven — measured at
+    # ~100 tok/s across every call in both live runs — so this is the single
+    # effective lever on wall clock. A backstop, not the mechanism: the concision
+    # rule in SYNTHESIZER_SYSTEM does the work and this catches the outliers.
+    #
+    # 6000, revised up from a planned 2000 across two live runs. The measurements:
+    #   Phase 1 prompt, uncapped   4392 out   40.5s
+    #   this prompt,   uncapped    2752 out   27.1s   <- the prompt is the mechanism
+    #   this prompt,   cap 2000    2000 out   22.2s   <- truncated mid-sentence
+    #   this prompt,   cap 3500    3500 out           <- truncated too, on a revision
+    # At 2000 and again at 3500 the cap bound on ordinary runs rather than
+    # outliers: the answer ended mid-sentence, a URL was cut in half, and the run
+    # reported ungrounded_citation for a citation that was never fabricated, only
+    # severed. A revision pass carrying critic feedback runs longer than a first
+    # pass, so "typical" is not one number. 6000 clears the largest output ever
+    # observed here (4392, under the more verbose Phase 1 prompt), which makes this
+    # what it was always meant to be — a guard against a runaway, not a shortener.
+    # It costs nothing on a normal run, and synthesis_truncated reports any trip.
+    synthesis_max_tokens: int = 6000
+
     @property
     def sqlalchemy_url(self) -> str:
         """``database_url`` rewritten for SQLAlchemy's async psycopg3 driver.
