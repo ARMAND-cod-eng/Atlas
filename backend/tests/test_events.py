@@ -146,6 +146,51 @@ async def test_run_completed_carries_a_summary_not_the_whole_result(one_branch: 
     assert "metrics" not in completed.payload
 
 
+async def test_a_branch_reports_its_sources_when_it_completes(one_branch: None) -> None:
+    """What fills the silent synthesis stretch.
+
+    These sources exist the moment the branch finishes, and until Phase 4 the
+    stream discarded them and reported only a count at the very end — leaving a
+    client with nothing real to show for the 20-45s the synthesizer spends
+    producing no observable output.
+    """
+    await _run("branch-sources")
+    completed = next(
+        e
+        for e in await _events("branch-sources")
+        if e.type == NODE_COMPLETED and e.node == nodes.RESEARCHER
+    )
+
+    assert completed.payload["sources"] == [
+        {"url": "https://ex.example/q0", "title": "T"},
+    ]
+    assert completed.payload["question"] == "q0"
+
+
+async def test_a_failed_branch_still_reports_what_it_found(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A branch that died with nothing says so with an empty list, not silence.
+
+    The distinction matters to a viewer: "searched and found nothing" and "never
+    reported" look identical if the field is simply absent.
+    """
+
+    async def boom(query: str, max_results: int | None = None) -> list[Source]:
+        raise SearchError("down", query=query)
+
+    monkeypatch.setattr(nodes, "search", boom)
+    monkeypatch.setattr(nodes, "call_model", make_call_model("the answer"))
+    monkeypatch.setattr(nodes, "call_structured", make_call_structured(make_plan(1)))
+
+    await _run("failed-branch-sources")
+    failed = next(e for e in await _events("failed-branch-sources") if e.type == NODE_FAILED)
+
+    assert failed.payload["sources"] == []
+    assert failed.payload["question"] == "q0"
+    assert "SearchError" in failed.payload["error"]
+
+
 # --- five branches at once -----------------------------------------------------
 
 

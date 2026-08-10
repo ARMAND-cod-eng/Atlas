@@ -314,6 +314,14 @@ async def researcher(state: ResearcherInput) -> dict[str, Any]:
     # subtask_id on the span is what makes five interleaved branches attributable.
     async with node_span(RESEARCHER, subtask_id=subtask.id) as span:
         result = await _research(subtask, span.metrics, state.get("guidance"))
+        # Reported on the branch's own event rather than waiting for the run to
+        # end. These sources exist the moment the branch finishes, and the
+        # synthesizer then spends 20-45s producing nothing observable — this is
+        # what a watching client reads during that silence.
+        span.report(
+            sources=[{"url": source.url, "title": source.title} for source in result.sources],
+            question=subtask.question,
+        )
         if result.error is not None:
             # A failed branch does not raise — Phase 1 turns it into a result so
             # the other four survive — but it has still failed, and a watching

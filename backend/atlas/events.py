@@ -98,10 +98,20 @@ class NodeSpan:
 
     metrics: RunMetrics = field(default_factory=RunMetrics)
     error: str | None = None
+    # Extra fields merged into the terminal event for this node. Added in Phase 4
+    # so a researcher can report the sources it retrieved: by the time synthesis
+    # starts, every branch has finished and its sources exist, and the stream was
+    # throwing them away until the very end. Surfacing them is what gives a viewer
+    # something real to read during the 20-45s the synthesizer spends silent.
+    detail: dict[str, Any] = field(default_factory=dict)
 
     def failed(self, reason: str) -> None:
         """Mark this node as failed even though nothing was raised."""
         self.error = reason
+
+    def report(self, **fields: object) -> None:
+        """Attach fields to this node's ``node_completed`` / ``node_failed``."""
+        self.detail.update(fields)
 
 
 @asynccontextmanager
@@ -126,9 +136,10 @@ async def node_span(node: str, subtask_id: str | None = None) -> AsyncIterator[N
             node,
             subtask_id=subtask_id,
             error=f"{type(exc).__name__}: {exc}",
+            **span.detail,
         )
         raise
     if span.error is None:
-        emit(NODE_COMPLETED, node, subtask_id=subtask_id)
+        emit(NODE_COMPLETED, node, subtask_id=subtask_id, **span.detail)
     else:
-        emit(NODE_FAILED, node, subtask_id=subtask_id, error=span.error)
+        emit(NODE_FAILED, node, subtask_id=subtask_id, error=span.error, **span.detail)

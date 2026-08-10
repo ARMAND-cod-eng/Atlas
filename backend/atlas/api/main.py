@@ -27,6 +27,7 @@ from redis.asyncio import Redis
 from atlas import eventlog
 from atlas.api.routes import router
 from atlas.api.streams import router as streams_router
+from atlas.api.topology import router as topology_router
 from atlas.config import get_settings
 from atlas.db.session import dispose_engine
 from atlas.errors import ProviderError, SearchError
@@ -153,13 +154,17 @@ def create_app() -> FastAPI:
     app.add_exception_handler(Exception, unhandled_error_handler)
     app.add_middleware(
         CORSMiddleware,
-        allow_origins=["http://localhost:3000"],
+        # Both spellings of the dev origin. They are distinct origins to the
+        # browser, and which one the user has in the address bar is not something
+        # the API should care about.
+        allow_origins=["http://localhost:3000", "http://127.0.0.1:3000"],
         allow_credentials=True,
         allow_methods=["*"],
         allow_headers=["*"],
     )
     app.include_router(router)
     app.include_router(streams_router)
+    app.include_router(topology_router)
     return app
 
 
