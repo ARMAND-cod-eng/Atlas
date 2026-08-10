@@ -1,0 +1,341 @@
+/**
+ * The reducer, against event sequences the backend actually produced.
+ *
+ * Fixtures are recorded by `backend/scripts/capture_fixtures.py` running the
+ * real graph, runner and nodes. Hand-written events would test the reducer
+ * against my beliefs about the backend; these test it against the backend.
+ *
+ * Assertions compare whole state objects, not individual fields. "The node has
+ * status running" passes whether or not four other lanes are also wrong; the
+ * exact map does not.
+ */
+
+import { describe, expect, it } from 'vitest';
+
+import accepted from './fixtures/accepted.json';
+import exhaustion from './fixtures/exhaustion.json';
+import partialFailure from './fixtures/partial-failure.json';
+import retry from './fixtures/retry.json';
+import runFailed from './fixtures/run-failed.json';
+
+import type { AgentEvent } from '../src/lib/events';
+import {
+  CRITIC,
+  PLANNER,
+  RESEARCHER,
+  SYNTHESIZER,
+  acceptAll,
+  initialState,
+  resumeFrom,
+  type BranchState,
+  type NodeStatus,
+  type RunState,
+} from '../src/lib/reducer';
+
+const SKELETON = [PLANNER, RESEARCHER, SYNTHESIZER, CRITIC];
+
+// The fixtures are produced by the backend's own pydantic models, so the shape
+// is guaranteed by the generator rather than by a cast at every use site.
+const ACCEPTED = accepted as readonly AgentEvent[];
+const PARTIAL_FAILURE = partialFailure as readonly AgentEvent[];
+const RETRY = retry as readonly AgentEvent[];
+const EXHAUSTION = exhaustion as readonly AgentEvent[];
+const RUN_FAILED_EVENTS = runFailed as readonly AgentEvent[];
+
+function run(events: readonly AgentEvent[]): RunState {
+  return acceptAll(initialState(SKELETON), events);
+}
+
+/** Node statuses as one comparable map. */
+function statuses(state: RunState): Record<string, NodeStatus> {
+  return Object.fromEntries(Object.values(state.nodes).map((node) => [node.id, node.status]));
+}
+
+/** Branch statuses keyed by subtask id. */
+function branchStatuses(state: RunState): Record<string, NodeStatus> {
+  return Object.fromEntries(state.branches.map((b) => [b.subtaskId, b.status]));
+}
+
+describe('a run the critic accepts', () => {
+  it('ends with every node done and an answer', () => {
+    const state = run(ACCEPTED);
+
+    expect(statuses(state)).toEqual({
+      [PLANNER]: 'done',
+      [RESEARCHER]: 'idle', // the placeholder; the real work is in branches
+      [SYNTHESIZER]: 'done',
+      [CRITIC]: 'done',
+    });
+    expect(branchStatuses(state)).toEqual({
+      s0: 'done',
+      s1: 'done',
+      s2: 'done',
+      s3: 'done',
+      s4: 'done',
+    });
+    expect(state.phase).toBe('completed');
+    expect(state.iteration).toBe(1);
+    expect(state.degraded).toEqual([]);
+    expect(state.retryFired).toBe(false);
+    expect(state.answer).toContain('Synthesised from the findings');
+  });
+
+  it('consumes every event with no gap and nothing buffered', () => {
+    const state = run(ACCEPTED);
+
+    expect(state.nextSeq).toBe(ACCEPTED.length + 1);
+    expect(state.buffered).toEqual({});
+    expect(state.gapAt).toBeNull();
+    expect(state.degradedStream).toBe(false);
+  });
+
+  it('has exactly one researcher node before fan_out and five after', () => {
+    const beforeFanOut = ACCEPTED.filter((e) => e.type !== 'fan_out' && e.seq < 4);
+    const before = run(beforeFanOut);
+
+    expect(before.fannedOut).toBe(false);
+    expect(before.branches).toEqual([]);
+
+    const after = run(ACCEPTED);
+    expect(after.fannedOut).toBe(true);
+    expect(after.branches.map((b) => b.subtaskId)).toEqual(['s0', 's1', 's2', 's3', 's4']);
+  });
+
+  it('labels each lane with its subtask question', () => {
+    const state = run(ACCEPTED);
+
+    expect(state.branches.map((b) => b.question)).toEqual([
+      'How accurate is RAG for enterprise document QA?',
+      'How accurate are long-context LLMs on the same task?',
+      'What are the cost characteristics of each?',
+      'What are the latency characteristics of each?',
+      'When is each the better choice?',
+    ]);
+  });
+
+  it('collects the sources each branch retrieved', () => {
+    const state = run(ACCEPTED);
+
+    expect(state.branches.map((b) => b.sources.length)).toEqual([2, 2, 2, 2, 2]);
+    expect(state.branches[0]?.sources[0]).toEqual({
+      url: 'https://example.com/how-0',
+      title: 'how result 0',
+    });
+  });
+});
+
+describe('a branch that fails while its siblings succeed', () => {
+  // The case the whole partial-failure design exists for. Phase 1 keeps the run
+  // alive by turning a dead branch into data; Phase 3 reports node_failed for it
+  // anyway. If the UI renders this as a clean run, the user believes an answer
+  // built on four fifths of the research is complete.
+  it('shows one lane failed and four done, with the run still completing', () => {
+    const state = run(PARTIAL_FAILURE);
+
+    expect(branchStatuses(state)).toEqual({
+      s0: 'done',
+      s1: 'failed',
+      s2: 'done',
+      s3: 'done',
+      s4: 'done',
+    });
+    expect(state.phase).toBe('completed');
+    expect(state.answer).not.toBeNull();
+  });
+
+  it('carries the failure reason and reports the run as degraded', () => {
+    const state = run(PARTIAL_FAILURE);
+    const failed = state.branches.find((b) => b.subtaskId === 's1');
+
+    expect(failed?.error).toContain('SearchError');
+    expect(failed?.sources).toEqual([]);
+    expect(state.degraded).toEqual(['researcher_failed:s1']);
+  });
+
+  it('leaves the healthy branches untouched', () => {
+    const state = run(PARTIAL_FAILURE);
+    const healthy = state.branches.filter((b) => b.subtaskId !== 's1');
+
+    expect(healthy.map((b) => b.error)).toEqual([null, null, null, null]);
+    expect(healthy.map((b) => b.sources.length)).toEqual([2, 2, 2, 2]);
+  });
+});
+
+describe('a targeted retry', () => {
+  it('re-runs only the faulted lane', () => {
+    const state = run(RETRY);
+    const runs: Record<string, number> = Object.fromEntries(
+      state.branches.map((b) => [b.subtaskId, b.runs]),
+    );
+
+    // s2 twice, everything else once. This is targeted retry, as a number.
+    expect(runs).toEqual({ s0: 1, s1: 1, s2: 2, s3: 1, s4: 1 });
+  });
+
+  it('ends with every lane done after two critic passes', () => {
+    const state = run(RETRY);
+
+    expect(branchStatuses(state)).toEqual({
+      s0: 'done',
+      s1: 'done',
+      s2: 'done',
+      s3: 'done',
+      s4: 'done',
+    });
+    expect(state.criticRounds).toEqual([
+      { iteration: 1, overall: 'revise', faultedSubtaskIds: ['s2'] },
+      { iteration: 2, overall: 'accept', faultedSubtaskIds: [] },
+    ]);
+    expect(state.iteration).toBe(2);
+  });
+
+  it('latches retryFired so the edge stays legible after the fact', () => {
+    const state = run(RETRY);
+
+    expect(state.retryFired).toBe(true);
+    // The final verdict faulted nothing, but the retry still happened.
+    expect(state.retryTargets).toEqual([]);
+  });
+
+  it('marks the faulted lane running again mid-retry', () => {
+    // Cut the stream immediately after the faulting verdict and the re-dispatch.
+    const verdict = RETRY.findIndex((e) => e.type === 'critic_verdict');
+    const restart = RETRY.findIndex(
+      (e, i) => i > verdict && e.type === 'node_started' && e.node === RESEARCHER,
+    );
+    const state = run(RETRY.slice(0, restart + 1));
+
+    expect(branchStatuses(state)).toEqual({
+      s0: 'done',
+      s1: 'done',
+      s2: 'running', // sent back
+      s3: 'done',
+      s4: 'done',
+    });
+    expect(state.retryTargets).toEqual(['s2']);
+  });
+});
+
+describe('a critic that never accepts', () => {
+  it('terminates degraded rather than failing, keeping its answer', () => {
+    const state = run(EXHAUSTION);
+
+    expect(state.phase).toBe('completed');
+    expect(state.degraded).toEqual(['critic_max_iterations']);
+    expect(state.answer).not.toBeNull();
+    expect(state.criticRounds.map((r) => r.overall)).toEqual(['revise', 'revise']);
+    expect(state.iteration).toBe(2);
+  });
+});
+
+describe('a run that dies', () => {
+  it('ends failed, names the error, and leaves no node spinning', () => {
+    const state = run(RUN_FAILED_EVENTS);
+
+    expect(state.phase).toBe('failed');
+    expect(state.error).toContain('ProviderError');
+    expect(statuses(state)).toEqual({
+      [PLANNER]: 'done',
+      [RESEARCHER]: 'idle',
+      [SYNTHESIZER]: 'failed',
+      [CRITIC]: 'idle',
+    });
+    // A lane left mid-flight would spin forever on screen.
+    expect(Object.values(statuses(state))).not.toContain('running');
+    expect(state.answer).toBeNull();
+  });
+});
+
+describe('sequence handling', () => {
+  it('buffers a gap instead of applying past it', () => {
+    // 1,2,3 then 5 — event 4 is missing.
+    const withHole = [...ACCEPTED.slice(0, 3), ACCEPTED[4]].filter(
+      (e): e is AgentEvent => e !== undefined,
+    );
+    const state = run(withHole);
+
+    expect(state.nextSeq).toBe(4);
+    expect(Object.keys(state.buffered)).toEqual(['5']);
+    expect(state.gapAt).toBe(4);
+  });
+
+  it('drains the buffer once the hole fills, converging on the same state', () => {
+    const ordered = ACCEPTED.slice(0, 6);
+    const shuffled = [ordered[0], ordered[1], ordered[4], ordered[2], ordered[3], ordered[5]].filter(
+      (e): e is AgentEvent => e !== undefined,
+    );
+
+    expect(run(shuffled)).toEqual(run(ordered));
+  });
+
+  it('ignores duplicates so a replay overlap cannot double-count a run', () => {
+    const once = run(ACCEPTED);
+    const twice = acceptAll(once, ACCEPTED);
+
+    expect(twice).toEqual(once);
+    // The retry counter is what a double-apply would corrupt.
+    expect(twice.branches.map((b) => b.runs)).toEqual([1, 1, 1, 1, 1]);
+  });
+
+  it('reports where to resume from', () => {
+    const partial = run(ACCEPTED.slice(0, 6));
+    expect(resumeFrom(partial)).toBe(6);
+  });
+});
+
+describe('reconnection', () => {
+  // The load-bearing one. Phase 3's whole event log exists so a client that
+  // drops mid-run can come back; if the reconnected UI does not converge on the
+  // same state, that machinery bought nothing.
+  it('converges on exactly the uninterrupted state', () => {
+    const uninterrupted = run(ACCEPTED);
+
+    // Drop after 6 events, reconnect, and replay from the last contiguous seq —
+    // which overlaps by one, exactly as the server's replay does.
+    const beforeDrop = run(ACCEPTED.slice(0, 6));
+    const resume = resumeFrom(beforeDrop);
+    const replayed = ACCEPTED.filter((e) => e.seq > resume);
+    const reconnected = acceptAll(beforeDrop, replayed);
+
+    expect(reconnected).toEqual(uninterrupted);
+  });
+
+  it('converges from a drop during the fan-out, where branches are in flight', () => {
+    const uninterrupted = run(PARTIAL_FAILURE);
+
+    // Cut at the first point where a lane is genuinely in flight, found rather
+    // than guessed — a hardcoded index silently stops testing what it claims to
+    // the moment the fixture changes length.
+    const cut = PARTIAL_FAILURE.findIndex(
+      (_event, index) =>
+        Object.values(branchStatuses(run(PARTIAL_FAILURE.slice(0, index + 1)))).includes('running'),
+    );
+    expect(cut).toBeGreaterThan(0);
+
+    const beforeDrop = run(PARTIAL_FAILURE.slice(0, cut + 1));
+    expect(Object.values(branchStatuses(beforeDrop))).toContain('running');
+
+    const replayed = PARTIAL_FAILURE.filter((e) => e.seq > resumeFrom(beforeDrop));
+    expect(acceptAll(beforeDrop, replayed)).toEqual(uninterrupted);
+  });
+
+  it('converges when the replay overlaps generously', () => {
+    // A client that resumes from further back than necessary must not end up in
+    // a different state — duplicate suppression is what guarantees it.
+    const uninterrupted = run(RETRY);
+    const beforeDrop = run(RETRY.slice(0, 15));
+    const replayed = RETRY.filter((e) => e.seq > 5); // deliberately too far back
+
+    expect(acceptAll(beforeDrop, replayed)).toEqual(uninterrupted);
+  });
+});
+
+describe('branch identity', () => {
+  it('keeps every lane distinct through concurrent interleaving', () => {
+    const state = run(ACCEPTED);
+    const ids = state.branches.map((b: BranchState) => b.subtaskId);
+
+    expect(new Set(ids).size).toBe(ids.length);
+    expect(state.branches.every((b) => b.id === `${RESEARCHER}:${b.subtaskId}`)).toBe(true);
+  });
+});

@@ -1,0 +1,285 @@
+[
+  {
+    "run_id": "partial-failure",
+    "seq": 1,
+    "ts": "2026-08-10T09:10:40.188685Z",
+    "type": "run_started",
+    "node": null,
+    "payload": {
+      "query": "Compare RAG with long-context LLMs.",
+      "thread_id": "thread"
+    }
+  },
+  {
+    "run_id": "partial-failure",
+    "seq": 2,
+    "ts": "2026-08-10T09:10:40.205284Z",
+    "type": "node_started",
+    "node": "planner",
+    "payload": {
+      "subtask_id": null
+    }
+  },
+  {
+    "run_id": "partial-failure",
+    "seq": 3,
+    "ts": "2026-08-10T09:10:40.205284Z",
+    "type": "node_completed",
+    "node": "planner",
+    "payload": {
+      "subtask_id": null
+    }
+  },
+  {
+    "run_id": "partial-failure",
+    "seq": 4,
+    "ts": "2026-08-10T09:10:40.205284Z",
+    "type": "fan_out",
+    "node": "planner",
+    "payload": {
+      "subtask_ids": [
+        "s0",
+        "s1",
+        "s2",
+        "s3",
+        "s4"
+      ],
+      "count": 5,
+      "questions": {
+        "s0": "How accurate is RAG for enterprise document QA?",
+        "s1": "How accurate are long-context LLMs on the same task?",
+        "s2": "What are the cost characteristics of each?",
+        "s3": "What are the latency characteristics of each?",
+        "s4": "When is each the better choice?"
+      }
+    }
+  },
+  {
+    "run_id": "partial-failure",
+    "seq": 5,
+    "ts": "2026-08-10T09:10:40.205284Z",
+    "type": "node_started",
+    "node": "researcher",
+    "payload": {
+      "subtask_id": "s0"
+    }
+  },
+  {
+    "run_id": "partial-failure",
+    "seq": 6,
+    "ts": "2026-08-10T09:10:40.205284Z",
+    "type": "node_completed",
+    "node": "researcher",
+    "payload": {
+      "subtask_id": "s0",
+      "sources": [
+        {
+          "url": "https://example.com/how-0",
+          "title": "how result 0"
+        },
+        {
+          "url": "https://example.com/how-1",
+          "title": "how result 1"
+        }
+      ],
+      "question": "How accurate is RAG for enterprise document QA?"
+    }
+  },
+  {
+    "run_id": "partial-failure",
+    "seq": 7,
+    "ts": "2026-08-10T09:10:40.205284Z",
+    "type": "node_started",
+    "node": "researcher",
+    "payload": {
+      "subtask_id": "s1"
+    }
+  },
+  {
+    "run_id": "partial-failure",
+    "seq": 8,
+    "ts": "2026-08-10T09:10:40.205284Z",
+    "type": "node_failed",
+    "node": "researcher",
+    "payload": {
+      "subtask_id": "s1",
+      "error": "SearchError: this source is unreachable",
+      "sources": [],
+      "question": "How accurate are long-context LLMs on the same task?"
+    }
+  },
+  {
+    "run_id": "partial-failure",
+    "seq": 9,
+    "ts": "2026-08-10T09:10:40.205284Z",
+    "type": "node_started",
+    "node": "researcher",
+    "payload": {
+      "subtask_id": "s2"
+    }
+  },
+  {
+    "run_id": "partial-failure",
+    "seq": 10,
+    "ts": "2026-08-10T09:10:40.205284Z",
+    "type": "node_completed",
+    "node": "researcher",
+    "payload": {
+      "subtask_id": "s2",
+      "sources": [
+        {
+          "url": "https://example.com/what-0",
+          "title": "what result 0"
+        },
+        {
+          "url": "https://example.com/what-1",
+          "title": "what result 1"
+        }
+      ],
+      "question": "What are the cost characteristics of each?"
+    }
+  },
+  {
+    "run_id": "partial-failure",
+    "seq": 11,
+    "ts": "2026-08-10T09:10:40.205284Z",
+    "type": "node_started",
+    "node": "researcher",
+    "payload": {
+      "subtask_id": "s3"
+    }
+  },
+  {
+    "run_id": "partial-failure",
+    "seq": 12,
+    "ts": "2026-08-10T09:10:40.205284Z",
+    "type": "node_completed",
+    "node": "researcher",
+    "payload": {
+      "subtask_id": "s3",
+      "sources": [
+        {
+          "url": "https://example.com/what-0",
+          "title": "what result 0"
+        },
+        {
+          "url": "https://example.com/what-1",
+          "title": "what result 1"
+        }
+      ],
+      "question": "What are the latency characteristics of each?"
+    }
+  },
+  {
+    "run_id": "partial-failure",
+    "seq": 13,
+    "ts": "2026-08-10T09:10:40.205284Z",
+    "type": "node_started",
+    "node": "researcher",
+    "payload": {
+      "subtask_id": "s4"
+    }
+  },
+  {
+    "run_id": "partial-failure",
+    "seq": 14,
+    "ts": "2026-08-10T09:10:40.205284Z",
+    "type": "node_completed",
+    "node": "researcher",
+    "payload": {
+      "subtask_id": "s4",
+      "sources": [
+        {
+          "url": "https://example.com/when-0",
+          "title": "when result 0"
+        },
+        {
+          "url": "https://example.com/when-1",
+          "title": "when result 1"
+        }
+      ],
+      "question": "When is each the better choice?"
+    }
+  },
+  {
+    "run_id": "partial-failure",
+    "seq": 15,
+    "ts": "2026-08-10T09:10:40.221938Z",
+    "type": "node_started",
+    "node": "synthesizer",
+    "payload": {
+      "subtask_id": null
+    }
+  },
+  {
+    "run_id": "partial-failure",
+    "seq": 16,
+    "ts": "2026-08-10T09:10:40.221938Z",
+    "type": "node_completed",
+    "node": "synthesizer",
+    "payload": {
+      "subtask_id": null
+    }
+  },
+  {
+    "run_id": "partial-failure",
+    "seq": 17,
+    "ts": "2026-08-10T09:10:40.221938Z",
+    "type": "iteration_started",
+    "node": "critic",
+    "payload": {
+      "iteration": 1
+    }
+  },
+  {
+    "run_id": "partial-failure",
+    "seq": 18,
+    "ts": "2026-08-10T09:10:40.221938Z",
+    "type": "node_started",
+    "node": "critic",
+    "payload": {
+      "subtask_id": null
+    }
+  },
+  {
+    "run_id": "partial-failure",
+    "seq": 19,
+    "ts": "2026-08-10T09:10:40.221938Z",
+    "type": "node_completed",
+    "node": "critic",
+    "payload": {
+      "subtask_id": null
+    }
+  },
+  {
+    "run_id": "partial-failure",
+    "seq": 20,
+    "ts": "2026-08-10T09:10:40.221938Z",
+    "type": "critic_verdict",
+    "node": "critic",
+    "payload": {
+      "iteration": 1,
+      "overall": "accept",
+      "faulted_subtask_ids": [],
+      "has_synthesis_feedback": false
+    }
+  },
+  {
+    "run_id": "partial-failure",
+    "seq": 21,
+    "ts": "2026-08-10T09:10:40.221938Z",
+    "type": "run_completed",
+    "node": null,
+    "payload": {
+      "answer": "## Answer\n\nSynthesised from the findings.",
+      "thread_id": "thread",
+      "iterations": 1,
+      "subtask_count": 5,
+      "source_count": 6,
+      "degraded": [
+        "researcher_failed:s1"
+      ],
+      "total_tokens": 0
+    }
+  }
+]
