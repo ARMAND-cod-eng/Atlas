@@ -31,7 +31,9 @@ from atlas.metrics import (
     DEGRADED_BUDGET_EXCEEDED,
     RunMetrics,
 )
+from atlas.runner import execute_run
 from tests.conftest import (
+    FakeArq,
     FakeRedis,
     initial_state,
     make_call_model,
@@ -252,20 +254,19 @@ async def test_a_breached_run_stops_at_one_iteration_with_an_answer(
     assert [(r.iteration, r.overall) for r in metrics.critic_rounds] == [(1, "accept")]
 
 
-def test_a_breach_returns_200_not_an_error(
-    budget_graph: None, fake_redis: FakeRedis, monkeypatch: pytest.MonkeyPatch
-) -> None:
+def test_a_breach_returns_200_not_an_error(budget_graph: None, fake_redis: FakeRedis) -> None:
     """Overspending is a degraded result, not a failed request.
 
-    A 5xx here would throw away an answer the user already paid for.
+    A 5xx here would throw away an answer the user already paid for. Still
+    asserted through the HTTP route even though execution moved to the worker in
+    Phase 3 — the client-visible contract is what this test is about, and it did
+    not change.
     """
     compiled = build_state_graph().compile(checkpointer=MemorySaver())
     app = create_app()
-
-    class StubGraph:
-        graph = compiled
-
-    app.state.graph = StubGraph()
+    app.state.arq = FakeArq(
+        lambda run_id, query, thread_id: execute_run(run_id, query, thread_id, compiled)
+    )
     fake_redis.values[f"atlas:budget:{THREAD}"] = get_settings().max_tokens_per_query + 1
 
     response = TestClient(app).post("/query", json={"query": "what is RAG?", "thread_id": THREAD})

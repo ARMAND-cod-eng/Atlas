@@ -90,6 +90,22 @@ class Settings(BaseSettings):
     # It costs nothing on a normal run, and synthesis_truncated reports any trip.
     synthesis_max_tokens: int = 6000
 
+    # --- Streaming ---------------------------------------------------------
+    #
+    # Heartbeat comment interval on an idle SSE stream. Proxies and load
+    # balancers close connections that go quiet — nginx defaults to 60s — and a
+    # run can easily spend 25s inside one synthesis call with nothing to report.
+    sse_heartbeat_seconds: int = 15
+
+    # How long a finished run's events and result stay readable. Matches the
+    # budget counter's TTL: an abandoned run's event log should not outlive the
+    # spend record for the same run.
+    event_stream_ttl_seconds: int = 3600
+
+    # Runs the worker will execute concurrently. Each one is five parallel
+    # branches of LLM I/O, so this is a fan-out multiplier, not a thread count.
+    worker_max_jobs: int = 5
+
     @property
     def sqlalchemy_url(self) -> str:
         """``database_url`` rewritten for SQLAlchemy's async psycopg3 driver.

@@ -8,6 +8,8 @@ one, because the only signal was "Internal Server Error".
 
 from __future__ import annotations
 
+from typing import Any
+
 
 class AtlasError(Exception):
     """Base for every error Atlas raises on purpose.
@@ -30,6 +32,18 @@ class ProviderError(AtlasError):
         self.node = node
         super().__init__(message)
 
+    def __reduce__(self) -> tuple[Any, ...]:
+        """Survive a trip through pickle.
+
+        Needed since Phase 3: a run executes in the worker, and arq pickles a
+        failing job's exception so the awaiting request can re-raise it. The
+        default reconstructor calls ``cls(*self.args)`` — one positional — which
+        does not match this signature, so the error would arrive as a confusing
+        ``TypeError`` about a missing ``message`` and the real provider failure
+        would be lost on the way to the client.
+        """
+        return (self.__class__, (self.provider, str(self)), {"node": self.node})
+
 
 class SearchError(AtlasError):
     """A web search failed.
@@ -41,3 +55,7 @@ class SearchError(AtlasError):
     def __init__(self, message: str, *, query: str | None = None) -> None:
         self.query = query
         super().__init__(message)
+
+    def __reduce__(self) -> tuple[Any, ...]:
+        """Survive a trip through pickle — see :meth:`ProviderError.__reduce__`."""
+        return (self.__class__, (str(self),), {"query": self.query})

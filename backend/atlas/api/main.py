@@ -1,122 +1,42 @@
-"""FastAPI application: lifespan, logging, CORS.
+"""FastAPI application: lifespan, exception handlers, CORS.
 
-The graph and the Redis client are built once at startup and shared for the
-process lifetime. Building either per-request would open a connection pool per
-request, which is the kind of thing that looks fine until it is under load.
+Since Phase 3 this process does not execute runs. It enqueues them and relays
+their events, so the clients it holds are the Redis one and the arq pool — both
+built once at startup, because building either per-request would open a
+connection pool per request.
+
+``loop_factory``, ``JsonFormatter`` and ``configure_logging`` live in
+:mod:`atlas.runtime` and are re-exported here: the worker needs them too, and the
+API imports the worker, so the worker cannot import back. The re-export keeps the
+documented ``--loop atlas.api.main:loop_factory`` argument resolving.
 """
 
 from __future__ import annotations
 
-import asyncio
-import json
 import logging
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
-from datetime import UTC, datetime
-from typing import Any
 
+from arq import create_pool
+from arq.connections import ArqRedis
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from redis.asyncio import Redis
 
+from atlas import eventlog
 from atlas.api.routes import router
+from atlas.api.streams import router as streams_router
 from atlas.config import get_settings
 from atlas.db.session import dispose_engine
 from atlas.errors import ProviderError, SearchError
-from atlas.graph.builder import build_graph
+from atlas.runtime import JsonFormatter, configure_logging, loop_factory
+from atlas.worker import redis_settings
 
-
-def loop_factory() -> asyncio.AbstractEventLoop:
-    """Build a SelectorEventLoop. Referenced by import path, for Windows only.
-
-    psycopg's async driver refuses to run on ProactorEventLoop::
-
-        InterfaceError: Psycopg cannot use the 'ProactorEventLoop' to run in
-        async mode.
-
-    and uvicorn picks exactly that loop on Windows for any run without
-    subprocesses (``uvicorn/loops/asyncio.py``: ``win32 and not use_subprocess ->
-    ProactorEventLoop``). The checkpointer pool then never opens a connection and
-    the failure surfaces as ``PoolTimeout: pool initialization incomplete after
-    30.0 sec`` — which points at the database rather than at the event loop, and
-    costs an afternoon to track down.
-
-    Setting the event loop *policy* does not help: uvicorn 0.36+ passes an
-    explicit ``loop_factory`` to ``asyncio.run``, bypassing the policy entirely.
-    The supported override is ``--loop <module>:<attr>``, which is what
-    ``atlas/__main__.py`` wires up. It also explains why ``--reload`` appeared to
-    work: the reloader uses subprocesses, so uvicorn already chose Selector there.
-
-    Not used off Windows — see ``atlas/__main__.py``, which keeps ``loop="auto"``
-    there so uvloop is still picked up in the container.
-    """
-    return asyncio.SelectorEventLoop()
-
-
-# Attributes the stdlib puts on every LogRecord. Anything outside this set was
-# passed by the caller via `extra=` and belongs in the structured output.
-_RESERVED_LOG_ATTRS = frozenset(
-    {
-        "args",
-        "asctime",
-        "created",
-        "exc_info",
-        "exc_text",
-        "filename",
-        "funcName",
-        "levelname",
-        "levelno",
-        "lineno",
-        "module",
-        "msecs",
-        "message",
-        "msg",
-        "name",
-        "pathname",
-        "process",
-        "processName",
-        "relativeCreated",
-        "stack_info",
-        "taskName",
-        "thread",
-        "threadName",
-    }
-)
-
-
-class JsonFormatter(logging.Formatter):
-    """Render each record as a single JSON object on one line.
-
-    One object per line is what log shippers expect, and it keeps `extra=` fields
-    queryable instead of buried in an interpolated string.
-    """
-
-    def format(self, record: logging.LogRecord) -> str:
-        payload: dict[str, Any] = {
-            "timestamp": datetime.fromtimestamp(record.created, tz=UTC).isoformat(),
-            "level": record.levelname,
-            "logger": record.name,
-            "message": record.getMessage(),
-        }
-        if record.exc_info:
-            payload["exception"] = self.formatException(record.exc_info)
-        for key, value in record.__dict__.items():
-            if key not in _RESERVED_LOG_ATTRS and not key.startswith("_"):
-                payload[key] = value
-        # default=str so an unserializable extra degrades to its repr rather than
-        # raising inside the logging call and masking the original event.
-        return json.dumps(payload, default=str)
-
-
-def configure_logging(level: str) -> None:
-    """Install the JSON formatter on the root logger."""
-    handler = logging.StreamHandler()
-    handler.setFormatter(JsonFormatter())
-    root = logging.getLogger()
-    root.handlers.clear()
-    root.addHandler(handler)
-    root.setLevel(level.upper())
+# Re-exported for `--loop atlas.api.main:loop_factory` and for tests that import
+# the formatter from here. Listed explicitly so the linter does not read them as
+# unused imports.
+__all__ = ["JsonFormatter", "app", "configure_logging", "create_app", "loop_factory"]
 
 
 @asynccontextmanager
@@ -128,11 +48,14 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
 
     log.info("starting Atlas", extra={"primary_model": settings.primary_model})
 
-    atlas_graph = await build_graph()
+    # No graph here since Phase 3. The API enqueues runs and relays their events;
+    # the worker owns the graph and its Postgres pool. That is what makes this
+    # process stateless enough to restart without killing a 67-second run.
     redis: Redis = Redis.from_url(settings.redis_url, decode_responses=True)
+    arq: ArqRedis = await create_pool(redis_settings())
 
-    app.state.graph = atlas_graph
     app.state.redis = redis
+    app.state.arq = arq
     log.info("startup complete")
 
     try:
@@ -140,8 +63,9 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     finally:
         # Unconditional teardown: a failure closing one resource must not strand
         # the others.
-        await atlas_graph.aclose()
+        await arq.aclose()
         await redis.aclose()
+        await eventlog.close_client()
         await dispose_engine()
         log.info("shutdown complete")
 
@@ -235,6 +159,7 @@ def create_app() -> FastAPI:
         allow_headers=["*"],
     )
     app.include_router(router)
+    app.include_router(streams_router)
     return app
 
 

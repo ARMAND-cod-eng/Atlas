@@ -6,6 +6,7 @@ money. Every model is a fake, every credential below is fictional.
 
 from __future__ import annotations
 
+import asyncio
 from collections.abc import Callable, Coroutine, Iterator, Sequence
 from typing import Any
 
@@ -13,7 +14,7 @@ import pytest
 from langchain_core.messages import AIMessage
 from pydantic import BaseModel
 
-from atlas import budget
+from atlas import budget, eventlog
 from atlas.config import get_settings
 from atlas.graph.state import AtlasState, CriticVerdict, PlannerOutput, Subtask
 from atlas.metrics import RunMetrics
@@ -42,26 +43,43 @@ def fake_env(monkeypatch: pytest.MonkeyPatch) -> Iterator[None]:
     get_settings.cache_clear()
 
 
-class FakeRedis:
-    """An in-memory stand-in for the budget counter's Redis client.
+StreamEntry = tuple[str, dict[str, str]]
 
-    Only the three calls ``atlas.budget`` makes. ``fail`` flips every operation to
-    raising, which is how the fail-open path is tested without taking Redis down.
+
+class FakeRedis:
+    """An in-memory stand-in for the Redis client, covering what Atlas calls.
+
+    The stream half is a real implementation rather than a stub, and that is
+    deliberate: ``XREAD BLOCK`` has to actually block and actually wake, or the
+    heartbeat and live-tail tests assert nothing at all. A stub that returned
+    immediately would make an idle stream indistinguishable from a busy one —
+    which is the specific thing those tests exist to tell apart.
+
+    ``fail`` flips every operation to raising, which is how the fail-open paths
+    are tested without taking Redis down.
     """
 
     def __init__(self) -> None:
-        self.values: dict[str, int] = {}
+        self.values: dict[str, int | str] = {}
         self.expiries: dict[str, int] = {}
+        self.streams: dict[str, list[StreamEntry]] = {}
         self.fail = False
+        # Signalled on every append so a blocked reader wakes immediately rather
+        # than sitting out its full timeout.
+        self._appended = asyncio.Event()
 
     def _guard(self) -> None:
         if self.fail:
             raise ConnectionError("redis is down")
 
+    # --- strings and counters -------------------------------------------------
+
     async def incrby(self, key: str, amount: int) -> int:
         self._guard()
-        self.values[key] = self.values.get(key, 0) + amount
-        return self.values[key]
+        current = self.values.get(key, 0)
+        total = int(current) + amount
+        self.values[key] = total
+        return total
 
     async def expire(self, key: str, seconds: int) -> bool:
         self._guard()
@@ -73,18 +91,141 @@ class FakeRedis:
         value = self.values.get(key)
         return None if value is None else str(value)
 
+    async def set(self, key: str, value: str, ex: int | None = None) -> bool:
+        self._guard()
+        self.values[key] = value
+        if ex is not None:
+            self.expiries[key] = ex
+        return True
+
+    async def exists(self, key: str) -> int:
+        self._guard()
+        return int(key in self.values or key in self.streams)
+
+    # --- streams --------------------------------------------------------------
+
+    async def xadd(
+        self,
+        name: str,
+        fields: dict[Any, Any],
+        maxlen: int | None = None,
+        approximate: bool = True,
+    ) -> str:
+        self._guard()
+        entries = self.streams.setdefault(name, [])
+        entry_id = f"{len(entries) + 1}-0"
+        entries.append((entry_id, {str(k): str(v) for k, v in fields.items()}))
+        if maxlen is not None and len(entries) > maxlen:
+            del entries[: len(entries) - maxlen]
+        self._appended.set()
+        self._appended = asyncio.Event()
+        return entry_id
+
+    async def xrange(self, name: str, min: str = "-", max: str = "+") -> list[StreamEntry]:
+        self._guard()
+        return list(self.streams.get(name, []))
+
+    async def xread(
+        self,
+        streams: dict[str, str],
+        count: int | None = None,
+        block: int | None = None,
+    ) -> list[tuple[str, list[StreamEntry]]]:
+        self._guard()
+        name, last_id = next(iter(streams.items()))
+        # "$" means "only what arrives after this call", so it resolves against
+        # the stream as it stands right now.
+        if last_id == "$":
+            existing = self.streams.get(name, [])
+            last_id = existing[-1][0] if existing else "0-0"
+
+        new = self._after(name, last_id)
+        if new:
+            return [(name, new[:count] if count else new)]
+        if not block:
+            return []
+
+        waiter = self._appended
+        try:
+            await asyncio.wait_for(waiter.wait(), timeout=block / 1000)
+        except TimeoutError:
+            return []
+        self._guard()
+        new = self._after(name, last_id)
+        return [(name, new[:count] if count else new)] if new else []
+
+    def _after(self, name: str, last_id: str) -> list[StreamEntry]:
+        def order(entry_id: str) -> tuple[int, int]:
+            ms, _, seq = entry_id.partition("-")
+            return int(ms), int(seq or 0)
+
+        cutoff = order(last_id)
+        return [entry for entry in self.streams.get(name, []) if order(entry[0]) > cutoff]
+
 
 @pytest.fixture(autouse=True)
 def fake_redis(monkeypatch: pytest.MonkeyPatch) -> FakeRedis:
-    """Point the budget counter at memory instead of a socket.
+    """Point every Redis consumer at one in-memory client.
 
-    Autouse rather than opt-in: the critic node checks the budget on every graph
-    run, so without this any graph test would try to reach localhost:6379. An
-    accidental network call is exactly what this suite is not allowed to make.
+    Autouse rather than opt-in: the critic checks the budget on every graph run
+    and the runner appends an event for every step, so without this any graph
+    test would reach for localhost:6379. An accidental network call is exactly
+    what this suite is not allowed to make.
+
+    One client for both modules, as in production — the budget counter and the
+    event log share a Redis.
     """
     client = FakeRedis()
     monkeypatch.setattr(budget, "get_client", lambda: client)
+    monkeypatch.setattr(eventlog, "get_client", lambda: client)
     return client
+
+
+class FakeJob:
+    """An arq job whose result is already known."""
+
+    def __init__(self, job_id: str, payload: dict[str, Any] | BaseException) -> None:
+        self.job_id = job_id
+        self._payload = payload
+
+    # ASYNC109 wants a timeout handled by asyncio.timeout rather than a
+    # parameter, but the name and shape here are arq's, not ours — this is a
+    # double for Job.result and has to match what routes.py calls.
+    async def result(self, timeout: float | None = None) -> dict[str, Any]:  # noqa: ASYNC109
+        if isinstance(self._payload, BaseException):
+            # arq re-raises a failed job's exception in the awaiting request.
+            raise self._payload
+        return self._payload
+
+
+class FakeArq:
+    """Stands in for the arq pool by running the job inline.
+
+    Inline rather than deferred keeps the API tests deterministic: by the time
+    ``enqueue_job`` returns, the run has happened and its events are in the log.
+    The queue itself is arq's to test, not ours.
+    """
+
+    def __init__(self, handler: Callable[[str, str, str], Coroutine[Any, Any, Any]]) -> None:
+        self.handler = handler
+        self.calls: list[tuple[str, str, str, str]] = []
+
+    async def enqueue_job(
+        self,
+        function: str,
+        run_id: str,
+        query: str,
+        thread_id: str,
+        _job_id: str | None = None,
+    ) -> FakeJob:
+        self.calls.append((function, run_id, query, thread_id))
+        try:
+            payload = await self.handler(run_id, query, thread_id)
+        except BaseException as exc:
+            # Mirrors arq, which stores a failed job's exception rather than
+            # letting it escape the enqueue call.
+            return FakeJob(run_id, exc)
+        return FakeJob(run_id, payload)
 
 
 # The two fake signatures mirror atlas.models exactly. They are spelled out rather

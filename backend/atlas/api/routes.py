@@ -1,5 +1,9 @@
 """HTTP routes.
 
+The API no longer executes runs — it enqueues them and reads their results. That
+is the point of Phase 3: a 67-second run must not be owned by a connection that
+can drop at second 40.
+
 The health probes are module-level functions rather than inline logic so tests
 can substitute them without standing up Postgres or Redis.
 """
@@ -7,19 +11,20 @@ can substitute them without standing up Postgres or Redis.
 from __future__ import annotations
 
 import logging
+from typing import Any
 from uuid import uuid4
 
-from fastapi import APIRouter, Request
-from langchain_core.runnables import RunnableConfig
-from psycopg import AsyncConnection
-from psycopg.rows import DictRow
-from psycopg_pool import AsyncConnectionPool
+from arq.connections import ArqRedis
+from arq.jobs import Job
+from fastapi import APIRouter, HTTPException, Request
 from pydantic import BaseModel, Field
 from redis.asyncio import Redis
+from sqlalchemy import text
 
-from atlas.graph.builder import AtlasGraph, recursion_limit
-from atlas.graph.state import AtlasState, ResearchResult, Source, Subtask
-from atlas.metrics import RunMetrics
+from atlas import eventlog
+from atlas.db.session import get_engine
+from atlas.result import QueryResponse
+from atlas.worker import QUERY_WAIT_SECONDS, RUN_RESEARCH
 
 logger = logging.getLogger(__name__)
 
@@ -39,25 +44,25 @@ class QueryRequest(BaseModel):
     )
 
 
-class QueryResponse(BaseModel):
-    """Answer, the thread it belongs to, and how it was produced.
+class RunAccepted(BaseModel):
+    """What ``POST /runs`` returns immediately, before any work happens.
 
-    Additive over Phase 0 — anything reading ``.answer`` keeps working. The rest
-    exists because a research platform's citations are the product, and because a
-    fan-out you cannot see is a fan-out you cannot debug. ``metrics.degraded``
-    in particular means a partial run is visible from the client rather than only
-    in server logs.
+    ``run_id`` identifies this execution and keys its event stream; ``thread_id``
+    identifies the conversation and keys the checkpointer. Different lifetimes —
+    one thread accumulates many runs — which is why both are returned.
     """
 
-    answer: str
+    run_id: str
     thread_id: str
-    subtasks: list[Subtask] = Field(default_factory=list)
-    sources: list[Source] = Field(default_factory=list)
-    metrics: RunMetrics = Field(default_factory=RunMetrics)
-    # How many critic passes ran. With metrics.critic_rounds this makes the
-    # quality gate visible: 1 with an "accept" round means it reviewed and
-    # approved, which is very different from it never having run.
-    iterations: int = 0
+    events_url: str
+
+
+class RunStatus(BaseModel):
+    """Where a run has got to, and its result once there is one."""
+
+    run_id: str
+    status: str
+    result: QueryResponse | None = None
 
 
 class HealthResponse(BaseModel):
@@ -69,11 +74,15 @@ class HealthResponse(BaseModel):
 
 
 async def check_db(request: Request) -> bool:
-    """Round-trip a trivial query through the checkpointer's pool."""
-    pool: AsyncConnectionPool[AsyncConnection[DictRow]] = request.app.state.graph.pool
+    """Round-trip a trivial query against Postgres.
+
+    Goes through the SQLAlchemy engine rather than the checkpointer's pool,
+    because the API no longer owns that pool — the worker does. Same database,
+    same answer to the question the probe is asking.
+    """
     try:
-        async with pool.connection() as conn:
-            await conn.execute("SELECT 1")
+        async with get_engine().connect() as conn:
+            await conn.execute(text("SELECT 1"))
     except Exception:
         # A failed probe is a reportable state, not a server error — the endpoint
         # must still answer so a load balancer learns *which* dependency is down.
@@ -91,42 +100,6 @@ async def check_redis(request: Request) -> bool:
         logger.exception("redis health check failed")
         return False
     return True
-
-
-def _validate_list[ModelT: BaseModel](raw: object, model: type[ModelT]) -> list[ModelT]:
-    """Coerce a state value into typed models.
-
-    Graph state round-trips through the checkpointer, which may hand back plain
-    dicts rather than model instances. ``model_validate`` accepts either, so this
-    is correct on a fresh run and on a resumed thread alike.
-    """
-    if not isinstance(raw, list):
-        return []
-    return [model.model_validate(item) for item in raw]
-
-
-def _validate_metrics(raw: object) -> RunMetrics:
-    """Coerce state's run_metrics, tolerating an absent or resumed value."""
-    if raw is None:
-        return RunMetrics()
-    return RunMetrics.model_validate(raw)
-
-
-def _dedupe_sources(results: list[ResearchResult]) -> list[Source]:
-    """Flatten every researcher's sources, first occurrence of each URL winning.
-
-    Parallel researchers frequently land on the same page, and a citation list
-    that repeats one URL five times is noise.
-    """
-    seen: set[str] = set()
-    sources: list[Source] = []
-    for result in results:
-        for source in result.sources:
-            if source.url in seen:
-                continue
-            seen.add(source.url)
-            sources.append(source)
-    return sources
 
 
 @router.get("/health", response_model=HealthResponse)
@@ -147,59 +120,74 @@ async def health(request: Request) -> HealthResponse:
     )
 
 
+async def enqueue_run(request: Request, payload: QueryRequest) -> tuple[Job, str, str]:
+    """Put one run on the queue. Returns ``(job, run_id, thread_id)``."""
+    arq: ArqRedis = request.app.state.arq
+    run_id = str(uuid4())
+    thread_id = payload.thread_id or str(uuid4())
+    # Register before enqueueing. A client can subscribe the instant this call
+    # returns, which is sooner than the worker can write its first event.
+    await eventlog.register(run_id)
+    # _job_id ties the arq job to the run, so the job's result and the run's
+    # event stream are addressable by the same identifier.
+    job = await arq.enqueue_job(RUN_RESEARCH, run_id, payload.query, thread_id, _job_id=run_id)
+    if job is None:
+        # arq returns None when a job with this id already exists. run_id is a
+        # fresh uuid, so this means Redis is not in the state we believe it is —
+        # better to say so than to hand back a run_id nothing will execute.
+        logger.error("enqueue returned no job", extra={"run_id": run_id})
+        raise HTTPException(status_code=503, detail="could not enqueue the run")
+    logger.info("run enqueued", extra={"run_id": run_id, "thread_id": thread_id})
+    return job, run_id, thread_id
+
+
+@router.post("/runs", response_model=RunAccepted, status_code=202)
+async def start_run(request: Request, payload: QueryRequest) -> RunAccepted:
+    """Start a run and return immediately.
+
+    202 rather than 200: nothing has been researched yet. The caller subscribes
+    to ``events_url`` to watch it happen, and may drop and reconnect freely —
+    the run is not tied to that connection.
+    """
+    _job, run_id, thread_id = await enqueue_run(request, payload)
+    return RunAccepted(run_id=run_id, thread_id=thread_id, events_url=f"/runs/{run_id}/events")
+
+
+@router.get("/runs/{run_id}", response_model=RunStatus)
+async def get_run(run_id: str) -> RunStatus:
+    """The full result of a run.
+
+    ``run_completed`` carries a summary only, so this is where a client fetches
+    the complete sources list and per-call metrics — once, rather than having
+    them replayed on every reconnect.
+    """
+    result = await eventlog.load_result(run_id)
+    if result is not None:
+        return RunStatus(run_id=run_id, status="completed", result=QueryResponse(**result))
+    if await eventlog.exists(run_id):
+        return RunStatus(run_id=run_id, status="running")
+    raise HTTPException(status_code=404, detail=f"unknown run: {run_id}")
+
+
 @router.post("/query", response_model=QueryResponse)
 async def query(request: Request, payload: QueryRequest) -> QueryResponse:
-    """Run a query through the graph and return the answer.
+    """Run a query and wait for the answer.
 
-    A thread id is minted when the caller omits one, and always returned — the
-    checkpointer keys persisted state by it, so it is how a follow-up call picks
-    up where this one left off.
+    Unchanged in shape since Phase 0, and still what the eval suite will drive —
+    50 traces through an SSE stream would be needless complexity. It is now a
+    thin wrapper over the same queue the streaming path uses, so there is one
+    execution path rather than two.
+
+    The cost, stated plainly: this call's latency now includes queue pickup, and
+    its throughput is bounded by the worker's ``max_jobs``.
+
+    A run that fails re-raises the worker's exception here, so a ProviderError
+    still reaches the 502 handler exactly as it did when the graph ran in-process.
     """
-    atlas_graph: AtlasGraph = request.app.state.graph
-    thread_id = payload.thread_id or str(uuid4())
-
-    config: RunnableConfig = {
-        "configurable": {"thread_id": thread_id},
-        # Explicit rather than LangGraph's default 25, so a routing bug in the
-        # critic loop fails loudly instead of spinning through silent supersteps.
-        "recursion_limit": recursion_limit(),
-    }
-    # Typed as AtlasState rather than a bare dict so the graph's input contract is
-    # checked here, at the boundary, instead of failing inside a node.
-    initial: AtlasState = {
-        "query": payload.query,
-        "subtasks": [],
-        "research_results": [],
-        "answer": "",
-        "messages": [],
-        "run_metrics": RunMetrics(),
-        "iteration": 0,
-        "critic_feedback": [],
-    }
-
-    logger.info("query received", extra={"thread_id": thread_id})
-    result = await atlas_graph.graph.ainvoke(initial, config=config)
-
-    subtasks = _validate_list(result.get("subtasks"), Subtask)
-    results = _validate_list(result.get("research_results"), ResearchResult)
-    metrics = _validate_metrics(result.get("run_metrics"))
-
-    logger.info(
-        "query complete",
-        extra={
-            "thread_id": thread_id,
-            "subtask_count": len(subtasks),
-            "degraded": metrics.degraded,
-            "total_tokens": metrics.total_tokens,
-        },
-    )
-
-    raw_iterations = result.get("iteration")
-    return QueryResponse(
-        answer=str(result["answer"]),
-        thread_id=thread_id,
-        subtasks=subtasks,
-        sources=_dedupe_sources(results),
-        metrics=metrics,
-        iterations=raw_iterations if isinstance(raw_iterations, int) else 0,
-    )
+    job, run_id, _thread_id = await enqueue_run(request, payload)
+    try:
+        result: dict[str, Any] = await job.result(timeout=QUERY_WAIT_SECONDS)
+    except TimeoutError:
+        logger.error("query timed out waiting for the worker", extra={"run_id": run_id})
+        raise HTTPException(status_code=504, detail="the run did not complete in time") from None
+    return QueryResponse(**result)
