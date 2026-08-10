@@ -41,6 +41,7 @@ def _patch_answer(monkeypatch: pytest.MonkeyPatch, answer: str) -> None:
         messages: object,
         metrics: RunMetrics,
         temperature: float | None = None,
+        max_tokens: int | None = None,
     ) -> AIMessage:
         return AIMessage(content=answer)
 
@@ -104,6 +105,7 @@ async def test_failed_subtasks_are_marked_in_the_prompt(
         messages: object,
         metrics: RunMetrics,
         temperature: float | None = None,
+        max_tokens: int | None = None,
     ) -> AIMessage:
         assert isinstance(messages, list)
         captured["prompt"] = "\n".join(str(m.content) for m in messages)
@@ -149,6 +151,7 @@ async def test_no_research_says_so_plainly(monkeypatch: pytest.MonkeyPatch) -> N
         messages: object,
         metrics: RunMetrics,
         temperature: float | None = None,
+        max_tokens: int | None = None,
     ) -> AIMessage:
         nonlocal called
         called = True

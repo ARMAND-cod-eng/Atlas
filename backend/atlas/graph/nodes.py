@@ -16,12 +16,15 @@ import re
 import uuid
 from typing import Any
 
-from langchain_core.messages import AIMessage, HumanMessage, SystemMessage
+from langchain_core.messages import AIMessage, BaseMessage, HumanMessage, SystemMessage
+from langgraph.graph import END
 from langgraph.types import Send
 
+from atlas.budget import is_exceeded
 from atlas.config import get_settings
 from atlas.graph.state import (
     AtlasState,
+    CriticVerdict,
     PlannerOutput,
     ResearcherInput,
     ResearchResult,
@@ -29,10 +32,16 @@ from atlas.graph.state import (
     Subtask,
 )
 from atlas.metrics import (
+    DEGRADED_BUDGET_CHECK_UNAVAILABLE,
     DEGRADED_BUDGET_EXCEEDED,
+    DEGRADED_CRITIC_MAX_ITERATIONS,
+    DEGRADED_CRITIC_NOT_ACTIONABLE,
+    DEGRADED_CRITIC_UNAVAILABLE,
     DEGRADED_PLANNER_FALLBACK,
     DEGRADED_RESEARCHER_FAILED,
+    DEGRADED_SYNTHESIS_TRUNCATED,
     DEGRADED_UNGROUNDED_CITATION,
+    CriticRound,
     RunMetrics,
     track_node,
 )
@@ -46,6 +55,7 @@ logger = logging.getLogger(__name__)
 PLANNER = "planner"
 RESEARCHER = "researcher"
 SYNTHESIZER = "synthesizer"
+CRITIC = "critic"
 
 PLANNER_SYSTEM = """You are the planning stage of a research system.
 
@@ -85,6 +95,40 @@ is worse than no citation, because it looks checkable and is not.
 could not be researched. Do not present partial findings as if they were complete.
 - Answer the question directly. Do not describe your process or the subtasks \
 unless a failure makes that necessary.
+- Be economical. Cover the substance and stop. Do not restate the question, \
+recap what you are about to say, or add a summary of your own summary. Length is \
+the single biggest driver of how long the user waits, so every sentence that does \
+not add information costs them time for nothing.
+"""
+
+CRITIC_SYSTEM = """You are reviewing the research behind a drafted answer, before \
+it reaches the user.
+
+You are given each subtask's question, the findings written for it, and THE \
+SOURCES THAT WERE ACTUALLY RETRIEVED. Judge the findings against those sources — \
+not against your own knowledge of the topic. If a claim is correct but not \
+supported by any listed source, that is a grounding failure and you should say so.
+
+For each subtask, check three things:
+1. Did the findings actually answer the subtask's question?
+2. Is every substantive claim traceable to one of the listed sources?
+3. Are there obvious gaps — an aspect of the question the sources cover but the \
+findings ignore?
+
+ACCEPTING SOUND WORK IS THE CORRECT OUTCOME. You are a quality gate, not a proof \
+of your own usefulness. Every rejection costs the user another search, another \
+model call, and roughly forty more seconds of waiting. Reject only when a \
+specific, nameable problem would leave the final answer wrong, unsupported, or \
+materially incomplete. Do not reject for style, for phrasing you would have \
+chosen differently, or to appear thorough. If the research is adequate, return \
+"accept" and stop.
+
+When you do reject a subtask, "guidance" must be a concrete instruction the \
+researcher can act on — say what to look for, not that the answer was weak.
+
+If the research is sound but the final write-up misrepresents it, omits a \
+finding, or cites something absent from the sources, set synthesis_feedback \
+instead of faulting subtasks. That fixes the answer without re-running searches.
 """
 
 
@@ -157,7 +201,10 @@ def fan_out(state: AtlasState) -> list[Send] | str:
         logger.warning("no subtasks to research; routing straight to synthesis")
         return SYNTHESIZER
     return [
-        Send(RESEARCHER, ResearcherInput(subtask=subtask, query=state["query"]))
+        Send(
+            RESEARCHER,
+            ResearcherInput(subtask=subtask, query=state["query"], guidance=None),
+        )
         for subtask in subtasks
     ]
 
@@ -184,23 +231,35 @@ async def _search_with_retries(subtask: Subtask, max_attempts: int) -> list[Sour
     return []
 
 
-async def _summarize(subtask: Subtask, sources: list[Source], metrics: RunMetrics) -> str:
+async def _summarize(
+    subtask: Subtask,
+    sources: list[Source],
+    metrics: RunMetrics,
+    guidance: str | None = None,
+) -> str:
     """Turn raw sources into findings with citations."""
     rendered = "\n\n".join(
         f"[{i + 1}] {s.title}\nURL: {s.url}\n{s.snippet}" for i, s in enumerate(sources)
     )
+    prompt = f"Question: {subtask.question}\n\nSources:\n{rendered}"
+    if guidance is not None:
+        # A retry. Telling the researcher what was wrong last time is the entire
+        # value of the loop — without it the second attempt repeats the first.
+        prompt = (
+            f"{prompt}\n\nA reviewer rejected your previous answer to this "
+            f"question. Address this specifically:\n{guidance}"
+        )
     response = await call_model(
         RESEARCHER,
-        [
-            SystemMessage(RESEARCHER_SYSTEM),
-            HumanMessage(f"Question: {subtask.question}\n\nSources:\n{rendered}"),
-        ],
+        [SystemMessage(RESEARCHER_SYSTEM), HumanMessage(prompt)],
         metrics,
     )
     return response.text
 
 
-async def _research(subtask: Subtask, metrics: RunMetrics) -> ResearchResult:
+async def _research(
+    subtask: Subtask, metrics: RunMetrics, guidance: str | None = None
+) -> ResearchResult:
     """Research one subtask. Never raises.
 
     This is the most important error boundary in the phase. Researchers run
@@ -218,7 +277,7 @@ async def _research(subtask: Subtask, metrics: RunMetrics) -> ResearchResult:
                 findings="No sources were found for this question.",
                 sources=[],
             )
-        findings = await _summarize(subtask, sources, metrics)
+        findings = await _summarize(subtask, sources, metrics, guidance)
         return ResearchResult(subtask_id=subtask.id, findings=findings, sources=sources)
     except Exception as exc:
         logger.exception("researcher failed", extra={"subtask_id": subtask.id})
@@ -235,7 +294,7 @@ async def researcher(state: ResearcherInput) -> dict[str, Any]:
     """Research a single subtask. Input arrives from a ``Send``, not AtlasState."""
     subtask = state["subtask"]
     async with track_node(RESEARCHER) as metrics:
-        result = await _research(subtask, metrics)
+        result = await _research(subtask, metrics, state.get("guidance"))
     # A one-element list because the reducer on research_results concatenates.
     return {"research_results": [result], "run_metrics": metrics}
 
@@ -320,19 +379,58 @@ async def _synthesize(state: AtlasState, metrics: RunMetrics) -> str:
             "subtasks — try rephrasing the question."
         )
 
+    settings = get_settings()
+    prompt = (
+        f"Original question: {state['query']}\n\nResearch findings:\n\n{_render_findings(results)}"
+    )
+    # On a synthesis-only revision the critic faulted the write-up, not the
+    # research. Passing its feedback is the only thing that makes the second
+    # attempt different from the first.
+    feedback = _latest_synthesis_feedback(state)
+    if feedback is not None:
+        prompt = f"{prompt}\n\nA reviewer rejected your previous answer:\n{feedback}"
+
     response = await call_model(
         SYNTHESIZER,
         [
             SystemMessage(SYNTHESIZER_SYSTEM),
             *state["messages"],
-            HumanMessage(
-                f"Original question: {state['query']}\n\n"
-                f"Research findings:\n\n{_render_findings(results)}"
-            ),
+            HumanMessage(prompt),
         ],
         metrics,
+        max_tokens=settings.synthesis_max_tokens,
     )
+    if _hit_the_output_cap(response):
+        logger.warning(
+            "synthesis stopped at the output cap; the answer is truncated",
+            extra={"max_tokens": settings.synthesis_max_tokens},
+        )
+        metrics.degraded.append(DEGRADED_SYNTHESIS_TRUNCATED)
     return response.text
+
+
+# Anthropic reports the stop condition as stop_reason, OpenAI as finish_reason.
+# Both are checked because either model can serve this call through the fallback.
+_TRUNCATION_MARKERS: dict[str, str] = {"stop_reason": "max_tokens", "finish_reason": "length"}
+
+
+def _hit_the_output_cap(response: BaseMessage) -> bool:
+    """Did the model stop because it ran out of budget rather than out of things to say?
+
+    Worth distinguishing: a cap that never trips is a backstop, and a cap that
+    trips on ordinary runs is a truncator. Only the response metadata knows which
+    one is deployed, and a truncated answer is otherwise silent — it just ends.
+    """
+    metadata = response.response_metadata
+    return any(metadata.get(field) == value for field, value in _TRUNCATION_MARKERS.items())
+
+
+def _latest_synthesis_feedback(state: AtlasState) -> str | None:
+    """The most recent critic note about the write-up, if any."""
+    for verdict in reversed(state.get("critic_feedback") or []):
+        if verdict.synthesis_feedback:
+            return verdict.synthesis_feedback
+    return None
 
 
 async def synthesizer(state: AtlasState) -> dict[str, Any]:
@@ -346,3 +444,201 @@ async def synthesizer(state: AtlasState) -> dict[str, Any]:
         "run_metrics": metrics,
         "messages": [AIMessage(content=answer)],
     }
+
+
+def _render_for_critic(state: AtlasState) -> str:
+    """Findings *with their sources*, so the critic judges against evidence.
+
+    Deliberately richer than ``_render_findings``: the synthesizer only needs
+    URLs to cite, but the critic needs the snippets to tell a supported claim
+    from a plausible-sounding one. Ungrounded self-critique degrades answers about
+    as often as it improves them; this is what makes the review grounded.
+    """
+    by_id = {s.id: s for s in state["subtasks"]}
+    blocks: list[str] = []
+    for result in state["research_results"]:
+        subtask = by_id.get(result.subtask_id)
+        question = subtask.question if subtask else "(unknown subtask)"
+        if result.error is not None:
+            blocks.append(
+                f"### Subtask {result.subtask_id}\nQuestion: {question}\nFAILED — {result.error}"
+            )
+            continue
+        sources = (
+            "\n".join(f"- {s.url} — {s.title}\n  {s.snippet}" for s in result.sources)
+            or "- (no sources retrieved)"
+        )
+        blocks.append(
+            f"### Subtask {result.subtask_id}\nQuestion: {question}\n"
+            f"Findings:\n{result.findings}\n\nSources retrieved:\n{sources}"
+        )
+    return "\n\n".join(blocks)
+
+
+async def _review(state: AtlasState, metrics: RunMetrics) -> CriticVerdict:
+    """Ask the critic for a verdict. A failure here accepts rather than blocks.
+
+    If the critic itself errors, the run must not die — an answer already exists.
+    Treating a broken reviewer as approval is the right default: the alternative
+    is failing a query because the optional quality gate fell over.
+    """
+    try:
+        return await call_structured(
+            CRITIC,
+            [
+                SystemMessage(CRITIC_SYSTEM),
+                HumanMessage(
+                    f"Original question: {state['query']}\n\n"
+                    f"Drafted answer:\n{state['answer']}\n\n"
+                    f"Research under review:\n\n{_render_for_critic(state)}"
+                ),
+            ],
+            CriticVerdict,
+            metrics,
+        )
+    except Exception as exc:
+        logger.warning(
+            "critic failed; accepting the current answer",
+            extra={"error_type": type(exc).__name__, "error": str(exc)[:300]},
+        )
+        # Recorded, not just logged. Live verification caught this returning a
+        # round of overall="accept" that was identical in every visible respect to
+        # a genuine approval — the answer went out unreviewed and nothing said so.
+        metrics.degraded.append(DEGRADED_CRITIC_UNAVAILABLE)
+        return CriticVerdict(overall="accept")
+
+
+async def critic(state: AtlasState) -> dict[str, Any]:
+    """Review the answer against the evidence, and decide whether to send it back.
+
+    Also the budget checkpoint. This is the only node from which a new iteration
+    can start — the retry fan-out is dispatched by this node's routing edge — so
+    one check here covers both "before a new iteration" and "before a fan-out",
+    and keeps the routing function synchronous.
+    """
+    iteration = state["iteration"] + 1
+    async with track_node(CRITIC) as metrics:
+        exceeded, total = await is_exceeded()
+        if total is None:
+            metrics.degraded.append(DEGRADED_BUDGET_CHECK_UNAVAILABLE)
+        if exceeded:
+            logger.warning(
+                "token budget exhausted; accepting current answer",
+                extra={"spent": total, "budget": get_settings().max_tokens_per_query},
+            )
+            # The synthesizer runs its own in-state estimate one node earlier and
+            # writes the same marker, so a live run reported budget_exceeded
+            # twice. Two checks are worth keeping — this one is authoritative and
+            # Redis-backed, the other still works when Redis is down — but one
+            # breach should say so once.
+            if DEGRADED_BUDGET_EXCEEDED not in (state.get("run_metrics") or RunMetrics()).degraded:
+                metrics.degraded.append(DEGRADED_BUDGET_EXCEEDED)
+            verdict = CriticVerdict(overall="accept")
+        else:
+            verdict = await _review(state, metrics)
+
+        metrics.critic_rounds.append(
+            CriticRound(
+                iteration=iteration,
+                overall=verdict.overall,
+                faulted_subtask_ids=verdict.faulted_ids(),
+            )
+        )
+
+        # The router cannot write state, so anything the *answer* or metrics need
+        # about how this loop ends has to be decided here.
+        update: dict[str, Any] = {}
+        if verdict.overall == "revise":
+            actionable = bool(verdict.faulted_ids()) or bool(verdict.synthesis_feedback)
+            if not actionable:
+                metrics.degraded.append(DEGRADED_CRITIC_NOT_ACTIONABLE)
+            elif iteration >= get_settings().max_critic_iterations:
+                # Out of iterations with concerns outstanding. Keep this pass's
+                # answer and tell the user what remains unverified — re-synthesising
+                # would add 20-34s to a run that has already spent its budget.
+                metrics.degraded.append(DEGRADED_CRITIC_MAX_ITERATIONS)
+                note = _exhaustion_note(verdict)
+                if note:
+                    update["answer"] = state["answer"] + note
+
+    logger.info(
+        "critic verdict",
+        extra={
+            "iteration": iteration,
+            "overall": verdict.overall,
+            "faulted": verdict.faulted_ids(),
+        },
+    )
+    return {
+        "iteration": iteration,
+        "critic_feedback": [verdict],
+        "run_metrics": metrics,
+        **update,
+    }
+
+
+def _exhaustion_note(verdict: CriticVerdict) -> str:
+    """A short note naming what the critic still wanted, for the final answer."""
+    parts = [v.reason for v in verdict.per_subtask if v.verdict == "revise"]
+    if verdict.synthesis_feedback:
+        parts.append(verdict.synthesis_feedback)
+    if not parts:
+        return ""
+    joined = " ".join(f"- {p}" for p in parts)
+    return (
+        "\n\n---\n\n**Unverified:** review limits were reached with concerns "
+        f"outstanding, so these points remain unaddressed: {joined}"
+    )
+
+
+def route_after_critic(state: AtlasState) -> list[Send] | str:
+    """Decide whether to finish, retry specific branches, or just re-write.
+
+    Synchronous by design — the budget check that could block a new iteration
+    already ran inside the critic node, so this only has to read the verdict.
+    """
+    settings = get_settings()
+    history = state.get("critic_feedback") or []
+    if not history:
+        return END
+    verdict = history[-1]
+
+    if verdict.overall == "accept":
+        return END
+
+    if state["iteration"] >= settings.max_critic_iterations:
+        # Never loop forever. The answer from this pass stands, annotated.
+        logger.warning(
+            "critic iteration cap reached with concerns outstanding",
+            extra={"iteration": state["iteration"]},
+        )
+        return END
+
+    faulted = verdict.faulted_ids()
+    if faulted:
+        # (b) targeted retry: only the branches the critic actually faulted.
+        by_id = {s.id: s for s in state["subtasks"]}
+        sends = [
+            Send(
+                RESEARCHER,
+                ResearcherInput(
+                    subtask=by_id[subtask_id],
+                    query=state["query"],
+                    guidance=verdict.guidance_for(subtask_id),
+                ),
+            )
+            for subtask_id in faulted
+            if subtask_id in by_id
+        ]
+        if sends:
+            return sends
+
+    if verdict.synthesis_feedback:
+        # (c) the research is sound, the write-up is not. Cheapest revision there
+        # is: no searches, one synthesis call.
+        return SYNTHESIZER
+
+    # "revise" with nothing actionable. Looping would burn a full iteration to
+    # produce the same answer, so exit and record it.
+    logger.warning("critic returned revise with no actionable feedback; exiting")
+    return END

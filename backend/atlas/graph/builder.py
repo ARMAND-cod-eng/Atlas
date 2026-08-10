@@ -23,12 +23,15 @@ from psycopg_pool import AsyncConnectionPool
 
 from atlas.config import get_settings
 from atlas.graph.nodes import (
+    CRITIC,
     PLANNER,
     RESEARCHER,
     SYNTHESIZER,
+    critic,
     fan_out,
     planner,
     researcher,
+    route_after_critic,
     synthesizer,
 )
 from atlas.graph.state import AtlasState
@@ -77,6 +80,7 @@ def build_state_graph() -> StateGraph[AtlasState, Any, AtlasState, AtlasState]:
     builder.add_node(PLANNER, planner)
     builder.add_node(RESEARCHER, researcher)
     builder.add_node(SYNTHESIZER, synthesizer)
+    builder.add_node(CRITIC, critic)
 
     builder.add_edge(START, PLANNER)
     # The conditional edge is where parallelism comes from: fan_out returns one
@@ -85,10 +89,28 @@ def build_state_graph() -> StateGraph[AtlasState, Any, AtlasState, AtlasState]:
     # when there is nothing to research.
     builder.add_conditional_edges(PLANNER, fan_out, [RESEARCHER, SYNTHESIZER])
     # Every researcher branch converges here. The reducers on research_results and
-    # run_metrics are what let concurrent branches merge instead of colliding.
+    # run_metrics are what let concurrent branches merge instead of colliding —
+    # and on a retry, merge_research_results replaces rather than duplicates.
     builder.add_edge(RESEARCHER, SYNTHESIZER)
-    builder.add_edge(SYNTHESIZER, END)
+    builder.add_edge(SYNTHESIZER, CRITIC)
+    # This closes the loop. Three destinations: back to specific researchers for a
+    # targeted retry, back to the synthesizer when only the write-up was faulted,
+    # or END on acceptance or exhaustion.
+    builder.add_conditional_edges(CRITIC, route_after_critic, [RESEARCHER, SYNTHESIZER, END])
     return builder
+
+
+def recursion_limit() -> int:
+    """A ceiling sized from config, not left at LangGraph's default 25.
+
+    Worst case per iteration is one superstep each for the fan-out, synthesis and
+    critique, plus the planner once. Doubling gives slack for the synthesis-only
+    path without letting a routing bug spin quietly — an explicit limit turns that
+    into a clear error instead of 25 silent supersteps.
+    """
+    settings = get_settings()
+    per_iteration = 3
+    return 2 * (1 + per_iteration * (settings.max_critic_iterations + 1))
 
 
 async def build_graph() -> AtlasGraph:

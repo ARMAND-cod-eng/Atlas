@@ -10,15 +10,15 @@ from langgraph.checkpoint.memory import MemorySaver
 from atlas.errors import SearchError
 from atlas.graph import nodes
 from atlas.graph.builder import build_state_graph
-from atlas.graph.state import PlannerOutput, ResearcherInput, Source, Subtask
+from atlas.graph.state import ResearcherInput, Source, Subtask
 from atlas.metrics import DEGRADED_RESEARCHER_FAILED, RunMetrics
-from tests.conftest import initial_state
+from tests.conftest import initial_state, make_call_structured, make_plan
 
 SUBTASK = Subtask(id="s0", question="what is RAG?", rationale="r")
 
 
 def _input() -> ResearcherInput:
-    return {"subtask": SUBTASK, "query": "original"}
+    return {"subtask": SUBTASK, "query": "original", "guidance": None}
 
 
 async def _ok_model(
@@ -26,6 +26,7 @@ async def _ok_model(
     messages: object,
     metrics: RunMetrics,
     temperature: float | None = None,
+    max_tokens: int | None = None,
 ) -> AIMessage:
     return AIMessage(content="findings with a citation")
 
@@ -134,19 +135,8 @@ async def test_a_failing_branch_still_reaches_the_synthesizer(
             raise SearchError("this one is down", query=query)
         return [Source(url=f"https://ex.example/{query}", title="T", snippet="s")]
 
-    async def fake_structured(
-        node: str,
-        messages: object,
-        schema: type[PlannerOutput],
-        metrics: RunMetrics,
-        temperature: float | None = None,
-    ) -> PlannerOutput:
-        return PlannerOutput(
-            subtasks=[Subtask(id=f"s{i}", question=f"q{i}", rationale="r") for i in range(3)]
-        )
-
     monkeypatch.setattr(nodes, "search", half_broken)
-    monkeypatch.setattr(nodes, "call_structured", fake_structured)
+    monkeypatch.setattr(nodes, "call_structured", make_call_structured(make_plan(3)))
     monkeypatch.setattr(nodes, "call_model", _ok_model)
 
     graph = build_state_graph().compile(checkpointer=MemorySaver())

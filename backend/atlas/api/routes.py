@@ -17,7 +17,7 @@ from psycopg_pool import AsyncConnectionPool
 from pydantic import BaseModel, Field
 from redis.asyncio import Redis
 
-from atlas.graph.builder import AtlasGraph
+from atlas.graph.builder import AtlasGraph, recursion_limit
 from atlas.graph.state import AtlasState, ResearchResult, Source, Subtask
 from atlas.metrics import RunMetrics
 
@@ -54,6 +54,10 @@ class QueryResponse(BaseModel):
     subtasks: list[Subtask] = Field(default_factory=list)
     sources: list[Source] = Field(default_factory=list)
     metrics: RunMetrics = Field(default_factory=RunMetrics)
+    # How many critic passes ran. With metrics.critic_rounds this makes the
+    # quality gate visible: 1 with an "accept" round means it reviewed and
+    # approved, which is very different from it never having run.
+    iterations: int = 0
 
 
 class HealthResponse(BaseModel):
@@ -154,7 +158,12 @@ async def query(request: Request, payload: QueryRequest) -> QueryResponse:
     atlas_graph: AtlasGraph = request.app.state.graph
     thread_id = payload.thread_id or str(uuid4())
 
-    config: RunnableConfig = {"configurable": {"thread_id": thread_id}}
+    config: RunnableConfig = {
+        "configurable": {"thread_id": thread_id},
+        # Explicit rather than LangGraph's default 25, so a routing bug in the
+        # critic loop fails loudly instead of spinning through silent supersteps.
+        "recursion_limit": recursion_limit(),
+    }
     # Typed as AtlasState rather than a bare dict so the graph's input contract is
     # checked here, at the boundary, instead of failing inside a node.
     initial: AtlasState = {
@@ -164,6 +173,8 @@ async def query(request: Request, payload: QueryRequest) -> QueryResponse:
         "answer": "",
         "messages": [],
         "run_metrics": RunMetrics(),
+        "iteration": 0,
+        "critic_feedback": [],
     }
 
     logger.info("query received", extra={"thread_id": thread_id})
@@ -183,10 +194,12 @@ async def query(request: Request, payload: QueryRequest) -> QueryResponse:
         },
     )
 
+    raw_iterations = result.get("iteration")
     return QueryResponse(
         answer=str(result["answer"]),
         thread_id=thread_id,
         subtasks=subtasks,
         sources=_dedupe_sources(results),
         metrics=metrics,
+        iterations=raw_iterations if isinstance(raw_iterations, int) else 0,
     )

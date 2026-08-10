@@ -11,7 +11,7 @@ from __future__ import annotations
 
 import json
 import operator
-from typing import Annotated, TypedDict
+from typing import Annotated, Literal, TypedDict
 
 from langchain_core.messages import AnyMessage
 from langgraph.graph.message import add_messages
@@ -87,21 +87,92 @@ class ResearchResult(BaseModel):
     error: str | None = None
 
 
+class SubtaskVerdict(BaseModel):
+    """The critic's judgement on one subtask's research."""
+
+    subtask_id: str
+    verdict: Literal["accept", "revise"]
+    reason: str
+    guidance: str
+
+
+class CriticVerdict(BaseModel):
+    """One full critic pass.
+
+    Structured rather than free text so routing can be derived mechanically: the
+    presence of faulted subtasks selects a targeted retry, synthesis feedback
+    alone selects a re-write, and neither means accept.
+    """
+
+    overall: Literal["accept", "revise"]
+    per_subtask: list[SubtaskVerdict] = Field(default_factory=list)
+    synthesis_feedback: str | None = None
+
+    def faulted_ids(self) -> list[str]:
+        """Subtask ids the critic wants re-researched."""
+        return [v.subtask_id for v in self.per_subtask if v.verdict == "revise"]
+
+    def guidance_for(self, subtask_id: str) -> str | None:
+        """The critic's instruction for one subtask, if it faulted it."""
+        for verdict in self.per_subtask:
+            if verdict.subtask_id == subtask_id and verdict.verdict == "revise":
+                return verdict.guidance
+        return None
+
+
+def merge_research_results(
+    left: list[ResearchResult], right: list[ResearchResult]
+) -> list[ResearchResult]:
+    """Upsert by ``subtask_id``, preserving first-seen order.
+
+    This replaces ``operator.add`` and is the load-bearing change of the critic
+    loop. Appending was correct while every subtask ran exactly once. Once a
+    faulted subtask can be re-researched, appending produces **two** results for
+    the same ``subtask_id`` — the synthesizer then sees one subtask twice with
+    contradictory findings, and ``_dedupe_sources`` keeps whichever URL it met
+    first, which may be the stale one.
+
+    Correct in both regimes, which is the point:
+
+    * **Initial fan-out** — every ``subtask_id`` is new, so every result appends.
+      Behaviourally identical to ``operator.add``, so the Phase 1 merge and
+      concurrency tests keep their meaning.
+    * **Targeted retry** — the id already exists, so the new result replaces it in
+      place. Order is preserved, so subtask ordering in the answer does not
+      shuffle between iterations.
+
+    ``test_targeted_retry`` proves the difference by running ``operator.add`` and
+    this function over the same input and asserting 6 against 5.
+    """
+    by_id = {result.subtask_id: result for result in left}
+    order = [result.subtask_id for result in left]
+    for result in right:
+        if result.subtask_id not in by_id:
+            order.append(result.subtask_id)
+        by_id[result.subtask_id] = result
+    return [by_id[subtask_id] for subtask_id in order]
+
+
 class AtlasState(TypedDict):
     """State threaded through every node in the graph."""
 
     query: str
     subtasks: list[Subtask]
-    # operator.add is what makes fan-in work at all. Researchers run concurrently
-    # and every one of them writes this key; without a reducer LangGraph raises
-    # InvalidUpdateError rather than merging, because it has no way to know how
-    # two simultaneous writes should combine. `add` on lists means "concatenate",
-    # which is exactly right here — order across branches is not meaningful.
-    research_results: Annotated[list[ResearchResult], operator.add]
+    # Upsert by subtask_id rather than append — see merge_research_results. A
+    # reducer is mandatory regardless: researchers run concurrently and all write
+    # this key, and without one LangGraph raises InvalidUpdateError rather than
+    # guessing how two simultaneous writes combine.
+    research_results: Annotated[list[ResearchResult], merge_research_results]
     answer: str
     messages: Annotated[list[AnyMessage], add_messages]
     # Same reasoning as research_results: every parallel branch writes metrics.
     run_metrics: Annotated[RunMetrics, merge_run_metrics]
+    # Written only by the critic, which never runs in parallel with itself, so
+    # these need no conflict handling. operator.add is right on critic_feedback
+    # precisely because accumulating the history is the point — a retried
+    # researcher must be able to see what was wrong last time.
+    iteration: int
+    critic_feedback: Annotated[list[CriticVerdict], operator.add]
 
 
 class ResearcherInput(TypedDict):
@@ -115,3 +186,7 @@ class ResearcherInput(TypedDict):
 
     subtask: Subtask
     query: str
+    # The critic's instruction from the previous iteration, when this is a retry.
+    # None on the first pass. This is the whole mechanism by which feedback
+    # reaches the researcher that earned it.
+    guidance: str | None

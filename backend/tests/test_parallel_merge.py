@@ -11,15 +11,14 @@ test that fails when the fan-out goes serial.
 from __future__ import annotations
 
 import pytest
-from langchain_core.messages import AIMessage
 from langchain_core.runnables import RunnableConfig
 from langgraph.checkpoint.memory import MemorySaver
 
 from atlas.graph import nodes
 from atlas.graph.builder import build_state_graph
-from atlas.graph.state import PlannerOutput, Source, Subtask
+from atlas.graph.state import Source
 from atlas.metrics import RunMetrics
-from tests.conftest import initial_state
+from tests.conftest import initial_state, make_call_model, make_call_structured, make_plan
 
 BRANCHES = 5
 
@@ -31,28 +30,9 @@ def graph_with_fakes(monkeypatch: pytest.MonkeyPatch) -> None:
     async def fake_search(query: str, max_results: int | None = None) -> list[Source]:
         return [Source(url=f"https://example.com/{query}", title=query, snippet="s")]
 
-    async def fake_structured(
-        node: str,
-        messages: object,
-        schema: type[PlannerOutput],
-        metrics: RunMetrics,
-        temperature: float | None = None,
-    ) -> PlannerOutput:
-        return PlannerOutput(
-            subtasks=[Subtask(id=f"s{i}", question=f"q{i}", rationale="r") for i in range(BRANCHES)]
-        )
-
-    async def fake_model(
-        node: str,
-        messages: object,
-        metrics: RunMetrics,
-        temperature: float | None = None,
-    ) -> AIMessage:
-        return AIMessage(content="findings")
-
     monkeypatch.setattr(nodes, "search", fake_search)
-    monkeypatch.setattr(nodes, "call_structured", fake_structured)
-    monkeypatch.setattr(nodes, "call_model", fake_model)
+    monkeypatch.setattr(nodes, "call_structured", make_call_structured(make_plan(BRANCHES)))
+    monkeypatch.setattr(nodes, "call_model", make_call_model())
 
 
 async def _run(thread: str) -> dict[str, object]:
@@ -81,9 +61,10 @@ async def test_metrics_merge_across_branches(graph_with_fakes: None) -> None:
     researcher_timings = [t for t in metrics.node_timings if t.node == nodes.RESEARCHER]
     assert len(researcher_timings) == BRANCHES
 
-    # Planner and synthesizer each contribute one timing on top of the branches.
+    # Planner, synthesizer and critic each contribute one timing on top of the
+    # branches.
     nodes_seen = {t.node for t in metrics.node_timings}
-    assert nodes_seen == {nodes.PLANNER, nodes.RESEARCHER, nodes.SYNTHESIZER}
+    assert nodes_seen == {nodes.PLANNER, nodes.RESEARCHER, nodes.SYNTHESIZER, nodes.CRITIC}
 
 
 async def test_run_reaches_an_answer(graph_with_fakes: None) -> None:

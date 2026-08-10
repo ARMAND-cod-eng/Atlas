@@ -20,15 +20,13 @@ import asyncio
 import time
 
 import pytest
-from langchain_core.messages import AIMessage
 from langchain_core.runnables import RunnableConfig
 from langgraph.checkpoint.memory import MemorySaver
 
 from atlas.graph import nodes
 from atlas.graph.builder import build_state_graph
-from atlas.graph.state import PlannerOutput, Source, Subtask
-from atlas.metrics import RunMetrics
-from tests.conftest import initial_state
+from atlas.graph.state import Source
+from tests.conftest import initial_state, make_call_model, make_call_structured, make_plan
 
 BRANCHES = 4
 DELAY_S = 0.2
@@ -46,31 +44,9 @@ def slow_parallel_graph(monkeypatch: pytest.MonkeyPatch) -> None:
         await asyncio.sleep(DELAY_S)
         return [Source(url=f"https://example.com/{query}", title="T", snippet="S")]
 
-    async def fake_structured(
-        node: str,
-        messages: object,
-        schema: type[PlannerOutput],
-        metrics: RunMetrics,
-        temperature: float | None = None,
-    ) -> PlannerOutput:
-        return PlannerOutput(
-            subtasks=[
-                Subtask(id=f"s{i}", question=f"question {i}", rationale="r")
-                for i in range(BRANCHES)
-            ]
-        )
-
-    async def fast_model(
-        node: str,
-        messages: object,
-        metrics: RunMetrics,
-        temperature: float | None = None,
-    ) -> AIMessage:
-        return AIMessage(content="findings")
-
     monkeypatch.setattr(nodes, "search", slow_search)
-    monkeypatch.setattr(nodes, "call_structured", fake_structured)
-    monkeypatch.setattr(nodes, "call_model", fast_model)
+    monkeypatch.setattr(nodes, "call_structured", make_call_structured(make_plan(BRANCHES)))
+    monkeypatch.setattr(nodes, "call_model", make_call_model())
 
 
 async def test_researchers_run_concurrently(slow_parallel_graph: None) -> None:
