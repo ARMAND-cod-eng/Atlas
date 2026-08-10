@@ -122,7 +122,24 @@ uv run python -m atlas.worker_main
 uv run python -m atlas --reload
 ```
 
-Interactive docs at <http://localhost:8000/docs>.
+Interactive docs at <http://127.0.0.1:8000/docs>.
+
+**6. Run the frontend**, in a third terminal.
+
+```powershell
+cd frontend
+npm install
+npm run dev
+```
+
+Open <http://127.0.0.1:3000>.
+
+> **Use `127.0.0.1`, not `localhost`, and it is worth two seconds a request.** On
+> Windows `localhost` resolves to `::1` before `127.0.0.1`, and uvicorn binds IPv4
+> only — so every call waits for the IPv6 attempt to fail first. Measured:
+> **2,050 ms via `localhost` against 22 ms via `127.0.0.1`** for the same request.
+> The frontend defaults to `127.0.0.1:8000` for this reason; override with
+> `NEXT_PUBLIC_API_BASE_URL` in `frontend/.env.local` if your API is elsewhere.
 
 > **Both processes are required.** With no worker running, `POST /runs` still
 > returns a `run_id` and the event stream stays open on heartbeats forever, because
@@ -160,19 +177,19 @@ Interactive docs at <http://localhost:8000/docs>.
 Health check — both booleans come from live probes, not constants:
 
 ```powershell
-Invoke-RestMethod http://localhost:8000/health
+Invoke-RestMethod http://127.0.0.1:8000/health
 ```
 
 Ask a question, then continue the same thread to confirm the checkpointer is persisting state:
 
 ```powershell
-$r = Invoke-RestMethod -Uri http://localhost:8000/query -Method Post -ContentType 'application/json' -Body '{"query":"What is retrieval-augmented generation?"}'
+$r = Invoke-RestMethod -Uri http://127.0.0.1:8000/query -Method Post -ContentType 'application/json' -Body '{"query":"What is retrieval-augmented generation?"}'
 $r.answer
 $r.thread_id
 ```
 
 ```powershell
-Invoke-RestMethod -Uri http://localhost:8000/query -Method Post -ContentType 'application/json' -Body (@{query='Summarize that in one sentence.'; thread_id=$r.thread_id} | ConvertTo-Json)
+Invoke-RestMethod -Uri http://127.0.0.1:8000/query -Method Post -ContentType 'application/json' -Body (@{query='Summarize that in one sentence.'; thread_id=$r.thread_id} | ConvertTo-Json)
 ```
 
 **Watch a run happen.** `POST /runs` returns immediately with a `run_id`; the
@@ -180,8 +197,8 @@ event stream shows the graph working. Five branches start together and finish ou
 of order — that interleaving is the fan-out, live.
 
 ```powershell
-$run = Invoke-RestMethod -Uri http://localhost:8000/runs -Method Post -ContentType 'application/json' -Body '{"query":"Compare RAG with long-context LLMs for enterprise document QA."}'
-curl.exe -N "http://localhost:8000/runs/$($run.run_id)/events"
+$run = Invoke-RestMethod -Uri http://127.0.0.1:8000/runs -Method Post -ContentType 'application/json' -Body '{"query":"Compare RAG with long-context LLMs for enterprise document QA."}'
+curl.exe -N "http://127.0.0.1:8000/runs/$($run.run_id)/events"
 ```
 
 Kill that `curl` with Ctrl-C partway through and the run keeps going — it belongs
@@ -189,8 +206,8 @@ to the worker, not to your connection. Check on it, then resume from where you
 left off by passing the last `id:` you saw:
 
 ```powershell
-Invoke-RestMethod "http://localhost:8000/runs/$($run.run_id)"
-curl.exe -N "http://localhost:8000/runs/$($run.run_id)/events?last_event_id=6"
+Invoke-RestMethod "http://127.0.0.1:8000/runs/$($run.run_id)"
+curl.exe -N "http://127.0.0.1:8000/runs/$($run.run_id)/events?last_event_id=6"
 ```
 
 A browser `EventSource` sends the `Last-Event-ID` header automatically on
@@ -208,7 +225,7 @@ uv run python -m atlas.worker_main
 Then from a second terminal:
 
 ```powershell
-Invoke-RestMethod -Uri http://localhost:8000/query -Method Post -ContentType 'application/json' -Body '{"query":"Say hello."}'
+Invoke-RestMethod -Uri http://127.0.0.1:8000/query -Method Post -ContentType 'application/json' -Body '{"query":"Say hello."}'
 ```
 
 An answer means the fallback chain worked. Restart without the override to go back to normal.
