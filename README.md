@@ -1,67 +1,82 @@
 # Atlas
 
-Atlas is a multi-agent research platform: you ask a question, a planner decomposes it into
-subtasks, parallel researcher agents investigate them, a critic reviews the findings and can send
-work back for another pass, and a synthesizer writes the final answer. It runs on LangGraph behind
-a FastAPI service, with Postgres+pgvector for state and retrieval and Redis for caching.
+Atlas is a multi-agent research platform. You ask a question; a planner decomposes it into
+independent subtasks, researcher agents investigate them **in parallel** against live web search, a
+critic reviews the findings against the sources actually retrieved and can **send specific branches
+back** for another pass, and a synthesizer writes the answer with citations. The whole run streams to
+the browser as it happens.
 
-**This repository is currently at Phase 1.** The planner, parallel researchers, and synthesizer are
-built and verified against live providers. The critic loop, SSE streaming, frontend, eval suite, and
-Langfuse tracing are not built yet.
+It runs on LangGraph behind FastAPI, with an arq worker executing runs, Postgres for checkpointed
+state, Redis for the event log and the token budget, and a Next.js frontend that draws the agent
+graph live.
+
+**Built and verified against live providers through Phase 4.** The eval suite (Phase 5) and Langfuse
+tracing (Phase 6) are not built yet.
 
 Phase notes — what was built, the defects found along the way, and how each was verified:
-[`docs/PHASE-0.md`](docs/PHASE-0.md) (foundations) · [`docs/PHASE-1.md`](docs/PHASE-1.md)
-(fan-out and parallel research).
+
+| | |
+|---|---|
+| [`docs/PHASE-0.md`](docs/PHASE-0.md) | Foundations: config, provider fallback, checkpointing |
+| [`docs/PHASE-1.md`](docs/PHASE-1.md) | Planner fan-out, parallel researchers, grounded citations |
+| [`docs/PHASE-2.md`](docs/PHASE-2.md) | The critic loop, targeted retry, enforced token budget |
+| [`docs/PHASE-3.md`](docs/PHASE-3.md) | Worker, Redis event log, SSE with resumable replay |
+| [`docs/PHASE-4.md`](docs/PHASE-4.md) | The frontend and the live agent-graph visualisation |
+
+---
 
 ## Architecture
 
-The target design. Solid edges are built; dashed edges arrive in later phases.
-
 ```mermaid
-graph TD
-    Client[Next.js frontend] -.SSE.-> API
-    API[FastAPI service] --> Graph
+graph LR
+    UI[Next.js frontend]
+    API[FastAPI]
+    Worker[arq worker]
 
-    subgraph Graph[LangGraph agent graph]
-        Start([START]) --> Planner[planner]
-        Planner -->|Send| R1[researcher]
-        Planner -->|Send| R2[researcher]
-        Planner -->|Send| R3[researcher]
-        R1 --> Synth[synthesizer]
-        R2 --> Synth
-        R3 --> Synth
-        Synth --> Done([END])
+    UI -->|POST /runs| API
+    API -->|enqueue| Queue[(Redis queue)]
+    Queue --> Worker
+    Worker -->|events| Stream[(Redis Stream)]
+    Stream -->|SSE + Last-Event-ID| API
+    API -.->|live events| UI
 
-        Synth -.-> Critic[critic]
-        Critic -.retry.-> Planner
-        Critic -.approve.-> Done
+    Worker --> Graph
+    Graph --> PG[(Postgres<br/>checkpointer)]
+    Graph --> Tavily[Tavily search]
+
+    subgraph Graph[LangGraph]
+        direction LR
+        P[planner] -->|Send x N| R[researcher]
+        R --> S[synthesizer]
+        S --> C[critic]
+        C -->|accept| E([END])
+        C -->|revise: faulted branches only| R
+        C -->|revise: write-up only| S
     end
-
-    R1 --> Tavily[Tavily search]
-    R2 --> Tavily
-    R3 --> Tavily
-
-    Graph --> Postgres[(Postgres + pgvector)]
-    API --> Redis[(Redis)]
-    Graph -.traces.-> Langfuse[Langfuse]
-
-    style Planner fill:#2d6a4f,color:#fff
-    style R1 fill:#2d6a4f,color:#fff
-    style R2 fill:#2d6a4f,color:#fff
-    style R3 fill:#2d6a4f,color:#fff
-    style Synth fill:#2d6a4f,color:#fff
-    style Critic stroke-dasharray: 5 5
-    style Langfuse stroke-dasharray: 5 5
-    style Client stroke-dasharray: 5 5
 ```
 
-The highlighted path is built and verified end to end. The planner decomposes a question into
-independent subtasks, each becomes a parallel researcher via a LangGraph `Send`, and the synthesizer
-merges the findings with citations grounded in the sources actually retrieved. State is checkpointed
-to Postgres, so a `thread_id` resumes a conversation.
+**The run does not belong to the connection.** The API enqueues and relays; the worker executes. A
+client that drops at second 40 of a 67-second run costs nothing — the run finishes, and reconnecting
+replays exactly what was missed from the event log. Verified by killing the API mid-run: the run
+completed with nothing listening, and the UI converged to the identical final state on restart.
 
-Fan-out is genuinely concurrent, not sequential: on a five-branch run the request cost 71.9s while
-the branches summed to 93.4s — the fan-out costs the slowest branch, not the total.
+**The critic sends back branches, not the whole graph.** Re-running everything would cost ~72s and
+~31k tokens per iteration, and re-planning produces a *different decomposition*, so per-subtask
+feedback would have nothing to attach to. Targeted retry costs the slowest faulted branch plus one
+synthesis, and preserves subtask identity so guidance reaches the branch that earned it.
+
+### Measured
+
+| | |
+|---|---|
+| Fan-out is genuinely concurrent | 5 branches: slowest **23.3s**, summed **93.4s** — the fan-out costs the slowest branch, not the sum |
+| Typical run | **67–92s** wall clock, dominated by provider tok/s variance rather than by Atlas |
+| Streaming overhead | SSE relay **0.18s**; queue pickup **~1.0s**; a whole run's events cost **78ms** of Redis |
+| Concision prompt on the synthesizer | 4,392 → 2,752 output tokens, **40.5s → 27.1s** |
+| Time to first visual feedback | **1.14s** from submit to the graph on screen |
+| Tests | **168** backend · **34** frontend, no network calls, no spend |
+
+---
 
 ## Prerequisites
 
@@ -69,12 +84,13 @@ the branches summed to 93.4s — the fan-out costs the slowest branch, not the t
 |---|---|
 | Python | 3.12 (pinned in `.python-version`; uv installs it automatically) |
 | [uv](https://docs.astral.sh/uv/) | 0.12+ |
+| Node | 20+ (developed on 24) |
 | Docker Desktop | with the WSL 2 backend |
 | API keys | Anthropic, OpenAI, Tavily |
 
-## Setup
+## Run the whole thing
 
-All commands are PowerShell, run from the repository root.
+Four terminals. All commands are PowerShell, run from the repository root.
 
 **1. Configure.** One `.env` at the root serves both the backend and Docker Compose.
 
@@ -99,7 +115,6 @@ docker compose exec -T postgres psql -U atlas -d atlas -c "\dx vector"
 > Keep the `-T`. Without it, `docker compose exec` allocates a TTY and psql pipes
 > its output through `less` inside the container — leaving your terminal stuck at
 > `(END)` with every subsequent keystroke going to the pager instead of the shell.
-> `-T` prints straight to stdout.
 
 **3. Install dependencies.**
 
@@ -108,15 +123,13 @@ cd backend
 uv sync
 ```
 
-**4. Run the worker.** Research runs execute here, not in the API — a run takes
-about a minute, and tying it to an HTTP connection means a client that drops
-destroys the run and the tokens already spent. Leave this in its own terminal.
+**4. Run the worker** — terminal one. Research runs execute here, not in the API.
 
 ```powershell
 uv run python -m atlas.worker_main
 ```
 
-**5. Run the API**, in a second terminal.
+**5. Run the API** — terminal two.
 
 ```powershell
 uv run python -m atlas --reload
@@ -124,7 +137,7 @@ uv run python -m atlas --reload
 
 Interactive docs at <http://127.0.0.1:8000/docs>.
 
-**6. Run the frontend**, in a third terminal.
+**6. Run the frontend** — terminal three.
 
 ```powershell
 cd frontend
@@ -132,45 +145,19 @@ npm install
 npm run dev
 ```
 
-Open <http://127.0.0.1:3000>.
+Open <http://127.0.0.1:3000> and ask a question.
 
-> **Use `127.0.0.1`, not `localhost`, and it is worth two seconds a request.** On
+> **Both the worker and the API are required.** With no worker running, `POST /runs`
+> still returns a `run_id` and the event stream sits on heartbeats forever, because
+> nothing is producing events; `POST /query` waits and returns 504. If a run never
+> seems to start, check that the worker terminal is alive.
+
+> **Use `127.0.0.1`, not `localhost` — it is worth two seconds a request.** On
 > Windows `localhost` resolves to `::1` before `127.0.0.1`, and uvicorn binds IPv4
-> only — so every call waits for the IPv6 attempt to fail first. Measured:
+> only, so every call waits for the IPv6 attempt to fail first. Measured:
 > **2,050 ms via `localhost` against 22 ms via `127.0.0.1`** for the same request.
-> The frontend defaults to `127.0.0.1:8000` for this reason; override with
-> `NEXT_PUBLIC_API_BASE_URL` in `frontend/.env.local` if your API is elsewhere.
-
-> **Both processes are required.** With no worker running, `POST /runs` still
-> returns a `run_id` and the event stream stays open on heartbeats forever, because
-> nothing is producing events. `POST /query` waits and eventually returns 504. If a
-> run never seems to start, check that the worker terminal is alive.
-
-> `atlas.worker_main` rather than arq's own `arq atlas.worker.WorkerSettings` CLI,
-> for the same Windows reason as below: arq's CLI calls `asyncio.run`, which selects
-> `ProactorEventLoop`, which psycopg refuses. The worker builds the checkpointer, so
-> it hits this immediately. `worker_main` builds the right loop and awaits
-> `Worker.async_run()`.
-
-> **Do not launch with bare `uvicorn atlas.api.main:app` on Windows.** It starts,
-> then fails after 30 seconds with `PoolTimeout: pool initialization incomplete`.
-> uvicorn selects `ProactorEventLoop` on Windows for runs without subprocesses, and
-> psycopg's async driver cannot use it — so the checkpointer pool never opens. The
-> error names the database, but the database is fine. `python -m atlas` passes the
-> right loop factory for you. If you want raw uvicorn, pass it yourself:
->
-> ```powershell
-> uv run uvicorn atlas.api.main:app --loop atlas.api.main:loop_factory
-> ```
->
-> Confusingly, bare `uvicorn ... --reload` *does* work — the reloader uses
-> subprocesses, for which uvicorn already picks a Selector loop. Don't rely on it.
-
-> **`--reload` does not cover `.env`.** It watches the `backend` package; `.env`
-> lives at the repository root and is read once at startup, then cached. After
-> editing `.env` — adding an API key, switching `PRIMARY_MODEL` — **stop the server
-> and start it again**. A running server keeps serving with the old values, and a
-> stale key shows up as a `500` from `/query` with nothing pointing back at config.
+> The frontend defaults to `127.0.0.1:8000`; override with `NEXT_PUBLIC_API_BASE_URL`
+> in `frontend/.env.local`.
 
 ## Verifying it works
 
@@ -180,52 +167,45 @@ Health check — both booleans come from live probes, not constants:
 Invoke-RestMethod http://127.0.0.1:8000/health
 ```
 
-Ask a question, then continue the same thread to confirm the checkpointer is persisting state:
-
-```powershell
-$r = Invoke-RestMethod -Uri http://127.0.0.1:8000/query -Method Post -ContentType 'application/json' -Body '{"query":"What is retrieval-augmented generation?"}'
-$r.answer
-$r.thread_id
-```
-
-```powershell
-Invoke-RestMethod -Uri http://127.0.0.1:8000/query -Method Post -ContentType 'application/json' -Body (@{query='Summarize that in one sentence.'; thread_id=$r.thread_id} | ConvertTo-Json)
-```
-
-**Watch a run happen.** `POST /runs` returns immediately with a `run_id`; the
-event stream shows the graph working. Five branches start together and finish out
-of order — that interleaving is the fan-out, live.
+**Watch a run from the terminal.** `POST /runs` returns immediately with a `run_id`;
+the event stream shows the graph working. Branches start together and finish out of
+order — that interleaving is the fan-out, live.
 
 ```powershell
 $run = Invoke-RestMethod -Uri http://127.0.0.1:8000/runs -Method Post -ContentType 'application/json' -Body '{"query":"Compare RAG with long-context LLMs for enterprise document QA."}'
 curl.exe -N "http://127.0.0.1:8000/runs/$($run.run_id)/events"
 ```
 
-Kill that `curl` with Ctrl-C partway through and the run keeps going — it belongs
-to the worker, not to your connection. Check on it, then resume from where you
-left off by passing the last `id:` you saw:
+Kill that `curl` with Ctrl-C partway through and the run keeps going — it belongs to
+the worker, not to your connection. Check on it, then resume from where you left off
+by passing the last `id:` you saw:
 
 ```powershell
 Invoke-RestMethod "http://127.0.0.1:8000/runs/$($run.run_id)"
 curl.exe -N "http://127.0.0.1:8000/runs/$($run.run_id)/events?last_event_id=6"
 ```
 
-A browser `EventSource` sends the `Last-Event-ID` header automatically on
-reconnect; the query parameter is for clients like `curl` that do not retry.
+A browser `EventSource` sends the `Last-Event-ID` header automatically on reconnect;
+the query parameter is for clients like `curl` that do not retry. The same thing works
+in the UI — refresh `/runs/{run_id}` mid-run and it rebuilds from the log.
 
-**Verify the fallback actually fires.** This is the behaviour most worth confirming by hand: break
-the primary provider and check that an answer still comes back via GPT-4o. The key
-is read by the **worker**, so set it there:
+**The synchronous endpoint still exists**, and is what the eval suite will drive:
+
+```powershell
+$r = Invoke-RestMethod -Uri http://127.0.0.1:8000/query -Method Post -ContentType 'application/json' -Body '{"query":"What is retrieval-augmented generation?"}'
+$r.answer
+Invoke-RestMethod -Uri http://127.0.0.1:8000/query -Method Post -ContentType 'application/json' -Body (@{query='Summarize that in one sentence.'; thread_id=$r.thread_id} | ConvertTo-Json)
+```
+
+Passing the returned `thread_id` back confirms the Postgres checkpointer is persisting state.
+
+**Verify the fallback actually fires.** The behaviour most worth confirming by hand: break
+the primary provider and check an answer still comes back via GPT-4o. The key is read by the
+**worker**, so set it there:
 
 ```powershell
 $env:ANTHROPIC_API_KEY = "sk-ant-deliberately-invalid"
 uv run python -m atlas.worker_main
-```
-
-Then from a second terminal:
-
-```powershell
-Invoke-RestMethod -Uri http://127.0.0.1:8000/query -Method Post -ContentType 'application/json' -Body '{"query":"Say hello."}'
 ```
 
 An answer means the fallback chain worked. Restart without the override to go back to normal.
@@ -234,32 +214,61 @@ An answer means the fallback chain worked. Restart without the override to go ba
 
 ```powershell
 cd backend
-uv run ruff check .
-uv run ruff format .
-uv run mypy --strict atlas
-uv run pytest -v
+uv run ruff check . ; uv run ruff format . ; uv run mypy --strict atlas ; uv run pytest -q
 ```
 
-The test suite makes no network calls and spends no money — every model is a fake.
+```powershell
+cd frontend
+npm run typecheck ; npm run lint ; npm test
+```
 
-## Notes
+`mypy --strict` with no `# type: ignore` anywhere; TypeScript strict plus
+`noUncheckedIndexedAccess`, no `any`, no `eslint-disable`. Neither suite makes a network call or
+spends money — every model is a fake, and the frontend's fixtures are real event streams recorded
+from the graph by `backend/scripts/capture_fixtures.py`.
 
-**Model selection.** The model is a single config constant, `PRIMARY_MODEL`, read only by
-`atlas/models.py`; nothing else names a model. Atlas was originally specified against
-`claude-sonnet-4-5-20250929` and now defaults to `claude-sonnet-5` — recorded here so the choice
-reads as a decision rather than an accident. Override it in `.env` without touching code.
+---
 
-**Provider fallback.** `atlas/models.py` sets `max_retries=0` on the primary model deliberately.
-LangChain retries *inside* a runnable before the exception reaches `with_fallbacks`, so a non-zero
-value would work an overloaded provider through its full backoff schedule while the healthy
-fallback sits idle. See the docstring in that module; `tests/test_fallback.py` guards it.
+## Things worth knowing
 
-## Metrics
+**A component that never fires looks exactly like one that works.** This is the bug class the
+project keeps producing, and most of the design exists to make it impossible. A `temperature=0.0`
+that 400s meant every answer came from the fallback for a whole session, and everything looked fine.
+A `SecretStr` stringified to `'**********'` produced a silent 401 that read as "no results". A
+critic whose structured output failed fell open to `accept` and recorded a round byte-for-byte
+identical to a real approval. Each was caught by a check built to *discriminate* — a wall-clock
+measurement against a forced serial loop, a reducer compared against `operator.add`, a deliberately
+poisoned search branch the critic had to reject — and each now reports itself in `metrics.degraded`,
+which the UI shows prominently rather than tucking away.
 
-TODO — token accounting per query, per-agent latency, cache hit rates, and cost attribution.
-`MAX_TOKENS_PER_QUERY` already exists in config as the budget these will measure against.
+**Model selection** is a single config constant, `PRIMARY_MODEL`, read only by `atlas/models.py`.
+Nothing else names a model. Override it in `.env` without touching code.
 
-## Evaluation
+**Provider fallback** sets `max_retries=0` on the primary deliberately. LangChain retries *inside* a
+runnable before the exception reaches `with_fallbacks`, so a non-zero value would work an overloaded
+provider through its full backoff schedule while the healthy fallback sits idle.
+`tests/test_fallback.py` guards it.
 
-TODO — the eval suite lands in a later phase: a graded question set, regression runs against
-known-good answers, and critic-loop effectiveness measurement.
+**The synthesizer's output cap is a runaway guard, not a length target.** Caps of 2,000 and 3,500
+both truncated ordinary answers mid-sentence — severing a URL, which then surfaced as
+`ungrounded_citation` for a citation that was never fabricated. The concision *prompt* is what
+actually shortens the answer; the cap sits above the largest output ever observed, and a run that
+trips it reports `synthesis_truncated`.
+
+**Windows, twice.** psycopg's async driver cannot run on `ProactorEventLoop`, which is what both
+uvicorn and arq's CLI select by default — the symptom is `PoolTimeout: pool initialization
+incomplete`, which points at the database while the database is fine. `python -m atlas` and
+`python -m atlas.worker_main` both build a Selector loop for you. And arq's `handle_signals=False`
+looks like the Windows-friendly choice but makes shutdown call `signal.SIGUSR1`, which does not
+exist there; the default `True` is correct because arq already swallows the `NotImplementedError`.
+
+**`--reload` does not cover `.env`.** It watches the `backend` package; `.env` lives at the
+repository root and is read once at startup. After editing it, stop and restart the process.
+
+## Roadmap
+
+**Phase 5 — evaluation.** A graded question set, regression runs against known-good answers, and
+critic-loop effectiveness measured rather than assumed. Budget ~1.0s of queue pickup per trace.
+
+**Phase 6 — tracing.** Langfuse. `atlas/metrics.py` is deliberately small and shaped to be replaced
+by deletion rather than unpicked from everywhere.
