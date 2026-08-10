@@ -22,6 +22,13 @@ from langgraph.types import Send
 
 from atlas.budget import is_exceeded
 from atlas.config import get_settings
+from atlas.events import (
+    CRITIC_VERDICT,
+    FAN_OUT,
+    ITERATION_STARTED,
+    emit,
+    node_span,
+)
 from atlas.graph.state import (
     AtlasState,
     CriticVerdict,
@@ -43,7 +50,6 @@ from atlas.metrics import (
     DEGRADED_UNGROUNDED_CITATION,
     CriticRound,
     RunMetrics,
-    track_node,
 )
 from atlas.models import call_model, call_structured
 from atlas.tools.search import search
@@ -174,8 +180,9 @@ async def _plan(query: str, history: list[Any], metrics: RunMetrics) -> list[Sub
 
 async def planner(state: AtlasState) -> dict[str, Any]:
     """Decompose the query into independent, parallelizable subtasks."""
-    async with track_node(PLANNER) as metrics:
-        subtasks = await _plan(state["query"], list(state["messages"]), metrics)
+    async with node_span(PLANNER) as span:
+        subtasks = await _plan(state["query"], list(state["messages"]), span.metrics)
+        metrics = span.metrics
     logger.info("planned subtasks", extra={"subtask_count": len(subtasks)})
     return {
         "subtasks": subtasks,
@@ -199,7 +206,18 @@ def fan_out(state: AtlasState) -> list[Send] | str:
     subtasks = state["subtasks"]
     if not subtasks:
         logger.warning("no subtasks to research; routing straight to synthesis")
+        emit(FAN_OUT, PLANNER, subtask_ids=[], count=0)
         return SYNTHESIZER
+    # Emitted here rather than in the planner because this is where the width of
+    # the fan-out is actually decided — a client can size its UI before the first
+    # branch reports anything.
+    emit(
+        FAN_OUT,
+        PLANNER,
+        subtask_ids=[subtask.id for subtask in subtasks],
+        count=len(subtasks),
+        questions={subtask.id: subtask.question for subtask in subtasks},
+    )
     return [
         Send(
             RESEARCHER,
@@ -293,9 +311,16 @@ async def _research(
 async def researcher(state: ResearcherInput) -> dict[str, Any]:
     """Research a single subtask. Input arrives from a ``Send``, not AtlasState."""
     subtask = state["subtask"]
-    async with track_node(RESEARCHER) as metrics:
-        result = await _research(subtask, metrics, state.get("guidance"))
-    # A one-element list because the reducer on research_results concatenates.
+    # subtask_id on the span is what makes five interleaved branches attributable.
+    async with node_span(RESEARCHER, subtask_id=subtask.id) as span:
+        result = await _research(subtask, span.metrics, state.get("guidance"))
+        if result.error is not None:
+            # A failed branch does not raise — Phase 1 turns it into a result so
+            # the other four survive — but it has still failed, and a watching
+            # client should see node_failed rather than node_completed.
+            span.failed(result.error)
+        metrics = span.metrics
+    # A one-element list because the reducer on research_results upserts by id.
     return {"research_results": [result], "run_metrics": metrics}
 
 
@@ -435,7 +460,8 @@ def _latest_synthesis_feedback(state: AtlasState) -> str | None:
 
 async def synthesizer(state: AtlasState) -> dict[str, Any]:
     """Produce the final answer from all research results."""
-    async with track_node(SYNTHESIZER) as metrics:
+    async with node_span(SYNTHESIZER) as span:
+        metrics = span.metrics
         answer = await _synthesize(state, metrics)
         _check_citations(answer, state["research_results"], metrics)
         _check_budget(state, metrics)
@@ -517,7 +543,9 @@ async def critic(state: AtlasState) -> dict[str, Any]:
     and keeps the routing function synchronous.
     """
     iteration = state["iteration"] + 1
-    async with track_node(CRITIC) as metrics:
+    emit(ITERATION_STARTED, CRITIC, iteration=iteration)
+    async with node_span(CRITIC) as span:
+        metrics = span.metrics
         exceeded, total = await is_exceeded()
         if total is None:
             metrics.degraded.append(DEGRADED_BUDGET_CHECK_UNAVAILABLE)
@@ -561,6 +589,14 @@ async def critic(state: AtlasState) -> dict[str, Any]:
                 if note:
                     update["answer"] = state["answer"] + note
 
+    emit(
+        CRITIC_VERDICT,
+        CRITIC,
+        iteration=iteration,
+        overall=verdict.overall,
+        faulted_subtask_ids=verdict.faulted_ids(),
+        has_synthesis_feedback=verdict.synthesis_feedback is not None,
+    )
     logger.info(
         "critic verdict",
         extra={
