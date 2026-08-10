@@ -51,13 +51,19 @@ select = ["E", "F", "I", "UP", "B", "ANN", "RUF", "ASYNC"]
 [tool.ruff.lint.per-file-ignores]
 # Fixtures and monkeypatch shims read better without full return annotations.
 "tests/*" = ["ANN401"]
+# The dataset drafts are tabular data that happens to be written in Python: one
+# row per query, so a query and its metadata belong on one line. Wrapping them to
+# 100 columns would triple the file and make the distribution impossible to scan.
+"scripts/draft_dataset.py" = ["E501"]
 
 # --- Types ---------------------------------------------------------------------
 
 [tool.mypy]
 strict = true
 python_version = "3.12"
-files = ["atlas"]
+# The eval suite is held to the same bar as the runtime. A scorer with a silent
+# type error reports a plausible number forever.
+files = ["atlas", "atlas_eval"]
 # Without this plugin mypy has no idea BaseSettings populates itself from the
 # environment, and reports every required field as a missing __init__ argument.
 plugins = ["pydantic.mypy"]

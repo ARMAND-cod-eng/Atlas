@@ -1,0 +1,20 @@
+{
+  "schema_version": 1,
+  "dataset_version": "v1",
+  "created": "2026-08-10",
+  "smoke_ids": [
+    "q01",
+    "q05",
+    "q11",
+    "q15",
+    "q19",
+    "q23",
+    "q27",
+    "q35",
+    "q43",
+    "q47",
+    "q50",
+    "q52"
+  ],
+  "notes": "Drafted by scripts/draft_dataset.py, reviewed item by item via `atlas_eval review`. Rubrics are checklists of required claims, not reference answers."
+}

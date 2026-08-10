@@ -52,7 +52,12 @@ from atlas.metrics import (
     RunMetrics,
 )
 from atlas.models import call_model, call_structured
-from atlas.tools.search import search
+
+# Re-exported explicitly (`as search`) rather than imported plainly. Under mypy's
+# no-implicit-reexport this name is part of the module's declared interface, and
+# it genuinely is one: it is the seam the tests, the fixture recorder and the eval
+# suite all substitute to keep themselves off the network.
+from atlas.tools.search import search as search
 
 logger = logging.getLogger(__name__)
 
