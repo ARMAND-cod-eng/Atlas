@@ -108,13 +108,32 @@ cd backend
 uv sync
 ```
 
-**4. Run the API.**
+**4. Run the worker.** Research runs execute here, not in the API — a run takes
+about a minute, and tying it to an HTTP connection means a client that drops
+destroys the run and the tokens already spent. Leave this in its own terminal.
+
+```powershell
+uv run python -m atlas.worker_main
+```
+
+**5. Run the API**, in a second terminal.
 
 ```powershell
 uv run python -m atlas --reload
 ```
 
 Interactive docs at <http://localhost:8000/docs>.
+
+> **Both processes are required.** With no worker running, `POST /runs` still
+> returns a `run_id` and the event stream stays open on heartbeats forever, because
+> nothing is producing events. `POST /query` waits and eventually returns 504. If a
+> run never seems to start, check that the worker terminal is alive.
+
+> `atlas.worker_main` rather than arq's own `arq atlas.worker.WorkerSettings` CLI,
+> for the same Windows reason as below: arq's CLI calls `asyncio.run`, which selects
+> `ProactorEventLoop`, which psycopg refuses. The worker builds the checkpointer, so
+> it hits this immediately. `worker_main` builds the right loop and awaits
+> `Worker.async_run()`.
 
 > **Do not launch with bare `uvicorn atlas.api.main:app` on Windows.** It starts,
 > then fails after 30 seconds with `PoolTimeout: pool initialization incomplete`.
@@ -156,12 +175,34 @@ $r.thread_id
 Invoke-RestMethod -Uri http://localhost:8000/query -Method Post -ContentType 'application/json' -Body (@{query='Summarize that in one sentence.'; thread_id=$r.thread_id} | ConvertTo-Json)
 ```
 
+**Watch a run happen.** `POST /runs` returns immediately with a `run_id`; the
+event stream shows the graph working. Five branches start together and finish out
+of order — that interleaving is the fan-out, live.
+
+```powershell
+$run = Invoke-RestMethod -Uri http://localhost:8000/runs -Method Post -ContentType 'application/json' -Body '{"query":"Compare RAG with long-context LLMs for enterprise document QA."}'
+curl.exe -N "http://localhost:8000/runs/$($run.run_id)/events"
+```
+
+Kill that `curl` with Ctrl-C partway through and the run keeps going — it belongs
+to the worker, not to your connection. Check on it, then resume from where you
+left off by passing the last `id:` you saw:
+
+```powershell
+Invoke-RestMethod "http://localhost:8000/runs/$($run.run_id)"
+curl.exe -N "http://localhost:8000/runs/$($run.run_id)/events?last_event_id=6"
+```
+
+A browser `EventSource` sends the `Last-Event-ID` header automatically on
+reconnect; the query parameter is for clients like `curl` that do not retry.
+
 **Verify the fallback actually fires.** This is the behaviour most worth confirming by hand: break
-the primary provider and check that an answer still comes back via GPT-4o.
+the primary provider and check that an answer still comes back via GPT-4o. The key
+is read by the **worker**, so set it there:
 
 ```powershell
 $env:ANTHROPIC_API_KEY = "sk-ant-deliberately-invalid"
-uv run python -m atlas
+uv run python -m atlas.worker_main
 ```
 
 Then from a second terminal:
