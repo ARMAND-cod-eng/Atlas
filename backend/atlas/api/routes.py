@@ -192,10 +192,11 @@ async def get_run(run_id: str) -> RunStatus:
 async def query(request: Request, payload: QueryRequest) -> QueryResponse:
     """Run a query and wait for the answer.
 
-    Unchanged in shape since Phase 0, and still what the eval suite will drive —
-    50 traces through an SSE stream would be needless complexity. It is now a
-    thin wrapper over the same queue the streaming path uses, so there is one
-    execution path rather than two.
+    Unchanged in shape since Phase 0, for clients that want one request and one
+    answer rather than a stream. (The eval suite does not use it — it runs the
+    graph in-process against a frozen corpus; see ``atlas_eval.runner``.) It is
+    now a thin wrapper over the same queue the streaming path uses, so there is
+    one execution path rather than two.
 
     The cost, stated plainly: this call's latency now includes queue pickup, and
     its throughput is bounded by the worker's ``max_jobs``.

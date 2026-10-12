@@ -1,9 +1,9 @@
 """Async SQLAlchemy engine and session factory.
 
-Nothing in Phase 0 queries the database — the checkpointer owns its own psycopg
-pool for graph state, and Atlas has no tables of its own yet. This module exists
-now so the pgvector retrieval layer has a typed, correctly-configured entry point
-to build on instead of inventing one under deadline.
+The checkpointer owns its own psycopg pool for graph state and Atlas has no
+tables of its own yet, so the only query through this engine today is the API's
+``/health`` probe. It exists so that a retrieval layer over pgvector, if one is
+built, has a typed, correctly-configured entry point to build on.
 
 Engine and factory are created lazily rather than at import so that importing
 ``atlas.db.session`` never requires a reachable database — which keeps the test

@@ -16,8 +16,18 @@ buying quality without paying that.
 | `critic` | Structured verdict per subtask, judged against **the sources actually retrieved**, not against the model's own knowledge. Also the budget checkpoint — it is the only node from which a new iteration can begin. |
 | `route_after_critic` | Derives routing from verdict content: accept → END, faulted subtasks → `Send` to *those researchers only*, synthesis feedback alone → re-write, exhaustion → END with a note. |
 | `merge_research_results` | Replaces `operator.add` on `research_results`. Upserts by `subtask_id` so a retried branch **replaces** its result instead of appearing twice. |
-| `atlas/budget.py` | Per-thread token counter in Redis, `INCRBY` after every model call, TTL 3600. Fails open. |
+| `atlas/budget.py` | Per-thread token counter in Redis, `INCRBY` after every model call, TTL 3600. Fails open. *Since re-keyed per run — see the note below.* |
 | synthesizer | Concision rule in the prompt, `max_tokens` backstop, and a `synthesis_truncated` flag when the backstop trips. |
+
+> **Corrected later: state and budget are per run, not per thread.** A thread is a conversation
+> and holds many runs. Two things here assumed one run per thread. The budget counter, keyed by
+> thread, kept climbing across follow-ups until an ordinary one was declared over budget at its
+> first review and went out unreviewed — it is now keyed by `run_id`, passed in `configurable`
+> beside `thread_id`. And graph input passes through each key's reducer, so the `[]` in
+> `initial_state` did not clear `research_results`, `critic_feedback` or `run_metrics`: a
+> follow-up was synthesised from the previous question's research and read the previous critic's
+> feedback as its own. The planner now resets all three with `Overwrite`. Neither showed up
+> because no test ran two questions on one thread; `tests/test_run_isolation.py` does.
 
 `/query` gains `iterations` and `metrics.critic_rounds`, so the quality gate is visible from the
 client: one round recording `accept` means it reviewed and approved, which is a different thing from

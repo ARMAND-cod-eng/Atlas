@@ -62,7 +62,7 @@ def test_emit_outside_a_graph_is_a_no_op() -> None:
 
     Every test written before this phase calls node functions directly, with no
     graph anywhere — so an unguarded emit would not fail *this* module, it would
-    fail 126 tests in the others. Asserting the no-op here is what makes that a
+    fail every node-level test in the others. Asserting the no-op here is what makes that a
     deliberate property rather than an accident of import order.
     """
     emit(NODE_STARTED, "planner", subtask_id="s0")  # must not raise

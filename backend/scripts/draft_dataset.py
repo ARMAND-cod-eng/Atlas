@@ -771,8 +771,8 @@ FAILURE_EXPECTED: list[Draft] = [
 def build() -> Dataset:
     drafts = DRAFTS + FAILURE_EXPECTED
     # Exactly 50, asserted rather than trimmed. Slicing to [:50] silently dropped
-    # every failure-expected item off the end — the one category the brief
-    # specifically asks for, gone without a word.
+    # every failure-expected item off the end — the one category that tests
+    # whether Atlas admits what it cannot find, gone without a word.
     if len(drafts) != 50:
         raise SystemExit(f"expected 50 drafts, have {len(drafts)}")
 

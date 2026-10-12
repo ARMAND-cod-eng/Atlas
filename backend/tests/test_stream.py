@@ -431,8 +431,8 @@ def test_a_run_with_no_terminal_event_is_running(fast_graph: None) -> None:
 def test_query_still_returns_the_phase_2_shape(fast_graph: None, fake_redis: FakeRedis) -> None:
     """POST /query is unchanged from the client's side.
 
-    Its execution moved to the queue, but the eval suite in Phase 5 drives this
-    endpoint and must not have to care.
+    Its execution moved to the queue, but a client that calls it must not have to
+    care.
     """
     body = _app_with_inline_worker().post("/query", json={"query": "what is RAG?"}).json()
 

@@ -33,12 +33,12 @@ from atlas_eval.dataset import (
 
 
 def test_the_dataset_loads_and_is_fifty_items() -> None:
-    """The number in the résumé is the number in the file."""
+    """The README says fifty; the file must agree."""
     dataset = load_dataset()
     assert len(dataset.items) == 50
 
 
-def test_the_distribution_covers_every_axis_the_brief_requires() -> None:
+def test_the_distribution_covers_every_axis_the_suite_is_designed_to_test() -> None:
     dataset = load_dataset()
     tags = [tag for item in dataset.items for tag in item.tags]
 
@@ -58,7 +58,8 @@ def test_failure_expected_items_survived_into_the_dataset() -> None:
     """They were silently trimmed off the end once. Never again.
 
     Building the list as DRAFTS + FAILURE_EXPECTED and slicing to [:50] dropped
-    exactly the category the brief singles out, with no error and no warning.
+    exactly the category that tests whether Atlas admits what it cannot find, with
+    no error and no warning.
     """
     dataset = load_dataset()
     failure_items = [i for i in dataset.items if "failure-expected" in i.tags]

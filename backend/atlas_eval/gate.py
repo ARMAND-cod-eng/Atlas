@@ -19,8 +19,8 @@ The gate fires when **both** hold:
 * the point delta is worse than the threshold, and
 * the 95% paired bootstrap CI on that delta excludes zero
 
-The first keeps the résumé's claim literally true — it still blocks on a >2%
-category regression. The second is what stops it firing on noise.
+The first is the gate's stated contract: it blocks on a category regression of
+more than 2pp. The second is what stops it firing on noise.
 
 And it **refuses to pass** a category it cannot evaluate. Without per-item
 baseline scores there is no paired CI, and "no CI" used to mean "not

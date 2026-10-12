@@ -17,7 +17,7 @@ researchers.
 **Shipped: (b) — `GET /graph/topology`, derived from the compiled LangGraph — with the fan-out node
 expanded at runtime.**
 
-**(a) hardcoded in React** — rejected. The concern in the brief understates the failure: a hardcoded
+**(a) hardcoded in React** — rejected. "It drifts out of date" understates the failure: a hardcoded
 graph does not become *wrong*, it becomes wrong **plausibly**. It keeps drawing a sensible topology
 that no longer matches what runs, and because node names are how events route to nodes, a rename in
 Phase 5 means events arrive for a node the UI does not have — so that node simply never lights up.
@@ -35,7 +35,8 @@ node and edge sets to explicit values. Change the graph and a test fails, loudly
 failing quietly. That test is *supposed* to fail when the graph legitimately changes; the fix is to
 update the expected set deliberately, not to relax it into a subset check.
 
-**(c) inferred from events** — rejected for the reason in the brief, plus a sharper one: *edges that
+**(c) inferred from events** — rejected. It ties the picture to whatever happened to run, and more
+sharply, *edges that
 do not fire in a run do not exist in the inference*. On a clean accepted run the critic never
 retries, so the retry edge is never inferred — the most interesting structure in the system is
 invisible exactly when the system is working well. An inferred graph is a trace of one execution,

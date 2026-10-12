@@ -18,11 +18,10 @@ This phase makes the run observable and makes it outlive the connection. Backend
 **Shipped: (b) — an arq worker executes the run, events go to a Redis Stream, and a separate SSE
 endpoint relays them.**
 
-The brief framed this as (a) in-request vs (b) decoupled, but there is a middle option that changes
+The obvious framing is (a) in-request vs (b) decoupled, but there is a middle option that changes
 how much (b) actually costs, and it deserves naming.
 
-**(a) strictly in-request** — rejected for the reason the brief identifies. A disconnect at 40s
-cancels the run.
+**(a) strictly in-request** — rejected. A disconnect at 40s cancels the run.
 
 **(a′) in-process background task** — the graph runs as an `asyncio.Task` owned by the app rather
 than by the request; events still go to a Redis Stream; the SSE endpoint is still a separate relay.
@@ -41,8 +40,8 @@ vs 100% complexity; it is closer to 70% vs 100%, and the extra 30% buys:
   answers it with "not without losing work."
 * **Execution that stops competing with the event loop** serving SSE relays.
 
-It is also the honest reading of the résumé claim: (a′) would make "worker-based architecture"
-aspirational.
+It is also the only option under which "worker-based architecture" describes the system rather than
+an intention: under (a′) there is no worker.
 
 ### arq, not Celery
 
@@ -58,9 +57,9 @@ clients. Celery would mean a synchronous worker spinning up an event loop to cal
 graph, plus a second broker beside a Redis we already run. arq is the same shape as the code it
 executes.
 
-**The résumé says Celery and should be changed to arq.** The defensible claim is "async task queue
-with Redis-backed job state" — true of arq, and a better interview answer than naming a tool that
-fits the stack badly.
+**Hence arq, not the more familiar Celery.** Described generally, this is an async task queue with
+Redis-backed job state; arq is the implementation of that which fits an async stack, where Celery
+would fit it badly.
 
 ### The Windows trap, spiked before anything was built
 
@@ -196,8 +195,8 @@ synthesis. `seq` is dense 1..21 and `run_completed` is last.
 
 ### Latency: the split
 
-The brief asked for graph execution and end-to-end `/query` reported separately, because a
-regression could come from streaming or from queue pickup and one number cannot tell them apart.
+Graph execution and end-to-end `/query` are reported separately, because a regression could come
+from streaming or from queue pickup and one number cannot tell them apart.
 
 | Measurement | Value |
 |---|---|

@@ -1,6 +1,6 @@
-# Backend image. Written now, deliberately NOT wired into docker-compose.yml yet —
-# Phase 0 runs the backend locally under uv for fast iteration. The compose
-# service arrives in a later phase.
+# Backend image for the API. Not wired into docker-compose.yml yet: the backend
+# runs locally under uv for fast iteration, and compose provides only Postgres
+# and Redis.
 
 # --- builder ------------------------------------------------------------------
 FROM python:3.12-slim AS builder

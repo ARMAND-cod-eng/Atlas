@@ -10,8 +10,9 @@ It runs on LangGraph behind FastAPI, with an arq worker executing runs, Postgres
 state, Redis for the event log and the token budget, and a Next.js frontend that draws the agent
 graph live.
 
-**Built and verified against live providers through Phase 4.** The eval suite (Phase 5) and Langfuse
-tracing (Phase 6) are not built yet.
+**Built and verified against live providers through Phase 4.** The Phase 5 eval suite is built and
+unit-tested but has not been run yet — see [Evaluation](#evaluation) for exactly where it stands.
+Langfuse tracing (Phase 6) is not started.
 
 Phase notes — what was built, the defects found along the way, and how each was verified:
 
@@ -74,7 +75,7 @@ synthesis, and preserves subtask identity so guidance reaches the branch that ea
 | Streaming overhead | SSE relay **0.18s**; queue pickup **~1.0s**; a whole run's events cost **78ms** of Redis |
 | Concision prompt on the synthesizer | 4,392 → 2,752 output tokens, **40.5s → 27.1s** |
 | Time to first visual feedback | **1.14s** from submit to the graph on screen |
-| Tests | **168** backend · **34** frontend, no network calls, no spend |
+| Tests | **229** backend · **34** frontend, no network calls, no spend |
 
 ---
 
@@ -185,11 +186,14 @@ Invoke-RestMethod "http://127.0.0.1:8000/runs/$($run.run_id)"
 curl.exe -N "http://127.0.0.1:8000/runs/$($run.run_id)/events?last_event_id=6"
 ```
 
+`GET /runs/{run_id}` reports `running`, `completed` with the full result, or `failed` with the
+error the run ended on.
+
 A browser `EventSource` sends the `Last-Event-ID` header automatically on reconnect;
 the query parameter is for clients like `curl` that do not retry. The same thing works
 in the UI — refresh `/runs/{run_id}` mid-run and it rebuilds from the log.
 
-**The synchronous endpoint still exists**, and is what the eval suite will drive:
+**The synchronous endpoint still exists**, for clients that want one request and one answer:
 
 ```powershell
 $r = Invoke-RestMethod -Uri http://127.0.0.1:8000/query -Method Post -ContentType 'application/json' -Body '{"query":"What is retrieval-augmented generation?"}'
@@ -197,7 +201,9 @@ $r.answer
 Invoke-RestMethod -Uri http://127.0.0.1:8000/query -Method Post -ContentType 'application/json' -Body (@{query='Summarize that in one sentence.'; thread_id=$r.thread_id} | ConvertTo-Json)
 ```
 
-Passing the returned `thread_id` back confirms the Postgres checkpointer is persisting state.
+Passing the returned `thread_id` back continues the conversation: the follow-up is planned against
+the previous turn, which confirms the Postgres checkpointer is persisting state. It is still a
+separate run, with its own research and its own token budget.
 
 **Verify the fallback actually fires.** The behaviour most worth confirming by hand: break
 the primary provider and check an answer still comes back via GPT-4o. The key is read by the
@@ -214,7 +220,7 @@ An answer means the fallback chain worked. Restart without the override to go ba
 
 ```powershell
 cd backend
-uv run ruff check . ; uv run ruff format . ; uv run mypy --strict atlas ; uv run pytest -q
+uv run ruff check . ; uv run ruff format . ; uv run mypy --strict atlas atlas_eval ; uv run pytest -q
 ```
 
 ```powershell
@@ -226,6 +232,56 @@ npm run typecheck ; npm run lint ; npm test
 `noUncheckedIndexedAccess`, no `any`, no `eslint-disable`. Neither suite makes a network call or
 spends money — every model is a fake, and the frontend's fixtures are real event streams recorded
 from the graph by `backend/scripts/capture_fixtures.py`.
+
+CI runs the backend checks on every push to `main` and every pull request. The frontend checks are
+not in CI yet.
+
+## Evaluation
+
+`backend/atlas_eval` scores the agent on a 50-query dataset in three categories:
+
+| | What it measures | How |
+|---|---|---|
+| **Completion** | Does the answer contain each fact on the item's rubric? | Pattern and number checks where possible, an LLM judge for the rest |
+| **Grounding** | What fraction of the answer's atomic claims do the retrieved sources support? | The answer is split into claims, and each is checked against the retrieved snippets |
+| **Tool use** | Subtask count in the expected range, no redundant searches, retries within the loop's bounds, subtasks genuinely independent | Deterministic checks, plus one judged check for independence |
+
+Grounding here is claim-level. The graph's own `ungrounded_urls` check only confirms that a cited URL
+was retrieved; it cannot catch a real URL cited for something it does not say. The suite runs the
+real graph in-process against a **frozen corpus** of recorded Tavily results, so two runs are
+comparable and CI never touches live search. The judge is GPT-4o at temperature 0: a fixed
+temperature is impossible on the Claude models Atlas runs on, and a model should not grade its own
+answers. The exception is a run the fallback answered, where GPT-4o is grading itself. Each run's
+metrics record which provider answered, so those runs can be told apart.
+
+**Status: built and unit-tested, not yet run.** No corpus has been recorded, there is no baseline,
+and the dataset is model-drafted and not yet reviewed. `atlas_eval claim` prints the strongest
+description the dataset supports, and today that is:
+
+```
+50 model-drafted query traces, 0 of 50 human-reviewed
+```
+
+So this README quotes no eval scores yet. Producing the first ones, from `backend/`:
+
+```powershell
+uv run python -m atlas_eval review      # approve or skip each item; resumable
+uv run python -m atlas_eval record      # the only online step: live models and Tavily, 3 passes per item
+uv run python -m atlas_eval run --name baseline --write-baseline --corpus-date <YYYY-MM-DD>
+uv run python -m atlas_eval label --run baseline       # human labels for judge calibration
+uv run python -m atlas_eval calibrate --run baseline   # judge-human agreement: raw, kappa, prevalence
+```
+
+Then commit `atlas_eval/data/corpus/`, `atlas_eval/data/baseline.json` and
+`atlas_eval/data/runs/baseline.json`.
+
+**The CI gate fails closed.** Every push to `main` and every PR from this repository runs a 12-item
+smoke that fails if any item crashes. On `main`, on PRs labelled `run-eval`, and on any PR that
+touches prompts, graph topology, model config or the eval suite itself, the full 50-item run is
+gated against the baseline. A category fails when it regresses by more than 2pp *and* its 95%
+paired-bootstrap CI excludes zero. The gate also refuses to pass when it has no per-item baseline to
+pair against. **Until the files above are committed, the eval jobs fail on `main`.** That is the
+gate reporting it has nothing to compare against, not a flaky test.
 
 ---
 
@@ -240,6 +296,15 @@ identical to a real approval. Each was caught by a check built to *discriminate*
 measurement against a forced serial loop, a reducer compared against `operator.add`, a deliberately
 poisoned search branch the critic had to reject — and each now reports itself in `metrics.degraded`,
 which the UI shows prominently rather than tucking away.
+
+**A thread is a conversation; a run is one question.** Only the conversation carries over between
+runs on the same thread. Each run starts with fresh research, critic feedback, metrics and token
+budget. That took deliberate work. LangGraph applies graph input through each key's reducer, so
+passing `research_results: []` does not clear the previous run's results — it merges into them.
+Before this was fixed, a follow-up was synthesised partly from the last question's research, and
+the budget counted a whole conversation against a per-question limit. The planner, which runs
+once at the start of every run, now resets those keys explicitly. `tests/test_run_isolation.py`
+runs two questions on one thread to keep it that way.
 
 **Model selection** is a single config constant, `PRIMARY_MODEL`, read only by `atlas/models.py`.
 Nothing else names a model. Override it in `.env` without touching code.
@@ -267,8 +332,10 @@ repository root and is read once at startup. After editing it, stop and restart 
 
 ## Roadmap
 
-**Phase 5 — evaluation.** A graded question set, regression runs against known-good answers, and
-critic-loop effectiveness measured rather than assumed. Budget ~1.0s of queue pickup per trace.
+**Phase 5 — evaluation, finishing.** The suite is built; what remains is running it: review the
+dataset, record the corpus, commit a baseline, and calibrate the judge against human labels. Then
+measure what Atlas claims rather than assume it — the full graph against a single model call with
+search at the same token budget, and the critic loop on against off.
 
 **Phase 6 — tracing.** Langfuse. `atlas/metrics.py` is deliberately small and shaped to be replaced
 by deletion rather than unpicked from everywhere.

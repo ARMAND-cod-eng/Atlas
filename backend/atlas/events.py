@@ -69,8 +69,8 @@ def emit(event_type: str, node: str | None = None, **payload: object) -> None:
     """Emit an event from inside a node. Never raises.
 
     ``get_stream_writer`` raises ``RuntimeError`` outside a runnable context, and
-    Phase 2's tests call node functions directly with no graph running at all —
-    so an unguarded call here would break 126 existing tests. It is also a no-op
+    many tests call node functions directly with no graph running at all — so an
+    unguarded call here would break every one of them. It is also a no-op
     under ``ainvoke``, which is what keeps ``POST /query`` working unchanged.
 
     Swallowing the error is right on its own terms too: telemetry that can fail a

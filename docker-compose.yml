@@ -1,8 +1,9 @@
 # Local infrastructure for Atlas.
 #
-# Phase 0 runs the backend directly under uv (fast reloads, native debugging) and
-# containerizes only its dependencies. The `backend` service — using
-# backend/Dockerfile, which already exists — is added in a later phase.
+# Only the backend's dependencies are containerized: Postgres (with pgvector) and
+# Redis. The API, worker and frontend run directly on the host (fast reloads,
+# native debugging). backend/Dockerfile builds an API image but is not wired in
+# here yet.
 #
 # Credentials here are local-development defaults and match .env.example. They are
 # not secrets and are not intended to leave your machine.

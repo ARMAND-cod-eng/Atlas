@@ -1,7 +1,7 @@
 """Runs dataset items through the real graph, in-process, against frozen search.
 
 In-process rather than through ``POST /query``: the eval scores the *agent*, and
-the queue, SSE relay and HTTP layer are Phase 3's concerns with 161 tests of their
+the queue, SSE relay and HTTP layer are Phase 3's concerns, with tests of their
 own. Driving the endpoint would mean booting four processes to exercise code this
 suite does not score, and paying ~1.0s of queue pickup fifty times over. With
 ``MemorySaver`` and a frozen corpus the suite needs no services at all, which is

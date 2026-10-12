@@ -1,5 +1,6 @@
-"""The Atlas agent graph.
+"""The Atlas agent graph: planner, parallel researchers, synthesizer, critic.
 
-Phase 0 holds a single node. The planner fan-out, parallel researchers, critic
-loop, and synthesizer are assembled here in later phases.
+:mod:`atlas.graph.builder` assembles and compiles it, :mod:`atlas.graph.nodes`
+holds the node functions and routing, and :mod:`atlas.graph.state` the state
+schema and its reducers.
 """

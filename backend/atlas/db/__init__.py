@@ -1,6 +1,7 @@
 """Database access layer.
 
 Distinct from the LangGraph checkpointer, which manages its own psycopg pool for
-graph state. This package is for Atlas's own tables — starting with the pgvector
-embedding store in a later phase.
+graph state. Atlas has no tables of its own yet, so today this package backs only
+the API's ``/health`` database probe. pgvector is enabled by the compose init
+script, but nothing uses it yet.
 """
