@@ -147,7 +147,15 @@ def get_structured_llm(
     narrow on ``include_raw`` — so the dict shape is verified at runtime rather
     than asserted with a cast.
     """
-    primary = _build_primary(temperature).with_structured_output(schema, include_raw=True)
+    # Native structured output: the model is constrained to the schema, rather
+    # than asked for a tool call whose JSON is hoped to be well-formed. Through
+    # tool calling, correct answers kept arriving in wrappers validation rejected
+    # — five in eight in the first live runs, about one in twenty-four even after
+    # the schemas learned to unwrap the shapes seen. A live probe of this mode
+    # parsed ten of ten. The schemas' tolerance stays, for the fallback's path.
+    primary = _build_primary(temperature).with_structured_output(
+        schema, include_raw=True, method="json_schema"
+    )
     composed: Runnable[LanguageModelInput, dict[Any, Any] | BaseModel] = primary.with_fallbacks(
         [get_structured_fallback(schema, temperature)]
     )

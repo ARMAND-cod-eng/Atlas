@@ -135,3 +135,35 @@ async def test_no_second_try_when_the_fallback_already_answered(
 
     assert calls == ["composed"]
     assert metrics.degraded == []
+
+
+# --- how the primary is asked ------------------------------------------------------------
+
+
+def test_the_primary_uses_native_structured_output(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Constrained decoding, not a tool call whose JSON is hoped to be well-formed.
+
+    Through tool calling, Claude wrapped correct answers in shapes validation
+    rejected — five in eight in the first live runs, still about one in
+    twenty-four after the schemas learned to unwrap them. A live probe of the
+    native json_schema mode parsed ten of ten. The fallback is left as it was.
+    """
+    seen: dict[str, dict[str, object]] = {}
+
+    class Recorder:
+        def __init__(self, name: str) -> None:
+            self.name = name
+
+        def with_structured_output(self, schema: object, **kwargs: object) -> Any:
+            seen[self.name] = kwargs
+            return RunnableLambda(lambda _: {})
+
+    monkeypatch.setattr(models, "_build_primary", lambda temperature=None: Recorder("primary"))
+    monkeypatch.setattr(models, "_build_fallback", lambda temperature=None: Recorder("fallback"))
+
+    models.get_structured_llm(PlannerOutput)
+
+    assert seen == {
+        "primary": {"include_raw": True, "method": "json_schema"},
+        "fallback": {"include_raw": True},
+    }
