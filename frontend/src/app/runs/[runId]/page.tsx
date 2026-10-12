@@ -1,12 +1,14 @@
 'use client';
 
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { use } from 'react';
 
 import { Answer } from '@/components/Answer';
 import { Findings } from '@/components/Findings';
 import { GraphCanvas } from '@/components/GraphCanvas';
 import { Metrics } from '@/components/Metrics';
+import { QuestionForm } from '@/components/QuestionForm';
 import { RunStatus } from '@/components/RunStatus';
 import { isFinished } from '@/lib/reducer';
 import { useNow, useRunStream, useTopology } from '@/lib/useRunStream';
@@ -19,30 +21,51 @@ import { useNow, useRunStream, useTopology } from '@/lib/useRunStream';
  * rejoins live if the run is still going. That is Phase 3's event log doing
  * exactly what it was built for, and it makes the reconnection behaviour
  * something you can check by pressing F5 rather than by reading a test.
+ *
+ * Once the run ends, a follow-up continues the same thread — planned against
+ * this answer — and links back here with `?from=`, so a conversation can be
+ * walked back one question at a time.
  */
 export default function RunPage({
   params,
+  searchParams,
 }: {
   params: Promise<{ runId: string }>;
+  searchParams: Promise<{ from?: string | string[] }>;
 }): React.JSX.Element {
   const { runId } = use(params);
+  const { from } = use(searchParams);
+  const previous = typeof from === 'string' ? from : null;
+  const router = useRouter();
   const topology = useTopology();
   const { state, connection, result } = useRunStream(runId);
-  const now = useNow(!isFinished(state));
+  const finished = isFinished(state);
+  const now = useNow(!finished);
 
   return (
-    <main className="flex h-screen flex-col bg-neutral-950 text-neutral-200">
+    <main className="flex min-h-screen flex-col bg-neutral-950 text-neutral-200 lg:h-screen">
       <header className="flex shrink-0 items-baseline gap-3 border-b border-neutral-800 px-4 py-2">
         <Link href="/" className="text-[13px] font-medium text-neutral-300 hover:text-neutral-100">
           Atlas
         </Link>
+        {previous !== null && (
+          <Link
+            href={`/runs/${previous}`}
+            className="shrink-0 text-[12px] text-neutral-500 hover:text-neutral-300"
+          >
+            ← previous question
+          </Link>
+        )}
         <p className="truncate text-[12px] text-neutral-400">{state.query ?? 'loading run…'}</p>
-        <span className="ml-auto shrink-0 font-mono text-[10px] text-neutral-600">{runId}</span>
+        <span className="ml-auto hidden shrink-0 font-mono text-[10px] text-neutral-600 sm:inline">
+          {runId}
+        </span>
       </header>
 
-      <div className="flex min-h-0 flex-1">
+      {/* Side by side on wide screens; stacked, and scrolling as one page, on narrow ones. */}
+      <div className="flex min-h-0 flex-1 flex-col lg:flex-row">
         <div className="flex min-w-0 flex-1 flex-col">
-          <div className="h-[52%] min-h-[260px] shrink-0 border-b border-neutral-800">
+          <div className="h-[60vh] min-h-[260px] shrink-0 border-b border-neutral-800 lg:h-[52%]">
             {topology === null ? (
               <p className="p-4 text-[12px] text-neutral-500">loading the graph…</p>
             ) : (
@@ -50,13 +73,27 @@ export default function RunPage({
             )}
           </div>
 
-          <div className="min-h-0 flex-1 space-y-6 overflow-y-auto p-4">
+          <div className="min-h-0 flex-1 space-y-6 p-4 lg:overflow-y-auto">
             <Answer state={state} result={result} />
             <Findings state={state} />
+            {finished && state.threadId !== null && (
+              <section>
+                <h2 className="mb-2 text-[11px] uppercase tracking-wide text-neutral-500">
+                  follow up
+                </h2>
+                <QuestionForm
+                  threadId={state.threadId}
+                  placeholder="Ask a follow-up. It is planned against this answer."
+                  hint="continues this conversation"
+                  submitLabel="Ask"
+                  onStarted={(next) => router.push(`/runs/${next}?from=${runId}`)}
+                />
+              </section>
+            )}
           </div>
         </div>
 
-        <aside className="w-72 shrink-0 space-y-3 overflow-y-auto border-l border-neutral-800 p-3">
+        <aside className="w-full shrink-0 space-y-3 border-t border-neutral-800 p-3 lg:w-72 lg:overflow-y-auto lg:border-l lg:border-t-0">
           <RunStatus state={state} connection={connection} now={now} />
           <Metrics result={result} />
         </aside>

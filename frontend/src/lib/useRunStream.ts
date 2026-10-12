@@ -18,21 +18,11 @@ import {
   type Topology,
   isTerminal,
 } from './events';
+import { API_BASE } from './api';
 import { CRITIC, PLANNER, RESEARCHER, SYNTHESIZER, accept, initialState, isFinished, resumeFrom, type RunState } from './reducer';
 
-/**
- * 127.0.0.1, not localhost — and this is worth two seconds per request.
- *
- * On Windows `localhost` resolves to `::1` before `127.0.0.1`, and uvicorn binds
- * IPv4 only. The browser therefore tries IPv6 first, waits for that attempt to
- * fail, and only then connects — measured at **2,050 ms against 22 ms** for the
- * identical request to `127.0.0.1`. Every call pays it: the topology fetch, the
- * POST, and the SSE connection, which is why the run page appeared to take many
- * seconds to show anything.
- *
- * Naming the loopback address explicitly removes the resolution step entirely.
- */
-export const API_BASE = process.env.NEXT_PUBLIC_API_BASE_URL ?? 'http://127.0.0.1:8000';
+// Re-exported: the run pages import the address from here.
+export { API_BASE };
 
 const SKELETON = [PLANNER, RESEARCHER, SYNTHESIZER, CRITIC];
 
