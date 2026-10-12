@@ -92,12 +92,26 @@ class FakeRedis:
         value = self.values.get(key)
         return None if value is None else str(value)
 
-    async def set(self, key: str, value: str, ex: int | None = None) -> bool:
+    async def set(
+        self, key: str, value: str, ex: int | None = None, nx: bool = False
+    ) -> bool | None:
         self._guard()
+        if nx and key in self.values:
+            # Redis answers a refused SET NX with nil, not False.
+            return None
         self.values[key] = value
         if ex is not None:
             self.expiries[key] = ex
         return True
+
+    async def delete(self, *keys: str) -> int:
+        self._guard()
+        removed = 0
+        for key in keys:
+            if self.values.pop(key, None) is not None:
+                removed += 1
+            self.expiries.pop(key, None)
+        return removed
 
     async def exists(self, key: str) -> int:
         self._guard()

@@ -104,6 +104,9 @@ async def execute_run(
     final_state: dict[str, Any] | None = None
     terminal_written = False
 
+    # The API claimed the thread when it queued this run; restart the claim's
+    # clock now that the run is actually executing. See eventlog.claim_thread.
+    await eventlog.renew_thread(thread_id, run_id)
     await events.write(RUN_STARTED, query=query, thread_id=thread_id)
     logger.info("run started", extra={"run_id": run_id, "thread_id": thread_id})
 
@@ -172,3 +175,6 @@ async def execute_run(
             # impossible" is not a guarantee, and a client hanging forever is a
             # bad way to discover that.
             await events.write(RUN_FAILED, error="run ended without a terminal event")
+        # Last, after the terminal event: the thread is free once the run is over,
+        # whichever way it ended.
+        await eventlog.release_thread(thread_id, run_id)

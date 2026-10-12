@@ -35,7 +35,9 @@ router = APIRouter()
 class QueryRequest(BaseModel):
     """Inbound research request."""
 
-    query: str = Field(min_length=1, description="The question to answer.")
+    # Capped: every character is multiplied across the fan-out and every prompt
+    # after it, so an unbounded question is an unbounded bill.
+    query: str = Field(min_length=1, max_length=2000, description="The question to answer.")
     thread_id: str | None = Field(
         default=None,
         description=(
@@ -128,16 +130,32 @@ async def enqueue_run(request: Request, payload: QueryRequest) -> tuple[Job, str
     arq: ArqRedis = request.app.state.arq
     run_id = str(uuid4())
     thread_id = payload.thread_id or str(uuid4())
-    # Register before enqueueing. A client can subscribe the instant this call
-    # returns, which is sooner than the worker can write its first event.
-    await eventlog.register(run_id)
-    # _job_id ties the arq job to the run, so the job's result and the run's
-    # event stream are addressable by the same identifier.
-    job = await arq.enqueue_job(RUN_RESEARCH, run_id, payload.query, thread_id, _job_id=run_id)
+
+    # Claimed before anything is queued or spent; released by the runner when the
+    # run ends. See eventlog.claim_thread for why two runs on one thread is a bug.
+    holder = await eventlog.claim_thread(thread_id, run_id)
+    if holder is not None:
+        raise HTTPException(
+            status_code=409,
+            detail=f"thread {thread_id} already has a run in progress: {holder}",
+        )
+
+    try:
+        # Register before enqueueing. A client can subscribe the instant this call
+        # returns, which is sooner than the worker can write its first event.
+        await eventlog.register(run_id)
+        # _job_id ties the arq job to the run, so the job's result and the run's
+        # event stream are addressable by the same identifier.
+        job = await arq.enqueue_job(RUN_RESEARCH, run_id, payload.query, thread_id, _job_id=run_id)
+    except BaseException:
+        await eventlog.release_thread(thread_id, run_id)
+        raise
     if job is None:
         # arq returns None when a job with this id already exists. run_id is a
         # fresh uuid, so this means Redis is not in the state we believe it is —
-        # better to say so than to hand back a run_id nothing will execute.
+        # better to say so than to hand back a run_id nothing will execute. The
+        # claim goes too, or the thread stays locked by a run that never existed.
+        await eventlog.release_thread(thread_id, run_id)
         logger.error("enqueue returned no job", extra={"run_id": run_id})
         raise HTTPException(status_code=503, detail="could not enqueue the run")
     logger.info("run enqueued", extra={"run_id": run_id, "thread_id": thread_id})

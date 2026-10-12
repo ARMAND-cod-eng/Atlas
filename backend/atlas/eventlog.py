@@ -193,6 +193,81 @@ async def exists(run_id: str) -> bool:
     )
 
 
+# --- one run per thread ------------------------------------------------------------
+#
+# Two runs on one thread write the same checkpoint concurrently: both start from
+# the same state, and whichever finishes second silently overwrites the other's
+# turn. So a run claims its thread before it is queued, and releases it when it
+# ends — success or failure.
+
+# Longer than any run can take: the worker kills a job at JOB_TIMEOUT_SECONDS,
+# and the claim is renewed when the run starts, so time spent queued does not eat
+# into it. Only reached if a worker dies without running its release, and then it
+# is how long that thread stays locked. A test pins it above the job timeout.
+THREAD_CLAIM_SECONDS = 15 * 60
+
+
+def thread_key(thread_id: str) -> str:
+    return f"atlas:thread:{thread_id}"
+
+
+async def claim_thread(thread_id: str, run_id: str) -> str | None:
+    """Claim ``thread_id`` for ``run_id``. None if claimed, else the holder's run id.
+
+    Fails open: a Redis error logs and returns None, so the run proceeds
+    unguarded — the behaviour before this lock existed — rather than every
+    request being refused because a cache hiccuped.
+    """
+    key = thread_key(thread_id)
+    try:
+        client = get_client()
+        if await client.set(key, run_id, ex=THREAD_CLAIM_SECONDS, nx=True):
+            return None
+        holder = await client.get(key)
+    except Exception as exc:
+        logger.warning(
+            "could not claim thread; running unguarded",
+            extra={"thread_id": thread_id, "run_id": run_id, "error_type": type(exc).__name__},
+        )
+        return None
+    # The holder can expire between the two calls. The thread is free then, but
+    # this run did not get it; the client retries rather than this looping.
+    return holder if holder is not None else "unknown"
+
+
+async def renew_thread(thread_id: str, run_id: str) -> None:
+    """Restart the claim's clock, if ``run_id`` still holds it. Never raises."""
+    key = thread_key(thread_id)
+    try:
+        client = get_client()
+        if await client.get(key) == run_id:
+            await client.expire(key, THREAD_CLAIM_SECONDS)
+    except Exception as exc:
+        logger.warning(
+            "could not renew thread claim",
+            extra={"thread_id": thread_id, "run_id": run_id, "error_type": type(exc).__name__},
+        )
+
+
+async def release_thread(thread_id: str, run_id: str) -> None:
+    """Release the thread, but only ``run_id``'s own claim. Never raises.
+
+    Read-then-delete rather than atomic. The gap matters only if this claim had
+    already expired and another run claimed the thread in between — which
+    THREAD_CLAIM_SECONDS, longer than any run, rules out short of a dead worker.
+    """
+    key = thread_key(thread_id)
+    try:
+        client = get_client()
+        if await client.get(key) == run_id:
+            await client.delete(key)
+    except Exception as exc:
+        logger.warning(
+            "could not release thread claim; it will expire on its own",
+            extra={"thread_id": thread_id, "run_id": run_id, "error_type": type(exc).__name__},
+        )
+
+
 async def store_result(run_id: str, result: dict[str, Any]) -> None:
     """Persist the final result for ``GET /runs/{run_id}``.
 
