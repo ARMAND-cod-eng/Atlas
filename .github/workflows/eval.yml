@@ -9,19 +9,19 @@
 # Score regressions are caught by the full 50-item run, gated against the
 # committed baseline. It runs on any PR that touches a file able to move a score —
 # prompts, graph topology, model config, the eval itself — on a `run-eval` label,
-# weekly, and on demand. Everything else stays cheap.
+# and on demand. Everything else stays cheap.
 #
 # Residual gap, acknowledged: a regression arriving through a path not listed
-# below (a provider-side model change, a dependency bump) is caught by the weekly
-# run rather than before merge.
+# below (a provider-side model change, a dependency bump) is not caught before
+# merge. Run the full suite on demand after a dependency bump. A weekly schedule
+# would close the gap, and is deliberately off until a baseline is committed —
+# before that, every scheduled run could only fail.
 
 name: eval
 
 on:
   pull_request:
   workflow_dispatch:
-  schedule:
-    - cron: "0 6 * * 1" # Mondays 06:00 UTC
 
 permissions:
   contents: read
@@ -95,11 +95,10 @@ jobs:
     name: eval full + gate
     needs: [changed-behaviour]
     # !cancelled(): changed-behaviour is skipped outside PRs, and a skipped
-    # dependency would otherwise skip this job on schedule and dispatch too.
+    # dependency would otherwise skip this job on dispatch too.
     if: >
       !cancelled() && (
         github.event_name == 'workflow_dispatch' ||
-        github.event_name == 'schedule' ||
         (github.event_name == 'pull_request' &&
          github.event.pull_request.head.repo.full_name == github.repository &&
          (needs.changed-behaviour.outputs.changed == 'true' ||

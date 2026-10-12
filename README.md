@@ -282,10 +282,10 @@ Then commit `atlas_eval/data/corpus/`, `atlas_eval/data/baseline.json` and
 **The CI gate fails closed.** The paid runs live in `eval.yml`, which never fires on a plain push.
 Every PR from this repository runs a 12-item smoke that fails if any item crashes. The full 50-item
 run, gated against the baseline, runs on PRs that touch prompts, graph code, model config or the
-eval itself, on PRs labelled `run-eval`, every Monday, and on demand. A category fails when it
-regresses by more than 2pp *and* its 95% paired-bootstrap CI excludes zero. The gate also refuses to
-pass when it has no per-item baseline to pair against. **Until the files above are committed, every
-eval job fails.** That is the gate reporting it has nothing to compare against, not a flaky test.
+eval itself, on PRs labelled `run-eval`, and on demand. A category fails when it regresses by more
+than 2pp *and* its 95% paired-bootstrap CI excludes zero. The gate also refuses to pass when it has
+no per-item baseline to pair against. **Until the files above are committed, every eval job
+fails.** That is the gate reporting it has nothing to compare against, not a flaky test.
 
 **Comparison runs.** `run --variant no-critic` runs the same graph without the review loop, and
 `run --variant single-call` answers each item with one search and Atlas's own synthesizer — same
