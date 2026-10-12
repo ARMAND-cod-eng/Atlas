@@ -15,7 +15,7 @@ from typing import Annotated, Literal, TypedDict
 
 from langchain_core.messages import AnyMessage
 from langgraph.graph.message import add_messages
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, Field, field_validator, model_validator
 
 from atlas.metrics import RunMetrics, merge_run_metrics
 
@@ -44,6 +44,45 @@ class Subtask(BaseModel):
     rationale: str
 
 
+# --- tolerating the shapes structured output actually arrives in ------------------
+#
+# Observed live against claude-sonnet-5, each with correct content inside:
+#
+#   a nested list double-encoded as a string     {"subtasks": "[...]"}
+#   that string holding the whole object         {"subtasks": "{\"subtasks\": [...]}"}
+#   the whole answer under one wrapper key       {"$PARAMETER_VALUE": {...}}
+#
+# Strict validation rejected all three, and a rejected answer goes to the
+# fallback — a GPT-4o call, a structured_output_fallback mark, and on the critic a
+# different model doing the reviewing. In the first live eval runs that was five
+# structured answers in eight. They are unwrapped at the schema, narrowly: each
+# rule fires only when the expected field is absent or arrives as a string, so a
+# payload genuinely missing its content still fails.
+
+
+def _unwrap_single_key(data: object, required: str) -> object:
+    """``{"<anything>": {...}}`` -> ``{...}``, when ``required`` is missing."""
+    if isinstance(data, dict) and required not in data and len(data) == 1:
+        (inner,) = data.values()
+        if isinstance(inner, dict):
+            return inner
+    return data
+
+
+def _decode_json_list(value: object, field: str) -> object:
+    """A list sent as a JSON string — possibly a string of the whole object."""
+    if not isinstance(value, str):
+        return value
+    try:
+        decoded = json.loads(value)
+    except json.JSONDecodeError:
+        # Not JSON either — let pydantic report the real problem.
+        return value
+    if isinstance(decoded, dict) and field in decoded:
+        return decoded[field]
+    return decoded
+
+
 class PlannerOutput(BaseModel):
     """Structured-output schema for the planner.
 
@@ -53,28 +92,22 @@ class PlannerOutput(BaseModel):
 
     subtasks: list[Subtask] = Field(default_factory=list)
 
-    @field_validator("subtasks", mode="before")
+    @model_validator(mode="before")
     @classmethod
     # `object` rather than Any: a "before" validator receives whatever the
     # provider sent, and object states that honestly without disabling checking.
+    def _unwrap(cls, data: object) -> object:
+        return _unwrap_single_key(data, "subtasks")
+
+    @field_validator("subtasks", mode="before")
+    @classmethod
     def _accept_json_encoded_list(cls, value: object) -> object:
         """Tolerate ``subtasks`` arriving as a JSON string instead of an array.
 
-        Observed live against claude-sonnet-5: the structured-output call returns
-        a correct plan whose nested list is double-encoded as a string, and strict
-        validation rejects it. That would degrade the run to a single subtask —
-        losing the whole fan-out — over an encoding wobble, with the right content
-        sitting in the payload. Both structured-output methods produce it
-        intermittently, so this is handled at the schema rather than by picking a
-        method and hoping.
+        Losing it would degrade the run to a single subtask — the whole fan-out —
+        over an encoding wobble, with the right content sitting in the payload.
         """
-        if isinstance(value, str):
-            try:
-                return json.loads(value)
-            except json.JSONDecodeError:
-                # Not JSON either — let pydantic report the real problem.
-                return value
-        return value
+        return _decode_json_list(value, "subtasks")
 
 
 class ResearchResult(BaseModel):
@@ -111,6 +144,16 @@ class CriticVerdict(BaseModel):
     overall: Literal["accept", "revise"]
     per_subtask: list[SubtaskVerdict] = Field(default_factory=list)
     synthesis_feedback: str | None = None
+
+    @model_validator(mode="before")
+    @classmethod
+    def _unwrap(cls, data: object) -> object:
+        return _unwrap_single_key(data, "overall")
+
+    @field_validator("per_subtask", mode="before")
+    @classmethod
+    def _accept_json_encoded_list(cls, value: object) -> object:
+        return _decode_json_list(value, "per_subtask")
 
     def faulted_ids(self) -> list[str]:
         """Subtask ids the critic wants re-researched."""
