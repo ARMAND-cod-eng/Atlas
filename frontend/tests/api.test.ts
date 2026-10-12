@@ -9,7 +9,7 @@
 
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-import { startRun } from '../src/lib/api';
+import { runExists, startRun } from '../src/lib/api';
 
 function respond(status: number, body: unknown): void {
   vi.stubGlobal(
@@ -69,5 +69,41 @@ describe('startRun', () => {
       kind: 'error',
       message: 'could not reach the API at http://127.0.0.1:8000. Is it running?',
     });
+  });
+});
+
+/**
+ * Whether a run page has anything to show.
+ *
+ * The page used to open the event stream unconditionally. For an unknown id —
+ * a typo, or a link older than the hour events are kept — the stream 404s,
+ * the browser closes it without saying why, and the page sat on "starting"
+ * forever: a run that does not exist, looking exactly like one about to begin.
+ */
+describe('runExists', () => {
+  it('is known when the API answers', async () => {
+    respond(200, { run_id: 'r-1', status: 'running', result: null, error: null });
+
+    expect(await runExists('r-1')).toBe('known');
+  });
+
+  it('is missing on 404', async () => {
+    respond(404, { detail: 'unknown run: r-9' });
+
+    expect(await runExists('r-9')).toBe('missing');
+  });
+
+  it('is unreachable when the API is down, so the stream can still retry', async () => {
+    vi.stubGlobal('fetch', vi.fn(async () => {
+      throw new TypeError('Failed to fetch');
+    }));
+
+    expect(await runExists('r-1')).toBe('unreachable');
+  });
+
+  it('treats any other answer as known rather than declaring the run gone', async () => {
+    respond(500, { error: 'internal_error' });
+
+    expect(await runExists('r-1')).toBe('known');
   });
 });

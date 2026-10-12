@@ -38,9 +38,27 @@ export default function RunPage({
   const previous = typeof from === 'string' ? from : null;
   const router = useRouter();
   const topology = useTopology();
-  const { state, connection, result } = useRunStream(runId);
+  const { state, connection, result, missing } = useRunStream(runId);
   const finished = isFinished(state);
-  const now = useNow(!finished);
+  const now = useNow(!finished && !missing);
+
+  if (missing) {
+    return (
+      <main className="mx-auto flex min-h-screen w-full max-w-2xl flex-col justify-center px-6">
+        <h1 className="text-sm font-medium tracking-wide text-neutral-300">No run here</h1>
+        <p className="mt-2 text-[13px] leading-relaxed text-neutral-400">
+          The API has no run <span className="font-mono text-neutral-300">{runId}</span>. A run is
+          kept for an hour after it finishes, so an older link has expired — or the id is wrong.
+        </p>
+        <Link
+          href="/"
+          className="mt-6 self-start rounded border border-neutral-700 px-3 py-1.5 text-[12px] text-neutral-200 hover:border-neutral-500"
+        >
+          Ask a question
+        </Link>
+      </main>
+    );
+  }
 
   return (
     <main className="flex min-h-screen flex-col bg-neutral-950 text-neutral-200 lg:h-screen">

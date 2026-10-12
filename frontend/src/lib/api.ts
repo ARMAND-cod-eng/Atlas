@@ -62,3 +62,26 @@ async function detailOf(response: Response): Promise<string> {
   }
   return '';
 }
+
+export type RunPresence = 'known' | 'missing' | 'unreachable';
+
+/**
+ * Whether the API knows this run, before the page opens its event stream.
+ *
+ * `POST /runs` registers a run before it returns, so a real run is always
+ * known — even one still queued. A 404 therefore means a wrong id or a run
+ * older than the hour its events are kept. Asked first because the stream
+ * cannot say so itself: the browser closes a 404'd EventSource without
+ * exposing the status, and the page would wait on "starting" forever.
+ *
+ * Only a 404 counts as missing. A 500 or an unreachable API says nothing about
+ * the run, so the page carries on and lets the stream retry.
+ */
+export async function runExists(runId: string): Promise<RunPresence> {
+  try {
+    const response = await fetch(`${API_BASE}/runs/${runId}`);
+    return response.status === 404 ? 'missing' : 'known';
+  } catch {
+    return 'unreachable';
+  }
+}

@@ -18,7 +18,7 @@ import {
   type Topology,
   isTerminal,
 } from './events';
-import { API_BASE } from './api';
+import { API_BASE, runExists } from './api';
 import { CRITIC, PLANNER, RESEARCHER, SYNTHESIZER, accept, initialState, isFinished, resumeFrom, type RunState } from './reducer';
 
 // Re-exported: the run pages import the address from here.
@@ -52,6 +52,8 @@ export interface RunStream {
   readonly state: RunState;
   readonly connection: Connection;
   readonly result: RunResult | null;
+  /** The API has never heard of this run: a wrong id, or one past its hour. */
+  readonly missing: boolean;
 }
 
 export function useTopology(): Topology | null {
@@ -98,6 +100,7 @@ export function useRunStream(runId: string): RunStream {
   const [state, setState] = useState<RunState>(() => initialState(SKELETON));
   const [connection, setConnection] = useState<Connection>('connecting');
   const [result, setResult] = useState<RunResult | null>(null);
+  const [missing, setMissing] = useState(false);
 
   // Refs, not state: these drive the connection lifecycle and must not
   // re-trigger the effect that owns it.
@@ -167,7 +170,17 @@ export function useRunStream(runId: string): RunStream {
       }
     };
 
-    connect(0);
+    // Asked before the stream opens — see runExists for why the stream itself
+    // cannot report a run that does not exist.
+    void runExists(runId).then((presence) => {
+      if (disposed) return;
+      if (presence === 'missing') {
+        setMissing(true);
+        setConnection('closed');
+        return;
+      }
+      connect(0);
+    });
 
     return () => {
       disposed = true;
@@ -194,7 +207,7 @@ export function useRunStream(runId: string): RunStream {
     };
   }, [runId, state]);
 
-  return { state, connection, result };
+  return { state, connection, result, missing };
 }
 
 /** A ticking clock for elapsed times. Stops when nothing is running. */
