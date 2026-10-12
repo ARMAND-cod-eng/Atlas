@@ -15,6 +15,7 @@ import pytest
 
 from atlas_eval.calibration import KAPPA_THRESHOLD, Agreement, CalibrationReport, agreement
 from atlas_eval.gate import (
+    CATEGORIES,
     Baseline,
     CategoryDelta,
     NoiseEstimate,
@@ -211,7 +212,7 @@ def test_noise_below_significance_does_not_trip_the_gate() -> None:
     A -3pp point delta is past the 2pp threshold, but it is driven by a handful
     of items moving in both directions, so the CI spans zero and the gate holds.
     """
-    base = _baseline(completion=0.80, grounding=0.90, tools=0.95)
+    base = _baseline(completion=0.80)
     baseline_items = {"completion": {f"q{i}": 0.80 for i in range(50)}}
     noisy = [0.80] * 40 + [0.30] * 5 + [1.00] * 5  # mean 0.77, wide spread
     current = {"completion": {f"q{i}": noisy[i] for i in range(50)}}
@@ -272,8 +273,8 @@ def test_a_missing_per_item_baseline_fails_the_gate() -> None:
     assert result.reasons == [
         "completion: no per-item baseline scores, so no paired comparison is possible "
         "— commit runs/baseline.json from `atlas_eval run --name baseline --write-baseline`",
-        "grounding: no scores in this run",
-        "tools: no scores in this run",
+        "grounding: absent from baseline, not gated",
+        "tools: absent from baseline, not gated",
     ]
 
 
@@ -288,8 +289,8 @@ def test_a_per_item_baseline_with_no_overlap_fails_the_gate() -> None:
     assert result.reasons == [
         "completion: 50 item(s) missing from the baseline run; CI computed on the overlap only",
         "completion: no item appears in both runs, so no paired comparison is possible",
-        "grounding: no scores in this run",
-        "tools: no scores in this run",
+        "grounding: absent from baseline, not gated",
+        "tools: absent from baseline, not gated",
     ]
 
 
@@ -373,3 +374,22 @@ def test_the_threshold_verdict_says_which_limit_binds(detectable_pp: float, verd
     )
 
     assert estimate.verdict(2.0) == verdict
+
+
+def test_a_run_with_no_scores_fails_the_gate() -> None:
+    """An unscored run — records saved, judge never reached — must not pass.
+
+    Before, a category the run had no scores for was a note in the report and
+    the gate passed: a run whose scoring had died would have sailed through.
+    """
+    base = _baseline(completion=0.80, grounding=0.90, tools=0.95)
+    baseline_items = {c: {f"q{i}": 0.9 for i in range(50)} for c in CATEGORIES}
+
+    result = compare(base, {}, baseline_items)
+
+    assert result.passed is False
+    assert result.reasons == [
+        "completion: the baseline has scores, this run has none",
+        "grounding: the baseline has scores, this run has none",
+        "tools: the baseline has scores, this run has none",
+    ]

@@ -210,7 +210,11 @@ def _write_run(
         "records": [json.loads(r.model_dump_json()) for r in records],
         "scores": [json.loads(s.model_dump_json()) for s in scores.scores],
     }
-    path.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    # newline="\n": the same bytes on every platform. On Windows, text mode
+    # wrote CRLF and every run file arrived in git needing conversion.
+    path.write_text(
+        json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8", newline="\n"
+    )
     return path
 
 
@@ -247,9 +251,22 @@ def cmd_run(args: argparse.Namespace) -> int:
     if failed:
         print(f"  {len(failed)} run(s) errored: {[r.item_id for r in failed]}")
 
+    # Saved before the judge is asked anything. The first rerun lost a whole
+    # agent run — 50 items, about 2M tokens — when the judge's provider ran out
+    # of credit mid-scoring, because nothing was written until scoring finished.
+    _write_run(args.name, records, SuiteScore(), args.variant, {"agent": agent_spend})
+
     by_id = {item.id: item for item in items}
-    with measured_spend() as judge_spend:
-        scores = asyncio.run(score_all([(by_id[r.item_id], r) for r in records]))
+    try:
+        with measured_spend() as judge_spend:
+            scores = asyncio.run(score_all([(by_id[r.item_id], r) for r in records]))
+    except Exception as exc:
+        print(
+            f"\nscoring failed: {type(exc).__name__}: {str(exc)[:300]}\n"
+            f"the agent's records are saved; once the judge is reachable, run\n"
+            f"  uv run python -m atlas_eval rescore --run {args.name}"
+        )
+        return 1
     spend = {"agent": agent_spend, "judge": judge_spend}
     print(_format_spend(spend))
 
@@ -301,7 +318,7 @@ def _write_baseline(
         notes=notes,
     )
     (DATA_DIR / "baseline.json").write_text(
-        baseline.model_dump_json(indent=2) + "\n", encoding="utf-8"
+        baseline.model_dump_json(indent=2) + "\n", encoding="utf-8", newline="\n"
     )
     print(f"wrote baseline from {len(records)} items")
 

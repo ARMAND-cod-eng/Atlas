@@ -153,16 +153,20 @@ def compare(
     undecided: list[str] = []
 
     for category in CATEGORIES:
-        current_items = current_scores.get(category, {})
-        if not current_items:
-            reasons.append(f"{category}: no scores in this run")
-            continue
-
-        current_mean = statistics.fmean(current_items.values())
         base_mean = baseline.means.get(category)
         if base_mean is None:
             reasons.append(f"{category}: absent from baseline, not gated")
             continue
+
+        current_items = current_scores.get(category, {})
+        if not current_items:
+            # A run whose scoring died — records saved, judge never reached —
+            # has no scores at all. That is not a pass.
+            undecided.append(category)
+            reasons.append(f"{category}: the baseline has scores, this run has none")
+            continue
+
+        current_mean = statistics.fmean(current_items.values())
 
         if not baseline_scores or category not in baseline_scores:
             undecided.append(category)

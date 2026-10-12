@@ -472,3 +472,48 @@ def test_rescoring_rejudges_the_answers_and_keeps_everything_else(
     # The approving fake judge spends nothing measurable.
     assert rewritten["spend"]["judge"] == {}
     assert (tmp_path / "baseline.json").exists() is False
+
+
+def test_a_judge_failure_loses_no_agent_work(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """The records are saved before scoring starts.
+
+    The first rerun lost a whole agent run — 50 items, about 2M Claude tokens —
+    when the judge's provider ran out of credit during scoring: nothing was
+    written until scoring finished, so there was nothing to rescore. Now the
+    run file holds the records before the judge is asked anything, and a
+    scoring failure says how to recover.
+    """
+
+    async def fake_run_items(
+        items: list[Any], concurrency: int = 5, run_one: Any = None
+    ) -> list[RunRecord]:
+        return [RunRecord(item_id=i.id, query=i.query, answer="an answer") for i in items]
+
+    async def broken_judge(schema: type[BaseModel], system: str, user: str) -> BaseModel:
+        raise RuntimeError("Error code: 429 - insufficient_quota")
+
+    for module in (completion, grounding, tools):
+        monkeypatch.setattr(module, "judge", broken_judge)
+    monkeypatch.setattr(cli, "run_items", fake_run_items)
+    monkeypatch.setattr(cli, "RUNS_DIR", tmp_path / "runs")
+
+    code = cli.cmd_run(cli.build_parser().parse_args(["run", "--only", "q01", "--name", "t"]))
+
+    saved = json.loads((tmp_path / "runs" / "t.json").read_text(encoding="utf-8"))
+    assert code == 1
+    assert [r["item_id"] for r in saved["records"]] == ["q01"]
+    assert (saved["per_item"], saved["means"]) == ({}, {})
+
+
+def test_run_files_are_written_with_unix_line_endings(
+    judge_calls: list[str], monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """Same bytes on every platform: written on Windows they came out CRLF."""
+    args = _patch_run(monkeypatch, tmp_path, crash_first=False)
+
+    cli.cmd_run(args)
+
+    assert b"\r\n" not in (tmp_path / "runs" / "t.json").read_bytes()
+    assert b"\r\n" not in (tmp_path / "baseline.json").read_bytes()
