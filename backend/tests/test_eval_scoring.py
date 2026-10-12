@@ -15,6 +15,7 @@ Three defects, one shape: the eval reported something better than what happened.
 from __future__ import annotations
 
 import argparse
+import json
 from pathlib import Path
 from typing import Any
 
@@ -286,3 +287,49 @@ def test_a_baseline_is_only_written_from_the_full_system(
     assert cli.cmd_run(args) == 2
     assert ran == []
     assert (tmp_path / "baseline.json").exists() is False
+
+
+# --- noise ------------------------------------------------------------------------------
+
+
+def _write_run(directory: Path, name: str, variant: str, scores: dict[str, float]) -> None:
+    directory.mkdir(parents=True, exist_ok=True)
+    payload = {"name": name, "variant": variant, "per_item": {"completion": scores}}
+    (directory / f"{name}.json").write_text(json.dumps(payload), encoding="utf-8")
+
+
+def test_noise_reports_each_category_and_what_binds(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    items = [f"q{i}" for i in range(50)]
+    runs = tmp_path / "runs"
+    _write_run(runs, "baseline", "atlas", dict.fromkeys(items, 0.8))
+    _write_run(
+        runs, "rerun1", "atlas", {q: 0.9 if i % 2 == 0 else 0.7 for i, q in enumerate(items)}
+    )
+    monkeypatch.setattr(cli, "RUNS_DIR", runs)
+
+    code = cli.cmd_noise(cli.build_parser().parse_args(["noise", "--runs", "baseline", "rerun1"]))
+
+    assert code == 0
+    assert (
+        "  completion  n=50  paired SD 10.10pp  drift 0.00pp  detectable >= 4.00pp"
+        "  -> raise the threshold to at least 5pp"
+    ) in capsys.readouterr().out.splitlines()
+
+
+def test_noise_refuses_to_mix_variants(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """The gap between Atlas and the baseline is the result, not noise."""
+    runs = tmp_path / "runs"
+    _write_run(runs, "baseline", "atlas", {"q0": 0.8, "q1": 0.8})
+    _write_run(runs, "single", "single-call", {"q0": 0.5, "q1": 0.5})
+    monkeypatch.setattr(cli, "RUNS_DIR", runs)
+
+    code = cli.cmd_noise(cli.build_parser().parse_args(["noise", "--runs", "baseline", "single"]))
+
+    assert code == 2
+    assert capsys.readouterr().out.splitlines() == [
+        "noise is measured between reruns of one variant; got atlas, single-call"
+    ]

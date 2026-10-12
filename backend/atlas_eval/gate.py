@@ -32,8 +32,11 @@ gate's behaviour on every run. A gate that cannot decide must say no.
 
 from __future__ import annotations
 
+import itertools
+import math
 import random
 import statistics
+from collections.abc import Mapping, Sequence
 from pathlib import Path
 
 from pydantic import BaseModel, Field
@@ -222,3 +225,80 @@ def load_baseline(path: Path = BASELINE_PATH) -> Baseline:
             "known-good commit first."
         )
     return Baseline.model_validate_json(path.read_text(encoding="utf-8"))
+
+
+# --- the noise floor -------------------------------------------------------------
+#
+# DEFAULT_THRESHOLD_PP is provisional until measured. This is the measurement:
+# run the same code several times against the same corpus, and the per-item
+# differences between those runs are pure run-to-run noise — the agent's own
+# sampling, the judge's wobble. Their SD sets the smallest regression the gate
+# can tell apart from that noise. Below it, a real regression and a bad roll of
+# the dice look the same, and no threshold changes that.
+
+# Two-sided 5% (the CI the gate uses) and 80% power, the usual design pair.
+Z_TWO_SIDED_95 = 1.959964
+Z_POWER_80 = 0.841621
+
+
+class NoiseEstimate(BaseModel):
+    """Run-to-run noise for one category, from reruns of identical code."""
+
+    category: str
+    pairs: int
+    items: int
+    # SD of per-item differences between two reruns, pooled over every pair.
+    paired_sd_pp: float
+    # The largest gap in the category *mean* between any two reruns — how far a
+    # headline number moves when nothing changed.
+    drift_pp: float
+    # The smallest true regression the paired test catches 80% of the time.
+    detectable_pp: float
+
+    def verdict(self, threshold_pp: float) -> str:
+        """Which limit actually decides what the gate can catch."""
+        if self.detectable_pp <= threshold_pp:
+            return "the threshold binds"
+        return f"raise the threshold to at least {math.ceil(self.detectable_pp)}pp"
+
+
+def noise_floor(runs: Sequence[Mapping[str, Mapping[str, float]]]) -> list[NoiseEstimate]:
+    """Estimate per-category noise from two or more runs of the same code.
+
+    ``runs`` are run files' ``per_item`` maps. A category absent from any run —
+    tool use, for the single-call baseline — is skipped rather than reported as
+    noiseless.
+    """
+    if len(runs) < 2:
+        raise ValueError("noise needs at least two runs of the same code")
+
+    estimates: list[NoiseEstimate] = []
+    for category in CATEGORIES:
+        if any(category not in run for run in runs):
+            continue
+        variances: list[float] = []
+        drifts: list[float] = []
+        sizes: list[int] = []
+        for first, second in itertools.combinations(runs, 2):
+            shared = sorted(set(first[category]) & set(second[category]))
+            if len(shared) < 2:
+                continue
+            differences = [second[category][i] - first[category][i] for i in shared]
+            variances.append(statistics.variance(differences))
+            drifts.append(abs(statistics.fmean(differences)) * 100)
+            sizes.append(len(shared))
+        if not variances:
+            continue
+        sd_pp = math.sqrt(statistics.fmean(variances)) * 100
+        items = min(sizes)
+        estimates.append(
+            NoiseEstimate(
+                category=category,
+                pairs=len(variances),
+                items=items,
+                paired_sd_pp=sd_pp,
+                drift_pp=max(drifts),
+                detectable_pp=(Z_TWO_SIDED_95 + Z_POWER_80) * sd_pp / math.sqrt(items),
+            )
+        )
+    return estimates

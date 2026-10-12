@@ -11,8 +11,17 @@ from __future__ import annotations
 
 import math
 
+import pytest
+
 from atlas_eval.calibration import KAPPA_THRESHOLD, Agreement, CalibrationReport, agreement
-from atlas_eval.gate import Baseline, CategoryDelta, compare, paired_bootstrap
+from atlas_eval.gate import (
+    Baseline,
+    CategoryDelta,
+    NoiseEstimate,
+    compare,
+    noise_floor,
+    paired_bootstrap,
+)
 
 # --- Cohen's kappa, against arithmetic done by hand ---------------------------
 
@@ -293,3 +302,74 @@ def test_an_unchanged_run_with_a_per_item_baseline_passes() -> None:
     result = compare(base, current, baseline_items)
 
     assert result.passed is True
+
+
+# --- the noise floor ------------------------------------------------------------------
+#
+# The gate's 2pp threshold was provisional "until the measured paired SD says
+# otherwise". noise_floor is what measures it: the same code run several times,
+# per-item differences between the runs, and from their SD the smallest
+# regression a 50-item gate can tell apart from that run-to-run wobble.
+
+ITEMS = [f"q{i}" for i in range(50)]
+
+
+def _alternating(base: float, step: float) -> dict[str, float]:
+    """Each item moved by +step or -step: zero net drift, SD of exactly ``step``-ish."""
+    return {item: base + (step if i % 2 == 0 else -step) for i, item in enumerate(ITEMS)}
+
+
+def test_identical_reruns_have_no_noise() -> None:
+    run = {"completion": dict.fromkeys(ITEMS, 0.8)}
+
+    [estimate] = noise_floor([run, run])
+
+    assert (estimate.category, estimate.pairs, estimate.items) == ("completion", 1, 50)
+    assert (estimate.paired_sd_pp, estimate.drift_pp, estimate.detectable_pp) == (0.0, 0.0, 0.0)
+
+
+def test_the_detectable_regression_follows_from_the_paired_sd() -> None:
+    """Hand-computed: diffs of +/-0.1 over 50 items have a sample SD of
+    sqrt(50 * 0.01 / 49) = 10.10pp, so the standard error is 10.10 / sqrt(50) =
+    1.43pp, and 80% power at two-sided 5% needs (1.96 + 0.84) x 1.43 = 4.00pp."""
+    first = {"completion": dict.fromkeys(ITEMS, 0.8)}
+    second = {"completion": _alternating(0.8, 0.1)}
+
+    [estimate] = noise_floor([first, second])
+
+    assert math.isclose(estimate.paired_sd_pp, 10.1015, abs_tol=1e-3)
+    assert math.isclose(estimate.drift_pp, 0.0, abs_tol=1e-9)
+    assert math.isclose(estimate.detectable_pp, 4.0023, abs_tol=1e-3)
+
+
+def test_a_category_missing_from_any_run_is_not_estimated() -> None:
+    """The single-call baseline has no tool use; it must not read as zero noise."""
+    with_tools = {"completion": dict.fromkeys(ITEMS, 0.8), "tools": dict.fromkeys(ITEMS, 1.0)}
+    without = {"completion": dict.fromkeys(ITEMS, 0.8)}
+
+    assert [e.category for e in noise_floor([with_tools, without])] == ["completion"]
+
+
+def test_noise_needs_at_least_two_runs() -> None:
+    with pytest.raises(ValueError, match="at least two runs"):
+        noise_floor([{"completion": dict.fromkeys(ITEMS, 0.8)}])
+
+
+@pytest.mark.parametrize(
+    ("detectable_pp", "verdict"),
+    [
+        (1.5, "the threshold binds"),
+        (4.0, "raise the threshold to at least 4pp"),
+    ],
+)
+def test_the_threshold_verdict_says_which_limit_binds(detectable_pp: float, verdict: str) -> None:
+    estimate = NoiseEstimate(
+        category="grounding",
+        pairs=1,
+        items=50,
+        paired_sd_pp=1.0,
+        drift_pp=0.0,
+        detectable_pp=detectable_pp,
+    )
+
+    assert estimate.verdict(2.0) == verdict

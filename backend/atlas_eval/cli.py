@@ -6,6 +6,8 @@
     uv run python -m atlas_eval label       # human calibration labels
     uv run python -m atlas_eval calibrate   # judge-human agreement
     uv run python -m atlas_eval gate        # compare a run against baseline
+    uv run python -m atlas_eval noise       # run-to-run noise from reruns
+    uv run python -m atlas_eval report      # results table and chart from run files
     uv run python -m atlas_eval claim       # what the dataset supports claiming
 
 ``review`` and ``label`` are interactive and **write after every keystroke**, so
@@ -24,6 +26,7 @@ import subprocess
 from collections.abc import Awaitable, Callable
 from datetime import UTC, datetime
 from pathlib import Path
+from typing import Any
 
 from atlas_eval.baselines import run_single_call
 from atlas_eval.dataset import (
@@ -35,7 +38,7 @@ from atlas_eval.dataset import (
     provenance_summary,
     write_jsonl,
 )
-from atlas_eval.gate import Baseline, compare, load_baseline
+from atlas_eval.gate import DEFAULT_THRESHOLD_PP, Baseline, compare, load_baseline, noise_floor
 from atlas_eval.runner import RunRecord, Variant, run_item, run_items
 from atlas_eval.score import SuiteScore, score_all
 
@@ -250,6 +253,86 @@ def cmd_gate(args: argparse.Namespace) -> int:
     return 0 if result.passed else 1
 
 
+# --- noise ---------------------------------------------------------------------
+
+
+def _load_run(name: str) -> dict[str, Any]:
+    loaded: dict[str, Any] = json.loads((RUNS_DIR / f"{name}.json").read_text(encoding="utf-8"))
+    return loaded
+
+
+def cmd_noise(args: argparse.Namespace) -> int:
+    """Run-to-run noise from reruns of identical code, and what the gate can catch."""
+    runs = [_load_run(name) for name in args.runs]
+    variants = sorted({str(run.get("variant", "atlas")) for run in runs})
+    if len(variants) > 1:
+        print(f"noise is measured between reruns of one variant; got {', '.join(variants)}")
+        return 2
+    try:
+        estimates = noise_floor([run["per_item"] for run in runs])
+    except ValueError as exc:
+        print(exc)
+        return 2
+
+    print(f"noise across {len(runs)} runs of the same code ({variants[0]})\n")
+    for e in estimates:
+        print(
+            f"  {e.category:<11} n={e.items}  paired SD {e.paired_sd_pp:.2f}pp  "
+            f"drift {e.drift_pp:.2f}pp  detectable >= {e.detectable_pp:.2f}pp  "
+            f"-> {e.verdict(args.threshold)}"
+        )
+    print(
+        "\nA regression smaller than 'detectable' cannot be told apart from run-to-run"
+        f" noise at this n, whatever the threshold (now {args.threshold}pp)."
+    )
+    return 0
+
+
+# --- report --------------------------------------------------------------------
+
+
+def cmd_report(args: argparse.Namespace) -> int:
+    """The results table (and, with --chart, the chart) from committed run files."""
+    from atlas_eval.report import (
+        critic_effect,
+        deltas_against,
+        render_chart,
+        render_markdown,
+        summarize,
+    )
+
+    names = [args.reference, *(name for name in args.runs if name != args.reference)]
+    runs = {name: _load_run(name) for name in names}
+    reference = runs[args.reference]
+    variant = str(reference.get("variant", "atlas"))
+    if variant != "atlas":
+        print(
+            "the reference must be a run of the production system ('atlas'); "
+            f"{args.reference!r} is {variant!r}"
+        )
+        return 2
+
+    no_critic = next((r for r in runs.values() if r.get("variant") == "no-critic"), None)
+    markdown = render_markdown(
+        [summarize(name, run) for name, run in runs.items()],
+        args.reference,
+        {
+            name: deltas_against(reference, run)
+            for name, run in runs.items()
+            if name != args.reference
+        },
+        critic_effect(reference, no_critic) if no_critic is not None else None,
+    )
+    print(markdown)
+    if args.out:
+        Path(args.out).write_text(markdown, encoding="utf-8")
+        print(f"wrote {args.out}")
+    if args.chart:
+        for path in render_chart([summarize(n, r) for n, r in runs.items()], Path(args.chart)):
+            print(f"wrote {path}")
+    return 0
+
+
 # --- label / calibrate ---------------------------------------------------------
 
 
@@ -303,6 +386,18 @@ def build_parser() -> argparse.ArgumentParser:
     gate.add_argument("--baseline-run", default="baseline")
     gate.add_argument("--threshold", type=float, default=2.0)
     gate.set_defaults(func=cmd_gate)
+
+    noise = sub.add_parser("noise", help="run-to-run noise from reruns of identical code")
+    noise.add_argument("--runs", nargs="+", required=True, help="run names, two or more")
+    noise.add_argument("--threshold", type=float, default=DEFAULT_THRESHOLD_PP)
+    noise.set_defaults(func=cmd_noise)
+
+    report = sub.add_parser("report", help="results table and chart from run files")
+    report.add_argument("--runs", nargs="+", required=True, help="run names to compare")
+    report.add_argument("--reference", default="baseline", help="the atlas run to compare against")
+    report.add_argument("--out", default=None, help="also write the markdown here")
+    report.add_argument("--chart", default=None, help="path stem for <stem>.light/.dark.png")
+    report.set_defaults(func=cmd_report)
 
     label = sub.add_parser("label", help="collect human calibration labels")
     label.add_argument("--run", default="baseline")

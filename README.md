@@ -77,7 +77,7 @@ synthesis, and preserves subtask identity so guidance reaches the branch that ea
 | Streaming overhead | SSE relay **0.18s**; queue pickup **~1.0s**; a whole run's events cost **78ms** of Redis |
 | Concision prompt on the synthesizer | 4,392 → 2,752 output tokens, **40.5s → 27.1s** |
 | Time to first visual feedback | **1.14s** from submit to the graph on screen |
-| Tests | **266** backend · **34** frontend, no network calls, no spend |
+| Tests | **285** backend · **34** frontend, no network calls, no spend |
 
 ---
 
@@ -272,12 +272,24 @@ So this README quotes no eval scores yet. Producing the first ones, from `backen
 uv run python -m atlas_eval review      # approve or skip each item; resumable
 uv run python -m atlas_eval record      # the only online step: live models and Tavily, 3 passes per item
 uv run python -m atlas_eval run --name baseline --write-baseline --corpus-date <YYYY-MM-DD>
+uv run python -m atlas_eval run --name rerun1          # identical code again: pure noise
+uv run python -m atlas_eval noise --runs baseline rerun1
 uv run python -m atlas_eval label --run baseline       # human labels for judge calibration
 uv run python -m atlas_eval calibrate --run baseline   # judge-human agreement: raw, kappa, prevalence
 ```
 
 Then commit `atlas_eval/data/corpus/`, `atlas_eval/data/baseline.json` and
-`atlas_eval/data/runs/baseline.json`.
+`atlas_eval/data/runs/baseline.json`. `noise` reports, per category, how far two runs of identical
+code drift apart and so the smallest regression the gate can catch at n=50. A threshold below that
+is a promise the gate cannot keep, and gets raised.
+
+The comparison and the chart come from the same run files, never typed in by hand:
+
+```powershell
+uv run python -m atlas_eval run --name no-critic --variant no-critic
+uv run python -m atlas_eval run --name single-call --variant single-call
+uv run python -m atlas_eval report --runs baseline no-critic single-call --out ../docs/RESULTS.md --chart ../docs/img/quality-vs-cost
+```
 
 **The CI gate fails closed.** The paid runs live in `eval.yml`, which never fires on a plain push.
 Every PR from this repository runs a 12-item smoke that fails if any item crashes. The full 50-item

@@ -30,6 +30,7 @@ dev = [
     # green CI run red without an explicit, reviewed bump.
     "ruff==0.14.4",
     "mypy==1.19.1",
+    "matplotlib>=3.11.2",
 ]
 
 [build-system]
