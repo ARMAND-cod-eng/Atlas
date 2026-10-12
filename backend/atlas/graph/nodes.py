@@ -379,9 +379,33 @@ def _render_findings(results: list[ResearchResult]) -> str:
     return "\n\n---\n\n".join(blocks)
 
 
-# Trailing punctuation is excluded so "see https://a.example." does not capture
-# the sentence's full stop as part of the URL.
-_URL_PATTERN = re.compile(r"https?://[^\s<>\"'\)\]]+")
+_URL_PATTERN = re.compile(r"https?://[^\s<>\"\]]+")
+
+# Trailing punctuation is trimmed so "see https://a.example." does not capture the
+# sentence's full stop. Parentheses and apostrophes are legal in URLs and common —
+# Wikipedia's ".../Raft_(algorithm)", ".../Cohen's_kappa". The pattern used to stop
+# at both, so a correctly cited, retrieved URL was read as ".../Raft_(algorithm"
+# and reported as invented: most of the "ungrounded" citations in the first full
+# recording were this. The match now takes them, and _trim removes only what
+# belongs to the surrounding prose.
+_TRAILING_PROSE = ".,;:!?'\""
+
+
+def _trim(url: str) -> str:
+    """Drop prose punctuation and unbalanced closing parentheses from the end."""
+    while url:
+        if url[-1] in _TRAILING_PROSE:
+            url = url[:-1]
+        elif url[-1] == ")" and url.count(")") > url.count("("):
+            url = url[:-1]
+        else:
+            break
+    return url
+
+
+def _same_page(url: str) -> str:
+    """Comparison key: a fragment or a trailing slash does not make another page."""
+    return url.split("#", 1)[0].rstrip("/")
 
 
 def allowed_urls(results: list[ResearchResult]) -> set[str]:
@@ -395,9 +419,9 @@ def ungrounded_urls(answer: str, results: list[ResearchResult]) -> set[str]:
     Prompting the model not to invent citations is necessary but not sufficient —
     it is an instruction, not a guarantee. This is the check that actually knows.
     """
-    permitted = allowed_urls(results)
-    cited = {match.rstrip(".,;:") for match in _URL_PATTERN.findall(answer)}
-    return cited - permitted
+    permitted = {_same_page(url) for url in allowed_urls(results)}
+    cited = {_trim(match) for match in _URL_PATTERN.findall(answer)}
+    return {url for url in cited if _same_page(url) not in permitted}
 
 
 def _check_citations(answer: str, results: list[ResearchResult], metrics: RunMetrics) -> None:

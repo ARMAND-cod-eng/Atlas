@@ -162,3 +162,72 @@ async def test_no_research_says_so_plainly(monkeypatch: pytest.MonkeyPatch) -> N
 
     assert not called
     assert "No research was performed" in result["answer"]
+
+
+# --- URLs as they actually appear in answers -------------------------------------------
+#
+# The first full recording raised "answer cites URLs absent from all sources"
+# twelve times. Most were the check's fault: the URL pattern stopped at ")" and
+# "'", so a correctly cited, retrieved ".../wiki/Raft_(algorithm)" was read as
+# ".../wiki/Raft_(algorithm" and reported as invented. Wikipedia alone makes that
+# common, and every false flag marks a run degraded.
+
+
+def _retrieved(*urls: str) -> list[ResearchResult]:
+    return [
+        ResearchResult(
+            subtask_id="s0",
+            findings="f",
+            sources=[Source(url=url, title="t", snippet="s") for url in urls],
+        )
+    ]
+
+
+@pytest.mark.parametrize(
+    ("answer", "url"),
+    [
+        # Seen in the recording, all retrieved and all flagged:
+        (
+            "See https://en.wikipedia.org/wiki/Raft_(algorithm).",
+            "https://en.wikipedia.org/wiki/Raft_(algorithm)",
+        ),
+        (
+            "[Raft](https://en.wikipedia.org/wiki/Raft_(algorithm))",
+            "https://en.wikipedia.org/wiki/Raft_(algorithm)",
+        ),
+        (
+            "per https://grokipedia.com/page/Cohen's_kappa, kappa",
+            "https://grokipedia.com/page/Cohen's_kappa",
+        ),
+        (
+            "slides: https://www.cs.toronto.edu/~m/4_-_Advanced_indexing_(trimmed).pdf",
+            "https://www.cs.toronto.edu/~m/4_-_Advanced_indexing_(trimmed).pdf",
+        ),
+        # Prose around a URL is not part of it:
+        ("(see https://a.example/docs)", "https://a.example/docs"),
+        ("'https://a.example/docs'", "https://a.example/docs"),
+        # The same page, written differently:
+        ("https://a.example/docs/", "https://a.example/docs"),
+        ("https://a.example/docs#section-2", "https://a.example/docs"),
+    ],
+)
+def test_a_retrieved_url_is_recognised_however_it_is_written(answer: str, url: str) -> None:
+    assert nodes.ungrounded_urls(answer, _retrieved(url)) == set()
+
+
+@pytest.mark.parametrize(
+    "answer",
+    [
+        # The controls, also from the recording: these were never retrieved.
+        "https://www.iaea.org/topics/energy",
+        "https://paths.grasp.study/",  # the site's root, not the page retrieved
+        "https://liner.com/review/found-in-middle",  # a cut-short path is another page
+    ],
+)
+def test_a_url_never_retrieved_is_still_flagged(answer: str) -> None:
+    retrieved = _retrieved(
+        "https://paths.grasp.study/modules/abc/lessons/1",
+        "https://liner.com/review/found-in-middle-calibrating-bias",
+    )
+
+    assert nodes.ungrounded_urls(answer, retrieved) == {answer}
