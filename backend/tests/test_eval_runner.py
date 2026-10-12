@@ -135,3 +135,37 @@ async def test_the_frozen_corpus_is_installed_on_every_run(
 
     assert live_calls == []
     assert record.search_calls == ["q0"]
+
+
+async def test_recording_keeps_its_budget_in_process(
+    monkeypatch: pytest.MonkeyPatch, fake_redis: FakeRedis, tmp_path: Path
+) -> None:
+    """Recording runs the live agent, so it needs the budget as much as replay —
+    without depending on a Redis being up to get it."""
+    from atlas_eval import record
+    from atlas_eval import runner as eval_runner
+    from atlas_eval.corpus import corpus_path
+    from atlas_eval.corpus import save_corpus as real_save
+
+    fake_redis.fail = True
+    monkeypatch.setattr(nodes, "search", nodes.search)
+    monkeypatch.setattr(budget, "get_client", budget.get_client)
+
+    async def fake_live(
+        query: str, max_results: int | None = None, include_content: bool = False
+    ) -> list[Any]:
+        from atlas.graph.state import Source
+
+        return [Source(url="https://a.example", title="A", snippet="s", content="page")]
+
+    monkeypatch.setattr(record, "live_search", fake_live)
+    monkeypatch.setattr(record, "save_corpus", lambda corpus: real_save(corpus, tmp_path))
+    monkeypatch.setattr(record, "corpus_path", lambda item_id: corpus_path(item_id, tmp_path))
+    monkeypatch.setattr(nodes, "call_model", _spending_model(50))
+    monkeypatch.setattr(nodes, "call_structured", make_call_structured(make_plan(1)))
+    before = sum(eval_runner._BUDGET.spent.values())
+
+    await record.record_corpus([load_dataset().items[0]], passes=1)
+
+    # One researcher and one synthesis at 50 tokens each, counted in memory.
+    assert sum(eval_runner._BUDGET.spent.values()) - before == 100

@@ -333,3 +333,66 @@ def test_noise_refuses_to_mix_variants(
     assert capsys.readouterr().out.splitlines() == [
         "noise is measured between reruns of one variant; got atlas, single-call"
     ]
+
+
+# --- what a run cost --------------------------------------------------------------------
+
+
+def _fake_llm(model: str, input_tokens: int, output_tokens: int) -> Any:
+    from langchain_core.language_models.fake_chat_models import GenericFakeChatModel
+    from langchain_core.messages import AIMessage
+
+    def reply() -> AIMessage:
+        return AIMessage(
+            content="x",
+            usage_metadata={
+                "input_tokens": input_tokens,
+                "output_tokens": output_tokens,
+                "total_tokens": input_tokens + output_tokens,
+            },
+            response_metadata={"model_name": model},
+        )
+
+    return GenericFakeChatModel(messages=iter([reply() for _ in range(50)]))
+
+
+def test_a_run_records_what_the_agent_and_the_judge_spent(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """Measured from provider usage, agent and judge apart.
+
+    The eval's own judge calls appear in no run metrics, so before this the
+    cost of scoring was a guess — and the full suite's budget was extrapolated
+    from half of what it actually spends.
+    """
+    agent = _fake_llm("claude-x", 100, 20)
+    judge_model = _fake_llm("gpt-x", 7, 3)
+
+    async def fake_run_items(
+        items: list[Any], concurrency: int = 5, run_one: Any = None
+    ) -> list[RunRecord]:
+        await agent.ainvoke("q")
+        return [RunRecord(item_id=i.id, query=i.query, answer="an answer") for i in items]
+
+    async def measured_judge(schema: type[BaseModel], system: str, user: str) -> BaseModel:
+        await judge_model.ainvoke(user)
+        if schema is FactVerdict:
+            return FactVerdict(present=True)
+        if schema is ClaimList:
+            return ClaimList(claims=[])
+        raise AssertionError(schema.__name__)
+
+    for module in (completion, grounding, tools):
+        monkeypatch.setattr(module, "judge", measured_judge)
+    monkeypatch.setattr(cli, "run_items", fake_run_items)
+    monkeypatch.setattr(cli, "RUNS_DIR", tmp_path / "runs")
+
+    args = cli.build_parser().parse_args(["run", "--only", "q01", "--name", "t"])
+    assert cli.cmd_run(args) == 0
+
+    written = json.loads((tmp_path / "runs" / "t.json").read_text(encoding="utf-8"))
+    # q01: three judged rubric entries and one claim decomposition — four calls.
+    assert written["spend"] == {
+        "agent": {"claude-x": {"input_tokens": 100, "output_tokens": 20}},
+        "judge": {"gpt-x": {"input_tokens": 28, "output_tokens": 12}},
+    }

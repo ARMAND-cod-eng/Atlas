@@ -23,10 +23,13 @@ import asyncio
 import functools
 import json
 import subprocess
-from collections.abc import Awaitable, Callable
+from collections.abc import Awaitable, Callable, Iterator, Mapping
+from contextlib import contextmanager
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
+
+from langchain_core.callbacks import get_usage_metadata_callback
 
 from atlas_eval.baselines import run_single_call
 from atlas_eval.dataset import (
@@ -129,7 +132,9 @@ def cmd_record(args: argparse.Namespace) -> int:
 
     dataset = load_dataset()
     items = _select(dataset, args.smoke, args.only)
-    asyncio.run(record_corpus(items, passes=args.passes))
+    with measured_spend() as spend:
+        asyncio.run(record_corpus(items, passes=args.passes))
+    print(_format_spend({"recording": spend}))
     return 0
 
 
@@ -143,14 +148,54 @@ def runner_for(variant: Variant) -> Callable[[EvalItem], Awaitable[RunRecord]]:
     return functools.partial(run_item, critic_enabled=variant == "atlas")
 
 
+# {model: {"input_tokens": n, "output_tokens": n}}
+Spend = dict[str, dict[str, int]]
+
+
+@contextmanager
+def measured_spend() -> Iterator[Spend]:
+    """Tokens per model for every call made inside, from the providers' usage.
+
+    Filled in when the block exits. Measured rather than summed from run
+    metrics because the judge's calls appear in no run metrics: before this,
+    the cost of scoring was a guess.
+    """
+    spend: Spend = {}
+    with get_usage_metadata_callback() as handler:
+        yield spend
+    for model, usage in handler.usage_metadata.items():
+        spend[model] = {
+            "input_tokens": usage["input_tokens"],
+            "output_tokens": usage["output_tokens"],
+        }
+
+
+def _format_spend(spend: Mapping[str, Spend]) -> str:
+    lines = ["\ntokens spent:"]
+    for phase, models in spend.items():
+        if not models:
+            lines.append(f"  {phase:<10} none")
+        for model, usage in sorted(models.items()):
+            lines.append(
+                f"  {phase:<10} {model:<28} {usage['input_tokens']:>11,} in "
+                f"{usage['output_tokens']:>10,} out"
+            )
+    return "\n".join(lines)
+
+
 def _write_run(
-    name: str, records: list[RunRecord], scores: SuiteScore, variant: Variant = "atlas"
+    name: str,
+    records: list[RunRecord],
+    scores: SuiteScore,
+    variant: Variant = "atlas",
+    spend: Mapping[str, Spend] | None = None,
 ) -> Path:
     RUNS_DIR.mkdir(parents=True, exist_ok=True)
     path = RUNS_DIR / f"{name}.json"
     payload = {
         "name": name,
         "variant": variant,
+        "spend": dict(spend or {}),
         "created": _now(),
         "commit": _git_commit(),
         "means": scores.means(),
@@ -188,15 +233,19 @@ def cmd_run(args: argparse.Namespace) -> int:
     items = _select(dataset, args.smoke, args.only)
     print(f"running {len(items)} item(s) as {args.variant!r} against the frozen corpus")
 
-    records = asyncio.run(
-        run_items(items, concurrency=args.concurrency, run_one=runner_for(args.variant))
-    )
+    with measured_spend() as agent_spend:
+        records = asyncio.run(
+            run_items(items, concurrency=args.concurrency, run_one=runner_for(args.variant))
+        )
     failed = [r for r in records if r.error]
     if failed:
         print(f"  {len(failed)} run(s) errored: {[r.item_id for r in failed]}")
 
     by_id = {item.id: item for item in items}
-    scores = asyncio.run(score_all([(by_id[r.item_id], r) for r in records]))
+    with measured_spend() as judge_spend:
+        scores = asyncio.run(score_all([(by_id[r.item_id], r) for r in records]))
+    spend = {"agent": agent_spend, "judge": judge_spend}
+    print(_format_spend(spend))
 
     print("\nmeans:")
     for category, mean in scores.means().items():
@@ -208,7 +257,7 @@ def cmd_run(args: argparse.Namespace) -> int:
         print(f"  {category:<11} {det} deterministic / {jdg} judge  ({share} deterministic)")
 
     # Written even when something crashed: it is what the crash is debugged from.
-    path = _write_run(args.name, records, scores, args.variant)
+    path = _write_run(args.name, records, scores, args.variant, spend)
     print(f"\nwrote {path}")
 
     if failed:

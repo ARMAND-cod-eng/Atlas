@@ -21,7 +21,7 @@ from atlas.graph.state import Source
 from atlas.tools.search import search as live_search
 from atlas_eval.corpus import Recorder, corpus_path, save_corpus
 from atlas_eval.dataset import EvalItem
-from atlas_eval.runner import run_item
+from atlas_eval.runner import install_offline_budget, run_item
 
 logger = logging.getLogger(__name__)
 
@@ -57,6 +57,7 @@ def capturing_search(recorder: Recorder) -> SearchFn:
 
 async def record_corpus(items: list[EvalItem], passes: int = 3) -> None:
     """Run each item against live search, keeping every document retrieved."""
+    install_offline_budget()
     total_calls = 0
 
     for position, item in enumerate(items, start=1):

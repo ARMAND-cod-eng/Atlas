@@ -109,6 +109,16 @@ def install_offline_runtime() -> None:
     later run in the process calling *live* Tavily, with no error to say so.
     """
     nodes.search = _dispatch
+    install_offline_budget()
+
+
+def install_offline_budget() -> None:
+    """Back the token budget with this process's memory instead of Redis.
+
+    Used alone by recording, which runs the live agent against live search but
+    needs the budget enforced as much as replay does — and should not depend on
+    a Redis being up to get it.
+    """
     budget.get_client = _offline_budget
 
 
