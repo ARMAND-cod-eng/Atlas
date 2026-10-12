@@ -1,9 +1,13 @@
 # Local infrastructure for Atlas.
 #
-# Only the backend's dependencies are containerized: Postgres (with pgvector) and
-# Redis. The API, worker and frontend run directly on the host (fast reloads,
-# native debugging). backend/Dockerfile builds an API image but is not wired in
-# here yet.
+# Two ways to run Atlas:
+#
+#   docker compose up -d                  Postgres and Redis only. The API, worker
+#                                         and frontend run on the host (fast
+#                                         reloads, native debugging).
+#   docker compose --profile app up --build
+#                                         everything, in containers. Open
+#                                         http://127.0.0.1:3000.
 #
 # Credentials here are local-development defaults and match .env.example. They are
 # not secrets and are not intended to leave your machine.
@@ -43,6 +47,47 @@ services:
       interval: 5s
       timeout: 3s
       retries: 10
+
+  # --- the application: `docker compose --profile app up --build` -------------
+  #
+  # Behind a profile so a plain `docker compose up` still starts only the two
+  # services above, for running the API, worker and frontend on the host.
+
+  api:
+    profiles: [app]
+    build: ./backend
+    image: atlas-backend:local
+    env_file: .env
+    environment: &backend-network
+      # Inside the compose network the services are reached by name; the .env
+      # values point at localhost for running on the host, so they are replaced.
+      DATABASE_URL: postgresql://atlas:atlas@postgres:5432/atlas
+      REDIS_URL: redis://redis:6379/0
+    ports:
+      - "8000:8000"
+    depends_on: &backend-deps
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  worker:
+    profiles: [app]
+    # Same image as the API; only the command differs. Runs execute here.
+    build: ./backend
+    image: atlas-backend:local
+    command: ["python", "-m", "atlas.worker_main"]
+    env_file: .env
+    environment: *backend-network
+    depends_on: *backend-deps
+
+  frontend:
+    profiles: [app]
+    build: ./frontend
+    ports:
+      - "3000:3000"
+    depends_on:
+      - api
 
 volumes:
   postgres_data:

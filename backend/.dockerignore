@@ -1,0 +1,11 @@
+# The image copies only pyproject.toml, uv.lock and atlas/. Everything else is
+# excluded from the build context so it is not sent to the daemon at all — the
+# local .venv alone is hundreds of megabytes.
+.venv
+**/__pycache__
+.mypy_cache
+.pytest_cache
+.ruff_cache
+tests
+scripts
+atlas_eval

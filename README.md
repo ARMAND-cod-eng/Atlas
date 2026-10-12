@@ -91,9 +91,22 @@ synthesis, and preserves subtask identity so guidance reaches the branch that ea
 | Docker Desktop | with the WSL 2 backend |
 | API keys | Anthropic, OpenAI, Tavily |
 
+## Quickstart
+
+Docker and three API keys. From the repository root:
+
+```powershell
+Copy-Item .env.example .env   # then fill in ANTHROPIC_API_KEY, OPENAI_API_KEY, TAVILY_API_KEY
+docker compose --profile app up --build
+```
+
+Open <http://127.0.0.1:3000> and ask a question. That starts Postgres, Redis, the API, the worker
+and the frontend in containers. To develop with fast reloads instead, run the pieces on the host as
+below.
+
 ## Run the whole thing
 
-Four terminals. All commands are PowerShell, run from the repository root.
+Four terminals, for development. All commands are PowerShell, run from the repository root.
 
 **1. Configure.** One `.env` at the root serves both the backend and Docker Compose.
 

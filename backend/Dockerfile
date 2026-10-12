@@ -1,6 +1,6 @@
-# Backend image for the API. Not wired into docker-compose.yml yet: the backend
-# runs locally under uv for fast iteration, and compose provides only Postgres
-# and Redis.
+# Backend image, shared by the API (this CMD) and the worker (compose overrides
+# the command with `python -m atlas.worker_main`). Built by
+# `docker compose --profile app up --build`.
 
 # --- builder ------------------------------------------------------------------
 FROM python:3.12-slim AS builder
