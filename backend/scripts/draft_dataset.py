@@ -10,6 +10,10 @@ the dataset then supports being called. If review is incomplete, the README says
 "model-drafted, human-reviewed" rather than "hand-labeled", and a test enforces
 that. The claim cannot outrun the work.
 
+Once any item has been reviewed, this script refuses to overwrite the dataset:
+the reviewed file is the source of truth from then on, and review may have
+corrected items, so it can legitimately differ from the drafts below.
+
 Rubric entries are deliberately short — 3 to 5 required claims each. A rubric is a
 checklist of what an answer must contain, not a model answer: scoring against
 prose measures phrasing, scoring against a checklist measures content.
@@ -26,6 +30,8 @@ from atlas_eval.dataset import (
     ExpectedSubtasks,
     Provenance,
     RubricEntry,
+    load_dataset,
+    provenance_summary,
     write_jsonl,
 )
 
@@ -828,6 +834,19 @@ def build() -> Dataset:
 
 
 def main() -> None:
+    # Once anyone has reviewed the dataset, it — not this script — is the source
+    # of truth: the review may also have corrected items, and redrafting would
+    # silently replace every approval and every correction with the drafts below.
+    if DATASET_PATH.exists():
+        reviewed = provenance_summary(load_dataset(DATASET_PATH, META_PATH)).reviewed
+        if reviewed:
+            raise SystemExit(
+                f"refusing to overwrite {DATASET_PATH.name}: {reviewed} item(s) are "
+                "human-reviewed, and redrafting would discard that review and any "
+                "corrections made during it. The reviewed file is the source of truth "
+                "now; this script is the record of what was originally drafted."
+            )
+
     dataset = build()
     write_jsonl(DATASET_PATH, dataset.items)
     META_PATH.write_text(dataset.meta.model_dump_json(indent=2) + "\n", encoding="utf-8")
