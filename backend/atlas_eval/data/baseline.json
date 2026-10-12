@@ -1,0 +1,13 @@
+{
+  "commit": "1acb8ee",
+  "dataset_version": "v1",
+  "corpus_recorded_at": "2026-10-12",
+  "run_date": "2026-10-12",
+  "n_items": 50,
+  "means": {
+    "completion": 0.995,
+    "grounding": 0.955463768115942,
+    "tools": 0.9633333333333333
+  },
+  "notes": "agent at 1acb8ee (native structured output, URL-check fix, reviewed dataset); rescored with the fixed independence judge"
+}
