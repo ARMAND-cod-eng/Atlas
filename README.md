@@ -77,7 +77,7 @@ synthesis, and preserves subtask identity so guidance reaches the branch that ea
 | Streaming overhead | SSE relay **0.18s**; queue pickup **~1.0s**; a whole run's events cost **78ms** of Redis |
 | Concision prompt on the synthesizer | 4,392 → 2,752 output tokens, **40.5s → 27.1s** |
 | Time to first visual feedback | **1.14s** from submit to the graph on screen |
-| Tests | **289** backend · **43** frontend, no network calls, no spend |
+| Tests | **290** backend · **43** frontend, no network calls, no spend |
 
 ---
 

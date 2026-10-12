@@ -396,3 +396,31 @@ def test_a_run_records_what_the_agent_and_the_judge_spent(
         "agent": {"claude-x": {"input_tokens": 100, "output_tokens": 20}},
         "judge": {"gpt-x": {"input_tokens": 28, "output_tokens": 12}},
     }
+
+
+# --- logging ----------------------------------------------------------------------------
+
+
+def test_the_eval_logs_warnings_with_their_detail(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """The first live recording logged "structured output failed validation"
+    three times and dropped the node, schema and parsing error that say why —
+    the CLI never configured logging, so Python's last-resort handler printed
+    the bare message. Every field passed as ``extra`` now reaches the output."""
+    import logging
+
+    monkeypatch.setattr(logging.getLogger(), "handlers", [])
+    cli.main(["claim"])
+    logging.getLogger("atlas.models").warning(
+        "structured output failed validation; discarding the response",
+        extra={"node": "critic", "schema": "CriticVerdict"},
+    )
+
+    [line] = [ln for ln in capsys.readouterr().err.splitlines() if "structured output" in ln]
+    record = json.loads(line)
+    assert (record["level"], record["node"], record["schema"]) == (
+        "WARNING",
+        "critic",
+        "CriticVerdict",
+    )

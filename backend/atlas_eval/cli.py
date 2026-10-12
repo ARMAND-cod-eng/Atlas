@@ -31,6 +31,7 @@ from typing import Any
 
 from langchain_core.callbacks import get_usage_metadata_callback
 
+from atlas.runtime import configure_logging
 from atlas_eval.baselines import run_single_call
 from atlas_eval.dataset import (
     DATA_DIR,
@@ -461,6 +462,13 @@ def build_parser() -> argparse.ArgumentParser:
 
 
 def main(argv: list[str] | None = None) -> int:
+    # The same JSON lines as the API and worker, so a warning's ``extra`` fields —
+    # which node, which schema, what failed to parse — reach the output. Without
+    # this, Python's last-resort handler printed bare messages, and the first live
+    # recording's three structured-output failures said nothing about why.
+    # WARNING, not LOG_LEVEL: `claim` and `review` run without API keys, and the
+    # settings that hold LOG_LEVEL refuse to load without them.
+    configure_logging("WARNING")
     args = build_parser().parse_args(argv)
     result: int = args.func(args)
     return result
