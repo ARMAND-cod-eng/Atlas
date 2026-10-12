@@ -21,6 +21,8 @@ dead cache must not break queries, and the run stays bounded by
 from __future__ import annotations
 
 import logging
+from collections.abc import Awaitable
+from typing import Protocol
 
 from langgraph.config import get_config
 from redis.asyncio import Redis
@@ -33,6 +35,23 @@ logger = logging.getLogger(__name__)
 # not accumulate keys forever.
 _KEY_TTL_SECONDS = 3600
 
+
+class CounterStore(Protocol):
+    """The three Redis calls the budget makes, and nothing else.
+
+    Typed this narrowly so a process without Redis — the eval — can keep the
+    counter in memory and still be checked, rather than the budget being
+    silently off there. The return types are ``Awaitable`` because that is what
+    redis-py's client declares.
+    """
+
+    def incrby(self, name: str, amount: int = 1) -> Awaitable[int]: ...
+
+    def expire(self, name: str, time: int) -> Awaitable[bool]: ...
+
+    def get(self, name: str) -> Awaitable[str | None]: ...
+
+
 _client: Redis | None = None
 
 
@@ -40,8 +59,8 @@ def _key(run_id: str) -> str:
     return f"atlas:budget:{run_id}"
 
 
-def get_client() -> Redis:
-    """Process-wide Redis client, created on first use.
+def get_client() -> CounterStore:
+    """Process-wide Redis client, created on first use, as a :class:`CounterStore`.
 
     Separate from the API's client (which lives on ``app.state``) because nodes
     have no access to the FastAPI app. Lazy so that importing this module never

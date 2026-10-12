@@ -26,6 +26,8 @@ from langchain_core.runnables import RunnableConfig
 from langgraph.checkpoint.memory import MemorySaver
 from pydantic import BaseModel, Field
 
+from atlas import budget
+from atlas.budget import CounterStore
 from atlas.graph import nodes
 from atlas.graph.builder import build_state_graph, checkpoint_serde, recursion_limit
 from atlas.graph.state import ResearchResult, Source, Subtask
@@ -49,8 +51,6 @@ Variant = Literal["atlas", "no-critic", "single-call"]
 
 _ACTIVE: ContextVar[FrozenSearch | None] = ContextVar("atlas_eval_search", default=None)
 
-_installed = False
-
 
 async def _dispatch(
     query: str, max_results: int | None = None, include_content: bool = False
@@ -65,12 +65,51 @@ async def _dispatch(
     return await active.search(query, max_results, include_content)
 
 
-def install_frozen_search() -> None:
-    """Replace the graph's search with the corpus dispatcher, once."""
-    global _installed
-    if not _installed:
-        nodes.search = _dispatch
-        _installed = True
+class InMemoryBudget:
+    """The token-budget counter, kept in this process instead of Redis.
+
+    The eval has no Redis — not in CI, often not on a laptop — and against an
+    absent Redis the budget fails open on every call. Right for production,
+    wrong here: every eval run reported ``budget_check_unavailable``, and a run
+    that blew its budget was never stopped. On exactly the most expensive runs
+    the eval measured a different system from the one that ships.
+
+    Keyed by run id like the real one, so concurrent items never share a count.
+    No expiry: nothing outlives the process.
+    """
+
+    def __init__(self) -> None:
+        self.spent: dict[str, int] = {}
+
+    async def incrby(self, name: str, amount: int = 1) -> int:
+        self.spent[name] = self.spent.get(name, 0) + amount
+        return self.spent[name]
+
+    async def expire(self, name: str, time: int) -> bool:
+        return True
+
+    async def get(self, name: str) -> str | None:
+        value = self.spent.get(name)
+        return None if value is None else str(value)
+
+
+_BUDGET = InMemoryBudget()
+
+
+def _offline_budget() -> CounterStore:
+    return _BUDGET
+
+
+def install_offline_runtime() -> None:
+    """Point the graph's two external services at in-process stand-ins.
+
+    Search goes to the frozen corpus, the budget counter to memory. Installed on
+    every run, not once per process: a once-only flag meant that anything which
+    restored ``nodes.search`` — a test fixture, a debugging session — left every
+    later run in the process calling *live* Tavily, with no error to say so.
+    """
+    nodes.search = _dispatch
+    budget.get_client = _offline_budget
 
 
 class RunRecord(BaseModel):
@@ -112,7 +151,7 @@ async def run_item(
 ) -> RunRecord:
     """Execute one dataset item and capture what it produced."""
     variant: Variant = "atlas" if critic_enabled else "no-critic"
-    install_frozen_search()
+    install_offline_runtime()
     corpus = load_corpus(item.id) if corpus_root is None else load_corpus(item.id, corpus_root)
     frozen = FrozenSearch(corpus)
     token = _ACTIVE.set(frozen)
