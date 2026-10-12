@@ -21,6 +21,12 @@ from atlas_eval.dataset import EvalItem
 from atlas_eval.scorers.completion import normalize
 from atlas_eval.scorers.judge import judge
 
+# The independence rule spells out the single-subtask case because the judge got
+# it wrong without it. On the first baseline it failed five single-subtask plans
+# for simple questions — exactly what the planner prompt asks for — as "not
+# independent", reasoning that the one subtask "combines multiple aspects". This
+# judge is outside the human calibration, which covers completion and grounding;
+# reading the baseline item by item is what caught it.
 JUDGE_SYSTEM = """You are reviewing how a research system decomposed a question.
 
 You are given the original QUESTION and the SUBTASKS it was split into. Judge two \
@@ -28,7 +34,10 @@ things about the set as a whole:
 
 1. INDEPENDENCE — can each subtask be researched without knowing another's answer? \
 A subtask that says "based on the above" or that only makes sense after another has \
-been answered breaks this.
+been answered breaks this. Independence is about dependencies BETWEEN subtasks. A \
+single subtask is independent by definition: there is nothing for it to depend on. \
+Covering several aspects of the question inside one subtask is not a dependency — \
+whether the question should have been split further is checked separately.
 2. RELEVANCE — does each subtask serve the original question? A subtask that wanders \
 off the topic breaks this.
 

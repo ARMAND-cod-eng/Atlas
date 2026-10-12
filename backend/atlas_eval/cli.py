@@ -190,15 +190,20 @@ def _write_run(
     scores: SuiteScore,
     variant: Variant = "atlas",
     spend: Mapping[str, Spend] | None = None,
+    agent_commit: str | None = None,
 ) -> Path:
     RUNS_DIR.mkdir(parents=True, exist_ok=True)
     path = RUNS_DIR / f"{name}.json"
+    scored_commit = _git_commit()
     payload = {
         "name": name,
         "variant": variant,
         "spend": dict(spend or {}),
         "created": _now(),
-        "commit": _git_commit(),
+        # The commit the agent ran on, and the one whose scorers judged it. The
+        # same for a fresh run; different after `rescore`.
+        "commit": agent_commit or scored_commit,
+        "scored_commit": scored_commit,
         "means": scores.means(),
         "per_item": scores.per_item(),
         "check_split": {k: list(v) for k, v in scores.check_split().items()},
@@ -271,19 +276,92 @@ def cmd_run(args: argparse.Namespace) -> int:
         return 1
 
     if args.write_baseline:
-        baseline = Baseline(
-            commit=_git_commit(),
-            dataset_version=dataset.meta.dataset_version,
-            corpus_recorded_at=args.corpus_date,
-            run_date=_now()[:10],
-            n_items=len(records),
-            means=scores.means(),
-            notes=args.notes,
+        _write_baseline(
+            _git_commit(), dataset, records, scores, args.corpus_date, _now()[:10], args.notes
         )
-        (DATA_DIR / "baseline.json").write_text(
-            baseline.model_dump_json(indent=2) + "\n", encoding="utf-8"
+    return 0
+
+
+def _write_baseline(
+    commit: str,
+    dataset: Dataset,
+    records: list[RunRecord],
+    scores: SuiteScore,
+    corpus_date: str,
+    run_date: str,
+    notes: str,
+) -> None:
+    baseline = Baseline(
+        commit=commit,
+        dataset_version=dataset.meta.dataset_version,
+        corpus_recorded_at=corpus_date,
+        run_date=run_date,
+        n_items=len(records),
+        means=scores.means(),
+        notes=notes,
+    )
+    (DATA_DIR / "baseline.json").write_text(
+        baseline.model_dump_json(indent=2) + "\n", encoding="utf-8"
+    )
+    print(f"wrote baseline from {len(records)} items")
+
+
+# --- rescore -------------------------------------------------------------------
+
+
+def _variant_of(run: Mapping[str, Any]) -> Variant:
+    """The variant a run file records, checked rather than cast."""
+    value = run.get("variant", "atlas")
+    if value == "no-critic":
+        return "no-critic"
+    if value == "single-call":
+        return "single-call"
+    if value == "atlas":
+        return "atlas"
+    raise ValueError(f"run file names an unknown variant: {value!r}")
+
+
+def cmd_rescore(args: argparse.Namespace) -> int:
+    """Re-judge a run's recorded answers with the current scorers.
+
+    For when the scoring was wrong and the answers were not — a judge prompt
+    fix, a scorer bug. The agent is not re-run: its records, its spend and the
+    commit it ran on are kept, and the run file says which commit scored it.
+    Costs only the judge.
+    """
+    payload = _load_run(args.run)
+    records = [RunRecord.model_validate(r) for r in payload["records"]]
+    if any(r.error for r in records) and args.write_baseline:
+        print("not writing a baseline: the run has crashed items")
+        return 1
+    variant = _variant_of(payload)
+    if args.write_baseline and variant != "atlas":
+        print(f"refusing to write a baseline from the {variant!r} variant; use 'atlas'")
+        return 2
+
+    dataset = load_dataset()
+    by_id = {item.id: item for item in dataset.items}
+    with measured_spend() as judge_spend:
+        scores = asyncio.run(score_all([(by_id[r.item_id], r) for r in records]))
+    spend = {**payload.get("spend", {}), "judge": judge_spend}
+    print(_format_spend({"judge": judge_spend}))
+    print("\nmeans:")
+    for category, mean in scores.means().items():
+        print(f"  {category:<11} {mean:.3f}")
+
+    agent_commit = str(payload.get("commit") or "unknown")
+    path = _write_run(args.run, records, scores, variant, spend, agent_commit=agent_commit)
+    print(f"\nrewrote {path}")
+    if args.write_baseline:
+        _write_baseline(
+            agent_commit,
+            dataset,
+            records,
+            scores,
+            args.corpus_date,
+            str(payload.get("created", ""))[:10],
+            args.notes,
         )
-        print(f"wrote baseline from {len(records)} items")
     return 0
 
 
@@ -436,6 +514,13 @@ def build_parser() -> argparse.ArgumentParser:
     gate.add_argument("--baseline-run", default="baseline")
     gate.add_argument("--threshold", type=float, default=2.0)
     gate.set_defaults(func=cmd_gate)
+
+    rescore = sub.add_parser("rescore", help="re-judge a run's answers without re-running it")
+    rescore.add_argument("--run", required=True)
+    rescore.add_argument("--write-baseline", action="store_true")
+    rescore.add_argument("--corpus-date", default="")
+    rescore.add_argument("--notes", default="")
+    rescore.set_defaults(func=cmd_rescore)
 
     noise = sub.add_parser("noise", help="run-to-run noise from reruns of identical code")
     noise.add_argument("--runs", nargs="+", required=True, help="run names, two or more")

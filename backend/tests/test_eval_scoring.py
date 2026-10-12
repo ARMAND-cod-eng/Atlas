@@ -424,3 +424,51 @@ def test_the_eval_logs_warnings_with_their_detail(
         "critic",
         "CriticVerdict",
     )
+
+
+# --- rescoring ---------------------------------------------------------------------------
+
+
+def test_rescoring_rejudges_the_answers_and_keeps_everything_else(
+    judge_calls: list[str], monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """A judge fix must not cost a re-run of the agent.
+
+    The baseline's tool-use judge misread independence and failed five correct
+    single-subtask plans. The answers were fine; only their scoring was wrong.
+    Rescoring recomputes the scores from the recorded answers and keeps what
+    the agent did — its records, its spend, the commit it ran on — while saying
+    which commit scored it.
+    """
+    item = load_dataset().items[0]
+    record = RunRecord(item_id=item.id, query=item.query, answer="an answer")
+    runs = tmp_path / "runs"
+    runs.mkdir()
+    (runs / "old.json").write_text(
+        json.dumps(
+            {
+                "name": "old",
+                "variant": "atlas",
+                "commit": "agent123",
+                "spend": {"agent": {"claude-x": {"input_tokens": 9, "output_tokens": 1}}},
+                "per_item": {"completion": {item.id: 0.0}},
+                "records": [json.loads(record.model_dump_json())],
+            }
+        ),
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(cli, "RUNS_DIR", runs)
+    monkeypatch.setattr(cli, "DATA_DIR", tmp_path)
+    monkeypatch.setattr(cli, "_git_commit", lambda: "scorer456")
+
+    code = cli.cmd_rescore(cli.build_parser().parse_args(["rescore", "--run", "old"]))
+
+    rewritten = json.loads((runs / "old.json").read_text(encoding="utf-8"))
+    assert code == 0
+    assert rewritten["per_item"]["completion"] == {item.id: 1.0}
+    assert rewritten["records"] == [json.loads(record.model_dump_json())]
+    assert (rewritten["commit"], rewritten["scored_commit"]) == ("agent123", "scorer456")
+    assert rewritten["spend"]["agent"] == {"claude-x": {"input_tokens": 9, "output_tokens": 1}}
+    # The approving fake judge spends nothing measurable.
+    assert rewritten["spend"]["judge"] == {}
+    assert (tmp_path / "baseline.json").exists() is False
