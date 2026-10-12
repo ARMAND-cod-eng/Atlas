@@ -15,6 +15,7 @@ from dataclasses import dataclass
 from typing import Any
 
 from langgraph.checkpoint.postgres.aio import AsyncPostgresSaver
+from langgraph.checkpoint.serde.jsonplus import JsonPlusSerializer
 from langgraph.graph import END, START, StateGraph
 from langgraph.graph.state import CompiledStateGraph
 from psycopg import AsyncConnection
@@ -34,7 +35,41 @@ from atlas.graph.nodes import (
     route_after_critic,
     synthesizer,
 )
-from atlas.graph.state import AtlasState
+from atlas.graph.state import (
+    AtlasState,
+    CriticVerdict,
+    ResearchResult,
+    Source,
+    Subtask,
+    SubtaskVerdict,
+)
+from atlas.metrics import CriticRound, LLMCall, NodeTiming, RunMetrics
+
+# Every Atlas type that can sit in graph state, and so in a checkpoint. On load
+# the serializer rebuilds only types it is allowed to, and an unlisted one does
+# not raise — it comes back as a plain dict with a log line, and the next run on
+# the thread dies in the first reducer that reads ``.subtask_id`` off it. LangGraph
+# allows everything today with a deprecation warning and has said strict is
+# coming; listing them makes the behaviour explicit and keeps it when it does.
+# Types, not import-path strings, so a rename breaks the import rather than the
+# allowlist. Nested models are listed too, in case one is ever stored alone.
+CHECKPOINT_TYPES: tuple[type, ...] = (
+    Subtask,
+    ResearchResult,
+    Source,
+    CriticVerdict,
+    SubtaskVerdict,
+    RunMetrics,
+    LLMCall,
+    NodeTiming,
+    CriticRound,
+)
+
+
+def checkpoint_serde() -> JsonPlusSerializer:
+    """The serializer every checkpointer in Atlas uses — production, eval, tests."""
+    return JsonPlusSerializer(allowed_msgpack_modules=CHECKPOINT_TYPES)
+
 
 # These three are not tunables — the checkpointer misbehaves without them.
 #
@@ -68,19 +103,28 @@ class AtlasGraph:
         await self.pool.close()
 
 
-def build_state_graph() -> StateGraph[AtlasState, Any, AtlasState, AtlasState]:
+def build_state_graph(
+    *, critic_enabled: bool = True
+) -> StateGraph[AtlasState, Any, AtlasState, AtlasState]:
     """Assemble the (uncompiled) research graph.
 
-    ``START -> planner -> [fan_out] -> researcher (parallel) -> synthesizer -> END``
+    ``START -> planner -> [fan_out] -> researcher (parallel) -> synthesizer ->
+    critic -> END``, with the critic able to send work back to specific
+    researchers or to the synthesizer.
 
     Kept separate from :func:`build_graph` so tests can compile this against an
     in-memory checkpointer and assert on the graph's shape without a database.
+
+    ``critic_enabled=False`` ends at the synthesizer. It exists for the eval's
+    comparison runs — measuring what the review loop buys — and production never
+    sets it.
     """
     builder: StateGraph[AtlasState, Any, AtlasState, AtlasState] = StateGraph(AtlasState)
     builder.add_node(PLANNER, planner)
     builder.add_node(RESEARCHER, researcher)
     builder.add_node(SYNTHESIZER, synthesizer)
-    builder.add_node(CRITIC, critic)
+    if critic_enabled:
+        builder.add_node(CRITIC, critic)
 
     builder.add_edge(START, PLANNER)
     # The conditional edge is where parallelism comes from: fan_out returns one
@@ -92,6 +136,9 @@ def build_state_graph() -> StateGraph[AtlasState, Any, AtlasState, AtlasState]:
     # run_metrics are what let concurrent branches merge instead of colliding —
     # and on a retry, merge_research_results replaces rather than duplicates.
     builder.add_edge(RESEARCHER, SYNTHESIZER)
+    if not critic_enabled:
+        builder.add_edge(SYNTHESIZER, END)
+        return builder
     builder.add_edge(SYNTHESIZER, CRITIC)
     # This closes the loop. Three destinations: back to specific researchers for a
     # targeted retry, back to the synthesizer when only the write-up was faulted,
@@ -131,7 +178,7 @@ async def build_graph() -> AtlasGraph:
     )
     await pool.open(wait=True)
 
-    checkpointer = AsyncPostgresSaver(pool)
+    checkpointer = AsyncPostgresSaver(pool, serde=checkpoint_serde())
     # Idempotent DDL — creates the checkpoint tables on first run, no-ops after.
     await checkpointer.setup()
 

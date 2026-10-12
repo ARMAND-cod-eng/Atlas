@@ -25,13 +25,27 @@ from typing import Any
 import pytest
 from langchain_core.messages import AIMessage, BaseMessage, HumanMessage
 from langgraph.checkpoint.memory import MemorySaver
+from langgraph.checkpoint.serde.jsonplus import JsonPlusSerializer
 
 from atlas.budget import record_spend
 from atlas.config import get_settings
 from atlas.graph import nodes
-from atlas.graph.builder import build_state_graph
-from atlas.graph.state import CriticVerdict, PlannerOutput, Source
-from atlas.metrics import DEGRADED_BUDGET_EXCEEDED, RunMetrics
+from atlas.graph.builder import build_state_graph, checkpoint_serde
+from atlas.graph.state import (
+    CriticVerdict,
+    PlannerOutput,
+    ResearchResult,
+    Source,
+    Subtask,
+    SubtaskVerdict,
+)
+from atlas.metrics import (
+    DEGRADED_BUDGET_EXCEEDED,
+    CriticRound,
+    LLMCall,
+    NodeTiming,
+    RunMetrics,
+)
 from atlas.runner import execute_run
 from tests.conftest import initial_state, make_call_structured, make_plan, run_config
 
@@ -63,9 +77,9 @@ def synth_prompts(monkeypatch: pytest.MonkeyPatch) -> list[str]:
     return prompts
 
 
-async def _two_runs(monkeypatch: pytest.MonkeyPatch) -> dict[str, Any]:
+async def _two_runs(monkeypatch: pytest.MonkeyPatch, graph: Any = None) -> dict[str, Any]:
     """Five subtasks and one write-up rejection, then a two-subtask follow-up."""
-    graph = build_state_graph().compile(checkpointer=MemorySaver())
+    graph = graph or build_state_graph().compile(checkpointer=MemorySaver())
 
     monkeypatch.setattr(
         nodes,
@@ -209,3 +223,67 @@ async def test_a_follow_up_starts_with_a_fresh_budget(monkeypatch: pytest.Monkey
     assert DEGRADED_BUDGET_EXCEEDED not in second["metrics"]["degraded"]
     # Both runs were actually reviewed, not waved through.
     assert critic_calls == 2
+
+
+# --- the checkpoint serializer ------------------------------------------------------
+#
+# Every follow-up starts by loading the thread's checkpoint, which rebuilds Atlas's
+# own types from their import paths. LangGraph only rebuilds types it is allowed
+# to. An unlisted one does not raise: it comes back as a plain dict with a log
+# line. Today everything is allowed with a deprecation warning; the allowlist in
+# atlas.graph.builder keeps that true when strict becomes LangGraph's default.
+
+
+def test_every_state_type_round_trips_through_the_serializer() -> None:
+    serde = checkpoint_serde()
+    values: list[object] = [
+        Subtask(id="s0", question="q", rationale="r"),
+        ResearchResult(
+            subtask_id="s0", findings="f", sources=[Source(url="https://a", title="t", snippet="s")]
+        ),
+        CriticVerdict(
+            overall="revise",
+            per_subtask=[
+                SubtaskVerdict(subtask_id="s0", verdict="revise", reason="r", guidance="g")
+            ],
+            synthesis_feedback="x",
+        ),
+        RunMetrics(
+            llm_calls=[LLMCall(node="planner", provider="anthropic", model="m", duration_s=1.0)],
+            node_timings=[NodeTiming(node="researcher", duration_s=1.0, subtask_id="s0")],
+            degraded=["d"],
+            critic_rounds=[CriticRound(iteration=1, overall="accept")],
+        ),
+    ]
+
+    assert [serde.loads_typed(serde.dumps_typed(v)) for v in values] == values
+
+
+async def test_a_follow_up_restores_atlas_types_not_dicts(
+    synth_prompts: list[str], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    graph = build_state_graph().compile(checkpointer=MemorySaver(serde=checkpoint_serde()))
+    await _two_runs(monkeypatch, graph)
+
+    restored = (await graph.aget_state(run_config(THREAD))).values
+
+    assert [type(s) for s in restored["subtasks"]] == [Subtask, Subtask]
+    assert [type(r) for r in restored["research_results"]] == [ResearchResult, ResearchResult]
+    assert [type(v) for v in restored["critic_feedback"]] == [CriticVerdict]
+    assert type(restored["run_metrics"]) is RunMetrics
+
+
+async def test_an_unlisted_type_breaks_the_follow_up(
+    synth_prompts: list[str], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The control: what the allowlist prevents.
+
+    With ResearchResult left off, the first run's results come back as dicts, and
+    the follow-up dies in the very first reducer to touch them — the input step
+    merging ``research_results: []`` into the restored list.
+    """
+    partial = JsonPlusSerializer(allowed_msgpack_modules=[Subtask])
+    graph = build_state_graph().compile(checkpointer=MemorySaver(serde=partial))
+
+    with pytest.raises(AttributeError, match="subtask_id"):
+        await _two_runs(monkeypatch, graph)

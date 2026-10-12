@@ -18,11 +18,14 @@ from __future__ import annotations
 
 import argparse
 import asyncio
+import functools
 import json
 import subprocess
+from collections.abc import Awaitable, Callable
 from datetime import UTC, datetime
 from pathlib import Path
 
+from atlas_eval.baselines import run_single_call
 from atlas_eval.dataset import (
     DATA_DIR,
     DATASET_PATH,
@@ -33,7 +36,7 @@ from atlas_eval.dataset import (
     write_jsonl,
 )
 from atlas_eval.gate import Baseline, compare, load_baseline
-from atlas_eval.runner import RunRecord, run_items
+from atlas_eval.runner import RunRecord, Variant, run_item, run_items
 from atlas_eval.score import SuiteScore, score_all
 
 RUNS_DIR = DATA_DIR / "runs"
@@ -130,11 +133,21 @@ def cmd_record(args: argparse.Namespace) -> int:
 # --- run -----------------------------------------------------------------------
 
 
-def _write_run(name: str, records: list[RunRecord], scores: SuiteScore) -> Path:
+def runner_for(variant: Variant) -> Callable[[EvalItem], Awaitable[RunRecord]]:
+    """How one item is run under each variant."""
+    if variant == "single-call":
+        return run_single_call
+    return functools.partial(run_item, critic_enabled=variant == "atlas")
+
+
+def _write_run(
+    name: str, records: list[RunRecord], scores: SuiteScore, variant: Variant = "atlas"
+) -> Path:
     RUNS_DIR.mkdir(parents=True, exist_ok=True)
     path = RUNS_DIR / f"{name}.json"
     payload = {
         "name": name,
+        "variant": variant,
         "created": _now(),
         "commit": _git_commit(),
         "means": scores.means(),
@@ -161,11 +174,20 @@ def _git_commit() -> str:
 
 
 def cmd_run(args: argparse.Namespace) -> int:
+    if args.write_baseline and args.variant != "atlas":
+        # Checked before anything runs: the gate compares production against the
+        # baseline, so a baseline from another system would gate the wrong thing —
+        # and finding that out should not cost a fifty-item run.
+        print(f"refusing to write a baseline from the {args.variant!r} variant; use 'atlas'")
+        return 2
+
     dataset = load_dataset()
     items = _select(dataset, args.smoke, args.only)
-    print(f"running {len(items)} item(s) against the frozen corpus")
+    print(f"running {len(items)} item(s) as {args.variant!r} against the frozen corpus")
 
-    records = asyncio.run(run_items(items, concurrency=args.concurrency))
+    records = asyncio.run(
+        run_items(items, concurrency=args.concurrency, run_one=runner_for(args.variant))
+    )
     failed = [r for r in records if r.error]
     if failed:
         print(f"  {len(failed)} run(s) errored: {[r.item_id for r in failed]}")
@@ -183,7 +205,7 @@ def cmd_run(args: argparse.Namespace) -> int:
         print(f"  {category:<11} {det} deterministic / {jdg} judge  ({share} deterministic)")
 
     # Written even when something crashed: it is what the crash is debugged from.
-    path = _write_run(args.name, records, scores)
+    path = _write_run(args.name, records, scores, args.variant)
     print(f"\nwrote {path}")
 
     if failed:
@@ -265,6 +287,12 @@ def build_parser() -> argparse.ArgumentParser:
     run.add_argument("--smoke", action="store_true")
     run.add_argument("--only", default=None)
     run.add_argument("--concurrency", type=int, default=5)
+    run.add_argument(
+        "--variant",
+        choices=["atlas", "no-critic", "single-call"],
+        default="atlas",
+        help="atlas is production; the others exist to measure it against",
+    )
     run.add_argument("--write-baseline", action="store_true")
     run.add_argument("--corpus-date", default="")
     run.add_argument("--notes", default="")

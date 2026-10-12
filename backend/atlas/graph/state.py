@@ -30,6 +30,10 @@ class Source(BaseModel):
     url: str
     title: str
     snippet: str
+    # The page's text, present only when the search asked for it. Nothing in the
+    # graph asks today; the eval corpus records it so a reader that uses more
+    # than the snippet can be measured later without recording again.
+    content: str | None = None
 
 
 class Subtask(BaseModel):

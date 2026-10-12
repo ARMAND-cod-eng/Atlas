@@ -48,7 +48,9 @@ class FakeTool:
 
 
 def _patch_tool(monkeypatch: pytest.MonkeyPatch, tool: FakeTool) -> None:
-    monkeypatch.setattr(search_module, "build_search_tool", lambda max_results: tool)
+    monkeypatch.setattr(
+        search_module, "build_search_tool", lambda max_results, include_content=False: tool
+    )
 
 
 async def test_normalizes_tavily_shape_to_sources(
@@ -218,3 +220,31 @@ async def test_query_is_passed_through(monkeypatch: pytest.MonkeyPatch) -> None:
     await search_module.search("specific phrasing")
 
     assert tool.calls == [{"query": "specific phrasing"}]
+
+
+# --- page text --------------------------------------------------------------------
+
+
+def test_page_text_is_requested_only_when_asked() -> None:
+    """Off by default: production prompts read snippets, and page text is heavy."""
+    assert search_module.build_search_tool(5).include_raw_content is False
+    assert search_module.build_search_tool(5, include_content=True).include_raw_content == "text"
+
+
+async def test_raw_content_becomes_the_sources_page_text(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    payload = {
+        "results": [
+            {"url": "https://a.example", "title": "A", "content": "snip", "raw_content": "page"},
+            {"url": "https://b.example", "title": "B", "content": "snip"},
+        ]
+    }
+    _patch_tool(monkeypatch, FakeTool(payload=payload))
+
+    sources = await search_module.search("q", include_content=True)
+
+    assert [(s.url, s.snippet, s.content) for s in sources] == [
+        ("https://a.example", "snip", "page"),
+        ("https://b.example", "snip", None),
+    ]

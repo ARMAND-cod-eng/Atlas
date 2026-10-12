@@ -55,6 +55,9 @@ class Check(BaseModel):
 class ToolScore(BaseModel):
     score: float
     checks: list[Check] = Field(default_factory=list)
+    # Set for the single-call baseline, which has no plan and no researchers.
+    # Distinct from 0.0: excluded from the mean rather than counted as a failure.
+    not_applicable: bool = False
 
     @property
     def deterministic_count(self) -> int:

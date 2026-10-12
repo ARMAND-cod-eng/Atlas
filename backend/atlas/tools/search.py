@@ -23,7 +23,7 @@ from atlas.graph.state import Source
 logger = logging.getLogger(__name__)
 
 
-def build_search_tool(max_results: int) -> TavilySearch:
+def build_search_tool(max_results: int, include_content: bool = False) -> TavilySearch:
     """Construct the Tavily tool with an explicitly injected credential.
 
     The key must be passed here rather than left to Tavily's ambient lookup:
@@ -40,11 +40,15 @@ def build_search_tool(max_results: int) -> TavilySearch:
     ten asterisks as the credential and every search returns 401 against a
     perfectly valid key. ``test_search`` asserts the key that arrives equals the
     configured one, because a truthiness check passes on the mask.
+
+    ``include_content`` asks for each page's text as plain text, alongside the
+    snippet. Off unless asked: the prompts read snippets, and page text is heavy.
     """
     settings = get_settings()
     return TavilySearch(
         max_results=max_results,
         tavily_api_key=settings.tavily_api_key,
+        include_raw_content="text" if include_content else False,
     )
 
 
@@ -89,18 +93,23 @@ def _coerce_sources(payload: object, limit: int) -> list[Source]:
             continue
         title = item.get("title")
         # Tavily calls the extract "content"; we call it a snippet everywhere else.
+        # Its "raw_content" is the page text, our ``content``.
         snippet = item.get("content")
+        page = item.get("raw_content")
         sources.append(
             Source(
                 url=url,
                 title=title if isinstance(title, str) else url,
                 snippet=snippet if isinstance(snippet, str) else "",
+                content=page if isinstance(page, str) and page else None,
             )
         )
     return sources
 
 
-async def search(query: str, max_results: int | None = None) -> list[Source]:
+async def search(
+    query: str, max_results: int | None = None, include_content: bool = False
+) -> list[Source]:
     """Run one web search and return normalized sources.
 
     Raises :class:`SearchError` on any failure. Returning an empty list is a
@@ -110,7 +119,7 @@ async def search(query: str, max_results: int | None = None) -> list[Source]:
     settings = get_settings()
     limit = max_results if max_results is not None else settings.search_results_per_query
 
-    tool = build_search_tool(limit)
+    tool = build_search_tool(limit, include_content)
     try:
         raw: Any = await tool.ainvoke({"query": query})
     except Exception as exc:

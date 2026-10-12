@@ -22,6 +22,7 @@ that only appears against live search. That belongs in the README, not here.
 
 from __future__ import annotations
 
+import gzip
 import json
 import logging
 import math
@@ -40,6 +41,11 @@ logger = logging.getLogger(__name__)
 
 CORPUS_DIR = DATA_DIR / "corpus"
 
+# Page text kept per document. Enough for a reader to find the relevant passages
+# of a typical article; a hard cap because the corpus is committed, and fifty
+# items of uncapped pages would be tens of megabytes of mostly navigation chrome.
+CONTENT_CHARS = 12_000
+
 _TOKEN = re.compile(r"[a-z0-9]+")
 
 
@@ -49,6 +55,9 @@ class CorpusDocument(BaseModel):
     url: str
     title: str
     snippet: str
+    # The page's text, capped at CONTENT_CHARS. Recorded so a reader that uses
+    # more than the snippet can be measured without a second (paid) recording.
+    content: str | None = None
     # Which search strings surfaced this document during recording. Kept for
     # provenance — it is how you check the pool actually covers the item.
     probe_queries: list[str] = Field(default_factory=list)
@@ -63,7 +72,7 @@ class QueryCorpus(BaseModel):
     documents: list[CorpusDocument]
 
     def path(self, root: Path = CORPUS_DIR) -> Path:
-        return root / f"{self.item_id}.json"
+        return corpus_path(self.item_id, root)
 
 
 class MissingCorpusError(RuntimeError):
@@ -90,6 +99,9 @@ class FrozenSearch:
       is exactly the variance this module exists to remove.
     * **No network, ever.** There is no fallback path to Tavily. If the corpus is
       missing, it raises.
+
+    Page text is ranked on never and returned only when asked for, exactly as
+    live search behaves: today's agent sees the snippets production gives it.
     """
 
     K1 = 1.5
@@ -124,7 +136,9 @@ class FrozenSearch:
             score += idf * (frequency * (self.K1 + 1)) / denominator
         return score
 
-    async def search(self, query: str, max_results: int | None = None) -> list[Source]:
+    async def search(
+        self, query: str, max_results: int | None = None, include_content: bool = False
+    ) -> list[Source]:
         """Rank the frozen pool. Signature matches ``atlas.tools.search.search``."""
         self.calls.append(query)
         limit = max_results if max_results is not None else 5
@@ -136,11 +150,20 @@ class FrozenSearch:
             key=lambda i: (-self._score(i, terms), self._docs[i].url),
         )
         chosen = [self._docs[i] for i in ranked[:limit]]
-        return [Source(url=d.url, title=d.title, snippet=d.snippet) for d in chosen]
+        return [
+            Source(
+                url=d.url,
+                title=d.title,
+                snippet=d.snippet,
+                content=d.content if include_content else None,
+            )
+            for d in chosen
+        ]
 
 
 def corpus_path(item_id: str, root: Path = CORPUS_DIR) -> Path:
-    return root / f"{item_id}.json"
+    # Gzipped: page text makes each pool several hundred kilobytes of JSON.
+    return root / f"{item_id}.json.gz"
 
 
 def load_corpus(item_id: str, root: Path = CORPUS_DIR) -> QueryCorpus:
@@ -150,14 +173,17 @@ def load_corpus(item_id: str, root: Path = CORPUS_DIR) -> QueryCorpus:
             f"no recorded corpus for item {item_id!r} at {path}. "
             "Run `atlas_eval record` — replay never falls through to live search."
         )
-    return QueryCorpus.model_validate_json(path.read_text(encoding="utf-8"))
+    return QueryCorpus.model_validate_json(gzip.decompress(path.read_bytes()))
 
 
 def save_corpus(corpus: QueryCorpus, root: Path = CORPUS_DIR) -> Path:
     path = corpus_path(corpus.item_id, root)
     path.parent.mkdir(parents=True, exist_ok=True)
     payload = json.loads(corpus.model_dump_json())
-    path.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    text = json.dumps(payload, indent=2, sort_keys=True) + "\n"
+    # mtime=0 so the same corpus always compresses to the same bytes, and an
+    # unchanged pool does not show up as a modified file.
+    path.write_bytes(gzip.compress(text.encode("utf-8"), mtime=0))
     return path
 
 
@@ -177,15 +203,20 @@ class Recorder:
     def absorb(self, query: str, sources: Iterable[Source]) -> None:
         self.tavily_calls += 1
         for source in sources:
+            content = source.content[:CONTENT_CHARS] if source.content else None
             existing = self.documents.get(source.url)
             if existing is None:
                 self.documents[source.url] = CorpusDocument(
                     url=source.url,
                     title=source.title,
                     snippet=source.snippet,
+                    content=content,
                     probe_queries=[query],
                 )
-            elif query not in existing.probe_queries:
+                continue
+            if existing.content is None:
+                existing.content = content
+            if query not in existing.probe_queries:
                 existing.probe_queries.append(query)
 
     def finish(self, previous: QueryCorpus | None = None) -> QueryCorpus:
@@ -197,10 +228,13 @@ class Recorder:
             for document in previous.documents:
                 if document.url not in merged:
                     merged[document.url] = document
-                else:
-                    for probe in document.probe_queries:
-                        if probe not in merged[document.url].probe_queries:
-                            merged[document.url].probe_queries.append(probe)
+                    continue
+                current = merged[document.url]
+                if current.content is None:
+                    current.content = document.content
+                for probe in document.probe_queries:
+                    if probe not in current.probe_queries:
+                        current.probe_queries.append(probe)
         # Sorted by URL so the committed file is stable across recordings.
         documents = [merged[url] for url in sorted(merged)]
         return QueryCorpus(

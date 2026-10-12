@@ -524,3 +524,31 @@ async def test_hitting_the_output_cap_is_reported(
 
     degraded = result["run_metrics"].degraded
     assert (DEGRADED_SYNTHESIS_TRUNCATED in degraded) is truncated
+
+
+# --- the comparison variant ---------------------------------------------------------
+
+
+async def test_the_no_critic_variant_ends_at_the_synthesizer(
+    graph_fakes: None, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """For measuring what the critic buys: same graph, minus the review.
+
+    A verdict that would reject is installed, so a critic that still ran would
+    show up as a second synthesis — not just as a timing.
+    """
+    _with_verdicts(monkeypatch, [_revise("s1"), _accept()])
+    graph = build_state_graph(critic_enabled=False).compile(checkpointer=MemorySaver())
+    result = dict(await graph.ainvoke(initial_state(), config=run_config("no-critic")))
+
+    assert nodes.CRITIC not in graph.get_graph().nodes
+    assert _calls(result, nodes.CRITIC) == 0
+    assert _calls(result, nodes.SYNTHESIZER) == 1
+    assert _calls(result, nodes.RESEARCHER) == BRANCHES
+    assert result["iteration"] == 0
+    assert result["answer"] == "the synthesized answer"
+
+
+def test_the_default_graph_keeps_its_critic() -> None:
+    """The control: production's graph is unchanged by the switch existing."""
+    assert nodes.CRITIC in build_state_graph().compile().get_graph().nodes

@@ -29,30 +29,35 @@ class ItemScore(BaseModel):
 
     @property
     def as_dict(self) -> dict[str, float]:
-        return {
-            "completion": self.completion.score,
-            "grounding": self.grounding.score,
-            "tools": self.tools.score,
-        }
+        """Every category that applies to this run."""
+        scores = {"completion": self.completion.score, "grounding": self.grounding.score}
+        if not self.tools.not_applicable:
+            scores["tools"] = self.tools.score
+        return scores
 
 
 class SuiteScore(BaseModel):
     scores: list[ItemScore] = Field(default_factory=list)
 
     def means(self) -> dict[str, float]:
-        if not self.scores:
-            return {}
+        """Per-category means over the runs each category applies to."""
         return {
-            category: sum(s.as_dict[category] for s in self.scores) / len(self.scores)
-            for category in ("completion", "grounding", "tools")
+            category: sum(scores.values()) / len(scores)
+            for category, scores in self.per_item().items()
         }
 
     def per_item(self) -> dict[str, dict[str, float]]:
-        """``{category: {item_id: score}}`` — what the paired bootstrap needs."""
-        return {
-            category: {s.item_id: s.as_dict[category] for s in self.scores}
-            for category in ("completion", "grounding", "tools")
-        }
+        """``{category: {item_id: score}}`` — what the paired bootstrap needs.
+
+        A category that applies to no run is absent rather than empty, so a
+        baseline with no tool use cannot be gated as if it had scored nothing.
+        """
+        per_item: dict[str, dict[str, float]] = {}
+        for category in ("completion", "grounding", "tools"):
+            scores = {s.item_id: s.as_dict[category] for s in self.scores if category in s.as_dict}
+            if scores:
+                per_item[category] = scores
+        return per_item
 
     def check_split(self) -> dict[str, tuple[int, int]]:
         """Realised deterministic:judge counts, per category.
@@ -102,7 +107,7 @@ def _crashed(item: EvalItem, record: RunRecord) -> ItemScore:
         item_id=item.id,
         completion=CompletionScore(score=0.0),
         grounding=GroundingScore(score=0.0),
-        tools=ToolScore(score=0.0),
+        tools=ToolScore(score=0.0, not_applicable=record.variant == "single-call"),
         error=record.error,
     )
 
@@ -112,17 +117,26 @@ async def score_run(item: EvalItem, record: RunRecord) -> ItemScore:
     if record.error is not None:
         return _crashed(item, record)
 
-    completion, grounding, tools = await asyncio.gather(
-        score_completion(item, record.answer),
-        score_grounding(record.answer, record.retrieved_context),
-        score_tools(
-            item,
-            record.subtasks,
-            [r.subtask_id for r in record.research_results],
-            record.search_calls,
-            researcher_runs(record),
-        ),
-    )
+    if record.variant == "single-call":
+        # No plan, no researchers: tool use does not apply, and scoring it would
+        # charge the baseline for checks it cannot pass by design.
+        completion, grounding = await asyncio.gather(
+            score_completion(item, record.answer),
+            score_grounding(record.answer, record.retrieved_context),
+        )
+        tools = ToolScore(score=0.0, not_applicable=True)
+    else:
+        completion, grounding, tools = await asyncio.gather(
+            score_completion(item, record.answer),
+            score_grounding(record.answer, record.retrieved_context),
+            score_tools(
+                item,
+                record.subtasks,
+                [r.subtask_id for r in record.research_results],
+                record.search_calls,
+                researcher_runs(record),
+            ),
+        )
     return ItemScore(
         item_id=item.id,
         completion=completion,

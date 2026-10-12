@@ -11,12 +11,14 @@ from __future__ import annotations
 import pytest
 
 from atlas_eval.corpus import (
+    CONTENT_CHARS,
     CorpusDocument,
     FrozenSearch,
     MissingCorpusError,
     QueryCorpus,
     Recorder,
     load_corpus,
+    save_corpus,
 )
 from atlas_eval.dataset import (
     Dataset,
@@ -285,3 +287,122 @@ def test_recording_merges_passes_without_duplicating_documents() -> None:
     shared = next(d for d in merged.documents if d.url == "https://a.example")
     assert sorted(shared.probe_queries) == ["query one", "query two"]
     assert merged.tavily_calls == 3
+
+
+# --- page text in the corpus ---------------------------------------------------------
+#
+# The corpus is recorded once, at real cost, and replayed for every run after. It
+# keeps each page's text so a later reader can use more than the snippet without
+# a second recording — but replay hands that text out only when asked, and never
+# ranks on it, so today's agent sees exactly what production search gives it.
+
+
+def _with_page_text() -> QueryCorpus:
+    return QueryCorpus(
+        item_id="t2",
+        recorded_at="2026-10-11",
+        tavily_calls=2,
+        documents=[
+            # The page body is all about embeddings; the snippet is not.
+            CorpusDocument(
+                url="https://a.example",
+                title="Overview",
+                snippet="a general introduction",
+                content="embeddings embeddings dense embeddings vectors",
+            ),
+            CorpusDocument(
+                url="https://b.example",
+                title="Dense retrieval",
+                snippet="embeddings for search",
+                content="full text of b",
+            ),
+        ],
+    )
+
+
+async def test_replay_withholds_page_text_unless_asked() -> None:
+    frozen = FrozenSearch(_with_page_text())
+
+    plain = await frozen.search("retrieval", 2)
+    full = await frozen.search("retrieval", 2, include_content=True)
+
+    assert [s.content for s in plain] == [None, None]
+    assert sorted(s.content or "" for s in full) == [
+        "embeddings embeddings dense embeddings vectors",
+        "full text of b",
+    ]
+
+
+async def test_page_text_does_not_move_the_ranking() -> None:
+    """Ranking on page text would change what today's agent retrieves."""
+    ranked = await FrozenSearch(_with_page_text()).search("embeddings", 1)
+
+    assert [s.url for s in ranked] == ["https://b.example"]
+
+    # The control: the same words in A's *snippet* do win, so the ranker is
+    # live and it is specifically the page text it ignores.
+    corpus = _with_page_text()
+    corpus.documents[0].snippet = corpus.documents[0].content or ""
+    promoted = await FrozenSearch(corpus).search("embeddings", 1)
+    assert [s.url for s in promoted] == ["https://a.example"]
+
+
+def test_page_text_is_capped_when_recorded() -> None:
+    from atlas.graph.state import Source
+
+    recorder = Recorder("t3")
+    recorder.absorb("q", [Source(url="https://a", title="A", snippet="s", content="x" * 50_000)])
+
+    stored = recorder.finish().documents[0].content
+    assert stored is not None
+    assert len(stored) == CONTENT_CHARS
+
+
+def test_a_later_pass_fills_in_missing_page_text() -> None:
+    from atlas.graph.state import Source
+
+    first = Recorder("t4")
+    first.absorb("q1", [Source(url="https://a", title="A", snippet="s")])
+    second = Recorder("t4")
+    second.absorb("q2", [Source(url="https://a", title="A", snippet="s", content="page")])
+
+    merged = second.finish(first.finish())
+
+    assert [(d.url, d.content) for d in merged.documents] == [("https://a", "page")]
+
+
+def test_a_corpus_round_trips_through_disk_compressed(tmp_path: object) -> None:
+    from pathlib import Path
+
+    assert isinstance(tmp_path, Path)
+    corpus = _with_page_text()
+
+    path = save_corpus(corpus, tmp_path)
+
+    assert path.name == "t2.json.gz"
+    assert load_corpus("t2", tmp_path) == corpus
+
+
+async def test_recording_captures_page_text_the_agent_never_sees(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Recording must not change the run it records."""
+    from atlas.graph.state import Source
+    from atlas_eval import record
+
+    asked: list[bool] = []
+
+    async def fake_live(
+        query: str, max_results: int | None = None, include_content: bool = False
+    ) -> list[Source]:
+        asked.append(include_content)
+        return [Source(url="https://a", title="A", snippet="s", content="page")]
+
+    monkeypatch.setattr(record, "live_search", fake_live)
+    recorder = Recorder("t5")
+
+    seen = await record.capturing_search(recorder)("q")
+
+    assert asked == [True]
+    assert [(s.url, s.content) for s in seen] == [("https://a", None)]
+    assert [(d.url, d.content) for d in recorder.finish().documents] == [("https://a", "page")]

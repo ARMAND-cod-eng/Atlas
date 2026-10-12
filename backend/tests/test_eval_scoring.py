@@ -26,11 +26,11 @@ from atlas.metrics import NodeTiming, RunMetrics
 from atlas_eval import cli
 from atlas_eval.dataset import load_dataset
 from atlas_eval.runner import RunRecord
-from atlas_eval.score import researcher_runs, score_run
+from atlas_eval.score import ItemScore, SuiteScore, researcher_runs, score_run
 from atlas_eval.scorers import completion, grounding, tools
-from atlas_eval.scorers.completion import FactVerdict
-from atlas_eval.scorers.grounding import ClaimList, VerdictList, score_grounding
-from atlas_eval.scorers.tools import PlanVerdict, score_tools
+from atlas_eval.scorers.completion import CompletionScore, FactVerdict
+from atlas_eval.scorers.grounding import ClaimList, GroundingScore, VerdictList, score_grounding
+from atlas_eval.scorers.tools import PlanVerdict, ToolScore, score_tools
 
 
 @pytest.fixture
@@ -156,7 +156,9 @@ async def test_the_search_ceiling_is_the_real_bound(
 def _patch_run(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path, crash_first: bool
 ) -> argparse.Namespace:
-    async def fake_run_items(items: list[Any], concurrency: int = 5) -> list[RunRecord]:
+    async def fake_run_items(
+        items: list[Any], concurrency: int = 5, run_one: Any = None
+    ) -> list[RunRecord]:
         return [
             RunRecord(
                 item_id=item.id,
@@ -193,3 +195,94 @@ def test_a_clean_run_passes_and_writes_its_baseline(
 
     assert cli.cmd_run(args) == 0
     assert (tmp_path / "baseline.json").exists() is True
+
+
+# --- comparison variants --------------------------------------------------------------
+
+
+async def test_the_single_call_baseline_is_not_scored_on_tool_use(
+    judge_calls: list[str],
+) -> None:
+    """It has no plan and no researchers, so tool use does not apply.
+
+    Scoring it would charge the baseline for checks it cannot pass by design
+    ("no subtasks were produced") and flatter Atlas by comparison.
+    """
+    item, _ = _item_and_plan()
+    record = RunRecord(item_id=item.id, query=item.query, answer="an answer", variant="single-call")
+
+    score = await score_run(item, record)
+
+    assert (score.tools.score, score.tools.not_applicable) == (0.0, True)
+    # Three judged rubric entries and one decomposition; no plan verdict.
+    assert sorted(judge_calls) == ["ClaimList", "FactVerdict", "FactVerdict", "FactVerdict"]
+
+
+def test_tool_use_means_skip_the_runs_it_does_not_apply_to() -> None:
+    def item(item_id: str, tools: ToolScore) -> ItemScore:
+        return ItemScore(
+            item_id=item_id,
+            completion=CompletionScore(score=1.0),
+            grounding=GroundingScore(score=1.0),
+            tools=tools,
+        )
+
+    baseline_only = SuiteScore(scores=[item("a", ToolScore(score=0.0, not_applicable=True))])
+    assert baseline_only.means() == {"completion": 1.0, "grounding": 1.0}
+    assert baseline_only.per_item() == {"completion": {"a": 1.0}, "grounding": {"a": 1.0}}
+
+    # The control: an applicable tool score of 0.5 is averaged in as usual.
+    mixed = SuiteScore(
+        scores=[
+            item("a", ToolScore(score=0.0, not_applicable=True)),
+            item("b", ToolScore(score=0.5)),
+        ]
+    )
+    assert mixed.means() == {"completion": 1.0, "grounding": 1.0, "tools": 0.5}
+    assert mixed.per_item()["tools"] == {"b": 0.5}
+
+
+async def test_each_variant_runs_its_own_system(monkeypatch: pytest.MonkeyPatch) -> None:
+    seen: list[tuple[str, bool | None]] = []
+
+    async def fake_run_item(item: Any, critic_enabled: bool = True) -> RunRecord:
+        seen.append(("graph", critic_enabled))
+        return RunRecord(item_id=item.id, query=item.query, answer="a")
+
+    async def fake_single(item: Any) -> RunRecord:
+        seen.append(("single-call", None))
+        return RunRecord(item_id=item.id, query=item.query, answer="a")
+
+    monkeypatch.setattr(cli, "run_item", fake_run_item)
+    monkeypatch.setattr(cli, "run_single_call", fake_single)
+    item = load_dataset().items[0]
+
+    for variant in ("atlas", "no-critic", "single-call"):
+        await cli.runner_for(variant)(item)
+
+    assert seen == [("graph", True), ("graph", False), ("single-call", None)]
+
+
+def test_a_baseline_is_only_written_from_the_full_system(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """Refused before anything runs: a no-critic baseline would gate production
+    against a system it is not, and the refusal should not cost a 50-item run."""
+    ran: list[int] = []
+
+    async def must_not_run(
+        items: list[Any], concurrency: int = 5, run_one: Any = None
+    ) -> list[RunRecord]:
+        ran.append(len(items))
+        return []
+
+    monkeypatch.setattr(cli, "run_items", must_not_run)
+    monkeypatch.setattr(cli, "RUNS_DIR", tmp_path / "runs")
+    monkeypatch.setattr(cli, "DATA_DIR", tmp_path)
+    args = cli.build_parser().parse_args(
+        ["run", "--variant", "no-critic", "--name", "t", "--write-baseline"]
+    )
+
+    assert cli.cmd_run(args) == 2
+    assert ran == []
+    assert (tmp_path / "baseline.json").exists() is False

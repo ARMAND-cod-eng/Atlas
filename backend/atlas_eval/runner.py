@@ -16,8 +16,10 @@ from __future__ import annotations
 import asyncio
 import logging
 import time
+from collections.abc import Awaitable, Callable
 from contextvars import ContextVar
 from pathlib import Path
+from typing import Literal
 from uuid import uuid4
 
 from langchain_core.runnables import RunnableConfig
@@ -25,7 +27,7 @@ from langgraph.checkpoint.memory import MemorySaver
 from pydantic import BaseModel, Field
 
 from atlas.graph import nodes
-from atlas.graph.builder import build_state_graph, recursion_limit
+from atlas.graph.builder import build_state_graph, checkpoint_serde, recursion_limit
 from atlas.graph.state import ResearchResult, Source, Subtask
 from atlas.metrics import RunMetrics
 from atlas.result import build_response, validate_list, validate_metrics
@@ -40,12 +42,19 @@ logger = logging.getLogger(__name__)
 # they were created in, so each run sees its own corpus. A plain global would let
 # five parallel items answer each other's searches — the kind of bug that does not
 # crash, it just quietly scores the wrong thing.
+# Which system produced a run. "atlas" is production; the other two exist only to
+# measure it against: the same graph without the critic, and one search answered
+# by the same synthesizer (atlas_eval.baselines).
+Variant = Literal["atlas", "no-critic", "single-call"]
+
 _ACTIVE: ContextVar[FrozenSearch | None] = ContextVar("atlas_eval_search", default=None)
 
 _installed = False
 
 
-async def _dispatch(query: str, max_results: int | None = None) -> list[Source]:
+async def _dispatch(
+    query: str, max_results: int | None = None, include_content: bool = False
+) -> list[Source]:
     """Stands in for ``atlas.graph.nodes.search`` for the whole eval process."""
     active = _ACTIVE.get()
     if active is None:
@@ -53,7 +62,7 @@ async def _dispatch(query: str, max_results: int | None = None) -> list[Source]:
             "search was called outside an eval run — the frozen corpus is not "
             "installed, and the eval must never reach the network"
         )
-    return await active.search(query, max_results)
+    return await active.search(query, max_results, include_content)
 
 
 def install_frozen_search() -> None:
@@ -74,6 +83,7 @@ class RunRecord(BaseModel):
     item_id: str
     query: str
     answer: str
+    variant: Variant = "atlas"
     subtasks: list[Subtask] = Field(default_factory=list)
     research_results: list[ResearchResult] = Field(default_factory=list)
     sources: list[Source] = Field(default_factory=list)
@@ -97,14 +107,19 @@ class RunRecord(BaseModel):
         return "\n\n".join(blocks)
 
 
-async def run_item(item: EvalItem, corpus_root: Path | None = None) -> RunRecord:
+async def run_item(
+    item: EvalItem, corpus_root: Path | None = None, critic_enabled: bool = True
+) -> RunRecord:
     """Execute one dataset item and capture what it produced."""
+    variant: Variant = "atlas" if critic_enabled else "no-critic"
     install_frozen_search()
     corpus = load_corpus(item.id) if corpus_root is None else load_corpus(item.id, corpus_root)
     frozen = FrozenSearch(corpus)
     token = _ACTIVE.set(frozen)
 
-    graph = build_state_graph().compile(checkpointer=MemorySaver())
+    graph = build_state_graph(critic_enabled=critic_enabled).compile(
+        checkpointer=MemorySaver(serde=checkpoint_serde())
+    )
     config: RunnableConfig = {
         # A fresh run id per execution, so re-running the suite within the budget
         # key's TTL does not start an item at the previous run's spend.
@@ -121,6 +136,7 @@ async def run_item(item: EvalItem, corpus_root: Path | None = None) -> RunRecord
             item_id=item.id,
             query=item.query,
             answer=response.answer,
+            variant=variant,
             subtasks=response.subtasks,
             research_results=validate_list(final.get("research_results"), ResearchResult),
             sources=response.sources,
@@ -138,6 +154,7 @@ async def run_item(item: EvalItem, corpus_root: Path | None = None) -> RunRecord
             item_id=item.id,
             query=item.query,
             answer="",
+            variant=variant,
             search_calls=list(frozen.calls),
             duration_s=elapsed,
             error=f"{type(exc).__name__}: {exc}",
@@ -146,7 +163,11 @@ async def run_item(item: EvalItem, corpus_root: Path | None = None) -> RunRecord
         _ACTIVE.reset(token)
 
 
-async def run_items(items: list[EvalItem], concurrency: int = 5) -> list[RunRecord]:
+async def run_items(
+    items: list[EvalItem],
+    concurrency: int = 5,
+    run_one: Callable[[EvalItem], Awaitable[RunRecord]] = run_item,
+) -> list[RunRecord]:
     """Run items concurrently, preserving dataset order in the output.
 
     Concurrency is bounded because each item is itself a five-branch fan-out; the
@@ -156,6 +177,6 @@ async def run_items(items: list[EvalItem], concurrency: int = 5) -> list[RunReco
 
     async def guarded(item: EvalItem) -> RunRecord:
         async with limiter:
-            return await run_item(item)
+            return await run_one(item)
 
     return list(await asyncio.gather(*(guarded(item) for item in items)))

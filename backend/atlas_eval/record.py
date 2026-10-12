@@ -12,6 +12,8 @@ enough that replay has real documents for whatever wording turns up later.
 from __future__ import annotations
 
 import logging
+from collections.abc import Coroutine
+from typing import Any, Protocol
 from uuid import uuid4
 
 from atlas.graph import nodes
@@ -24,6 +26,35 @@ from atlas_eval.runner import run_item
 logger = logging.getLogger(__name__)
 
 
+class SearchFn(Protocol):
+    """The shape of :func:`atlas.tools.search.search`, defaults included, so a
+    substitute for ``nodes.search`` type-checks as one."""
+
+    def __call__(
+        self, query: str, max_results: int | None = None, include_content: bool = False
+    ) -> Coroutine[Any, Any, list[Source]]: ...
+
+
+def capturing_search(recorder: Recorder) -> SearchFn:
+    """Live search for the agent, with every result kept by ``recorder``.
+
+    Page text is always fetched, because the corpus is recorded once and a later
+    reader may need it. It is stripped before the agent sees it unless the agent
+    asked: recording must not change the run it is recording.
+    """
+
+    async def search(
+        query: str, max_results: int | None = None, include_content: bool = False
+    ) -> list[Source]:
+        sources = await live_search(query, max_results, include_content=True)
+        recorder.absorb(query, sources)
+        if include_content:
+            return sources
+        return [source.model_copy(update={"content": None}) for source in sources]
+
+    return search
+
+
 async def record_corpus(items: list[EvalItem], passes: int = 3) -> None:
     """Run each item against live search, keeping every document retrieved."""
     total_calls = 0
@@ -31,17 +62,8 @@ async def record_corpus(items: list[EvalItem], passes: int = 3) -> None:
     for position, item in enumerate(items, start=1):
         recorder = Recorder(item.id)
 
-        async def capturing_search(
-            query: str,
-            max_results: int | None = None,
-            _recorder: Recorder = recorder,
-        ) -> list[Source]:
-            sources = await live_search(query, max_results)
-            _recorder.absorb(query, sources)
-            return sources
-
         original = nodes.search
-        nodes.search = capturing_search
+        nodes.search = capturing_search(recorder)
         try:
             for attempt in range(passes):
                 try:
@@ -81,10 +103,10 @@ async def _run_online(item: EvalItem) -> None:
     """
     from langgraph.checkpoint.memory import MemorySaver
 
-    from atlas.graph.builder import build_state_graph, recursion_limit
+    from atlas.graph.builder import build_state_graph, checkpoint_serde, recursion_limit
     from atlas.runner import initial_state
 
-    graph = build_state_graph().compile(checkpointer=MemorySaver())
+    graph = build_state_graph().compile(checkpointer=MemorySaver(serde=checkpoint_serde()))
     await graph.ainvoke(
         initial_state(item.query),
         config={

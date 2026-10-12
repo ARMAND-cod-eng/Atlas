@@ -276,6 +276,17 @@ async def _search_with_retries(subtask: Subtask, max_attempts: int) -> list[Sour
     return []
 
 
+def render_sources(sources: list[Source]) -> str:
+    """Numbered sources as a model reads them: title, URL, snippet.
+
+    Shared with the eval's single-call baseline so the two systems present
+    evidence to the model identically, and differ only in their structure.
+    """
+    return "\n\n".join(
+        f"[{i + 1}] {s.title}\nURL: {s.url}\n{s.snippet}" for i, s in enumerate(sources)
+    )
+
+
 async def _summarize(
     subtask: Subtask,
     sources: list[Source],
@@ -283,10 +294,7 @@ async def _summarize(
     guidance: str | None = None,
 ) -> str:
     """Turn raw sources into findings with citations."""
-    rendered = "\n\n".join(
-        f"[{i + 1}] {s.title}\nURL: {s.url}\n{s.snippet}" for i, s in enumerate(sources)
-    )
-    prompt = f"Question: {subtask.question}\n\nSources:\n{rendered}"
+    prompt = f"Question: {subtask.question}\n\nSources:\n{render_sources(sources)}"
     if guidance is not None:
         # A retry. Telling the researcher what was wrong last time is the entire
         # value of the loop — without it the second attempt repeats the first.
