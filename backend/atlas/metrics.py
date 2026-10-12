@@ -51,6 +51,10 @@ DEGRADED_SYNTHESIS_TRUNCATED = "synthesis_truncated"
 # routed to any branch, so it is dropped — and said so, rather than leaving a
 # "revise" verdict that quietly went nowhere.
 DEGRADED_CRITIC_UNKNOWN_SUBTASK = "critic_unknown_subtask"
+# The primary answered a structured call (plan, verdict) in the wrong shape and
+# the fallback was asked instead. A primary that keeps doing this looks, from the
+# answers alone, exactly like a healthy one.
+DEGRADED_STRUCTURED_OUTPUT_FALLBACK = "structured_output_fallback"
 
 
 class LLMCall(BaseModel):

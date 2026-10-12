@@ -30,7 +30,7 @@ from pydantic import BaseModel, SecretStr
 from atlas.budget import record_spend
 from atlas.config import get_settings
 from atlas.errors import ProviderError
-from atlas.metrics import LLMCall, RunMetrics
+from atlas.metrics import DEGRADED_STRUCTURED_OUTPUT_FALLBACK, LLMCall, RunMetrics
 
 logger = logging.getLogger(__name__)
 
@@ -148,11 +148,27 @@ def get_structured_llm(
     than asserted with a cast.
     """
     primary = _build_primary(temperature).with_structured_output(schema, include_raw=True)
-    fallback = _build_fallback(temperature).with_structured_output(schema, include_raw=True)
     composed: Runnable[LanguageModelInput, dict[Any, Any] | BaseModel] = primary.with_fallbacks(
-        [fallback]
+        [get_structured_fallback(schema, temperature)]
     )
     return composed
+
+
+def get_structured_fallback(
+    schema: type[BaseModel],
+    temperature: float | None = None,
+) -> Runnable[LanguageModelInput, dict[Any, Any] | BaseModel]:
+    """The fallback alone, constrained to ``schema``, with the same raw envelope.
+
+    The link in :func:`get_structured_llm`'s chain, and also what
+    :func:`call_structured` calls directly when the primary answered in the
+    wrong shape — a failure ``with_fallbacks`` cannot see, because
+    ``include_raw=True`` reports a parse error as data instead of raising it.
+    """
+    structured: Runnable[LanguageModelInput, dict[Any, Any] | BaseModel] = _build_fallback(
+        temperature
+    ).with_structured_output(schema, include_raw=True)
+    return structured
 
 
 def _provider_for(model_name: str) -> str:
@@ -165,23 +181,28 @@ def _provider_for(model_name: str) -> str:
     return "unknown"
 
 
+def _model_name(response: object) -> str:
+    """The model a response says it came from, or "unknown".
+
+    Read off the response rather than off config, because the two differ
+    precisely when it matters — when the fallback answered.
+    """
+    meta = getattr(response, "response_metadata", None)
+    if isinstance(meta, Mapping):
+        raw_model = meta.get("model_name") or meta.get("model")
+        if isinstance(raw_model, str):
+            return raw_model
+    return "unknown"
+
+
 def _record(
     metrics: RunMetrics,
     node: str,
     response: object,
     duration_s: float,
 ) -> None:
-    """Append an :class:`LLMCall` describing what just answered.
-
-    Reads the model name off the response rather than off config, because the
-    two differ precisely when it matters — when the fallback answered.
-    """
-    meta = getattr(response, "response_metadata", None)
-    model = "unknown"
-    if isinstance(meta, Mapping):
-        raw_model = meta.get("model_name") or meta.get("model")
-        if isinstance(raw_model, str):
-            model = raw_model
+    """Append an :class:`LLMCall` describing what just answered."""
+    model = _model_name(response)
 
     # usage_metadata lives on AIMessage, not BaseMessage, and is absent entirely
     # on structured-output responses. Missing counts are reported as None rather
@@ -211,7 +232,7 @@ async def _charge_budget(metrics: RunMetrics) -> None:
     """Add the most recent call's tokens to the run's shared counter.
 
     Charged here rather than in the nodes so no call site can forget. The counter
-    is per-thread and lives in Redis, because parallel branches cannot see each
+    is per-run and lives in Redis, because parallel branches cannot see each
     other's spend through graph state. Never raises — see ``atlas.budget``.
     """
     if not metrics.llm_calls:
@@ -260,10 +281,50 @@ async def call_structured[SchemaT: BaseModel](
     ``with_structured_output`` declares ``dict | BaseModel``, so the result is
     narrowed with ``model_validate``. That gives mypy a concrete type without a
     ``type: ignore``, and re-validates the model's output as a side benefit.
+
+    A primary that answers in the wrong shape is retried on the fallback, once.
+    ``with_fallbacks`` cannot do this itself: it reacts to exceptions, and
+    ``include_raw=True`` returns a parse failure as data. Before this, a
+    malformed plan from the primary was final — the planner degraded to a single
+    subtask, losing the fan-out, while a healthy fallback sat idle.
     """
+    envelope = await _invoke_structured(
+        get_structured_llm(schema, temperature), node, messages, metrics
+    )
+    parsed = _parsed_or_log(envelope, node, schema)
+
+    fallback_provider = _provider_for(get_settings().fallback_model)
+    if parsed is None and _provider_for(_model_name(envelope.get("raw"))) != fallback_provider:
+        # Recorded, not just logged: a primary that keeps answering malformed
+        # output looks, from the answer alone, exactly like a healthy one.
+        metrics.degraded.append(DEGRADED_STRUCTURED_OUTPUT_FALLBACK)
+        envelope = await _invoke_structured(
+            get_structured_fallback(schema, temperature), node, messages, metrics
+        )
+        parsed = _parsed_or_log(envelope, node, schema)
+
+    if parsed is None:
+        # The model answered but not in the requested shape. Surfacing this as a
+        # ProviderError lets the caller decide — the planner, for instance,
+        # degrades to a single subtask rather than failing the run.
+        raise ProviderError(
+            provider=_provider_for(_model_name(envelope.get("raw"))),
+            message=f"structured output did not parse: {envelope.get('parsing_error')}",
+            node=node,
+        )
+    return schema.model_validate(parsed)
+
+
+async def _invoke_structured(
+    runnable: Runnable[LanguageModelInput, dict[Any, Any] | BaseModel],
+    node: str,
+    messages: LanguageModelInput,
+    metrics: RunMetrics,
+) -> Mapping[str, Any]:
+    """One structured call: invoke, verify the envelope, record, charge."""
     started = time.perf_counter()
     try:
-        envelope = await get_structured_llm(schema, temperature).ainvoke(messages)
+        envelope = await runnable.ainvoke(messages)
     except Exception as exc:
         raise ProviderError(
             provider=_provider_for(get_settings().fallback_model),
@@ -285,32 +346,31 @@ async def call_structured[SchemaT: BaseModel](
     # structured call served by the fallback is still attributed correctly.
     _record(metrics, node, envelope.get("raw"), time.perf_counter() - started)
     await _charge_budget(metrics)
+    return envelope
 
+
+def _parsed_or_log(envelope: Mapping[str, Any], node: str, schema: type[BaseModel]) -> object:
+    """The parsed payload, or None after logging what the model actually said."""
     parsing_error = envelope.get("parsing_error")
     parsed = envelope.get("parsed")
-    if parsing_error is not None or parsed is None:
-        # Log the payload before discarding it. A valid five-subtask plan was once
-        # thrown away here — the model had answered correctly but encoded a nested
-        # list as a JSON string — and it was found only by chance while reading
-        # logs. Whatever the model actually said belongs in the record.
-        raw_message = envelope.get("raw")
-        raw_content = getattr(raw_message, "content", raw_message)
-        logger.warning(
-            "structured output failed validation; discarding the response",
-            extra={
-                "node": node,
-                "schema": schema.__name__,
-                "parsing_error": str(parsing_error)[:500],
-                # Truncated so a large plan cannot flood the log.
-                "raw_content": repr(raw_content)[:1000],
-            },
-        )
-        # The model answered but not in the requested shape. Surfacing this as a
-        # ProviderError lets the caller decide — the planner, for instance,
-        # degrades to a single subtask rather than failing the run.
-        raise ProviderError(
-            provider=_provider_for(get_settings().primary_model),
-            message=f"structured output did not parse: {parsing_error}",
-            node=node,
-        )
-    return schema.model_validate(parsed)
+    if parsing_error is None and parsed is not None:
+        return parsed
+
+    # Log the payload before discarding it. A valid five-subtask plan was once
+    # thrown away here — the model had answered correctly but encoded a nested
+    # list as a JSON string — and it was found only by chance while reading
+    # logs. Whatever the model actually said belongs in the record.
+    raw_message = envelope.get("raw")
+    raw_content = getattr(raw_message, "content", raw_message)
+    logger.warning(
+        "structured output failed validation; discarding the response",
+        extra={
+            "node": node,
+            "schema": schema.__name__,
+            "model": _model_name(raw_message),
+            "parsing_error": str(parsing_error)[:500],
+            # Truncated so a large plan cannot flood the log.
+            "raw_content": repr(raw_content)[:1000],
+        },
+    )
+    return None
