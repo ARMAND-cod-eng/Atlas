@@ -77,7 +77,7 @@ synthesis, and preserves subtask identity so guidance reaches the branch that ea
 | Streaming overhead | SSE relay **0.18s**; queue pickup **~1.0s**; a whole run's events cost **78ms** of Redis |
 | Concision prompt on the synthesizer | 4,392 → 2,752 output tokens, **40.5s → 27.1s** |
 | Time to first visual feedback | **1.14s** from submit to the graph on screen |
-| Tests | **285** backend · **34** frontend, no network calls, no spend |
+| Tests | **287** backend · **43** frontend, no network calls, no spend |
 
 ---
 
@@ -271,12 +271,14 @@ temperature is impossible on the Claude models Atlas runs on, and a model should
 answers. The exception is a run the fallback answered, where GPT-4o is grading itself. Each run's
 metrics record which provider answered, so those runs can be told apart.
 
-**Status: built and unit-tested, not yet run.** No corpus has been recorded, there is no baseline,
-and the dataset is model-drafted and not yet reviewed. `atlas_eval claim` prints the strongest
-description the dataset supports, and today that is:
+**Status: dataset reviewed, suite not yet run.** Every one of the 50 items was read and approved by
+a person, and nine were corrected first: rubric lines that were wrong, ambiguous, out of date, or
+asked for more than the question did. No corpus has been recorded and there is no baseline.
+`atlas_eval claim` prints the strongest description the dataset supports, and a test keeps it
+honest:
 
 ```
-50 model-drafted query traces, 0 of 50 human-reviewed
+50 hand-labeled query traces
 ```
 
 So this README quotes no eval scores yet. Producing the first ones, from `backend/`:
