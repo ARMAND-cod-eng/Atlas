@@ -1,0 +1,61 @@
+# Static checks for both halves of the stack. No secrets, no network, no spend,
+# so this runs on every push and every pull request, forks included — and it is
+# the badge on the README.
+#
+# The scored evaluation lives in eval.yml, because it calls live models and costs
+# money per run.
+
+name: ci
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  backend:
+    name: backend — lint, types, tests
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+      - run: uv sync --frozen
+      - name: ruff
+        run: uv run ruff check .
+      - name: ruff format
+        run: uv run ruff format --check .
+      - name: mypy --strict
+        run: uv run mypy --strict atlas atlas_eval
+      - name: pytest
+        run: uv run pytest -q
+      - name: dataset validates and the provenance claim is honest
+        run: uv run python -m atlas_eval claim
+
+  frontend:
+    name: frontend — types, lint, tests
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - run: npm ci
+      - name: typecheck
+        run: npm run typecheck
+      - name: lint
+        run: npm run lint
+      - name: vitest
+        run: npm test

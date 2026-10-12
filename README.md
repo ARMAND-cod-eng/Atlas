@@ -1,5 +1,7 @@
 # Atlas
 
+[![ci](https://github.com/ARMAND-cod-eng/Atlas/actions/workflows/ci.yml/badge.svg)](https://github.com/ARMAND-cod-eng/Atlas/actions/workflows/ci.yml)
+
 Atlas is a multi-agent research platform. You ask a question; a planner decomposes it into
 independent subtasks, researcher agents investigate them **in parallel** against live web search, a
 critic reviews the findings against the sources actually retrieved and can **send specific branches
@@ -75,7 +77,7 @@ synthesis, and preserves subtask identity so guidance reaches the branch that ea
 | Streaming overhead | SSE relay **0.18s**; queue pickup **~1.0s**; a whole run's events cost **78ms** of Redis |
 | Concision prompt on the synthesizer | 4,392 → 2,752 output tokens, **40.5s → 27.1s** |
 | Time to first visual feedback | **1.14s** from submit to the graph on screen |
-| Tests | **229** backend · **34** frontend, no network calls, no spend |
+| Tests | **266** backend · **34** frontend, no network calls, no spend |
 
 ---
 
@@ -203,7 +205,9 @@ Invoke-RestMethod -Uri http://127.0.0.1:8000/query -Method Post -ContentType 'ap
 
 Passing the returned `thread_id` back continues the conversation: the follow-up is planned against
 the previous turn, which confirms the Postgres checkpointer is persisting state. It is still a
-separate run, with its own research and its own token budget.
+separate run, with its own research and its own token budget. A thread runs one question at a time:
+a second request while one is in progress gets `409`, because two runs writing one checkpoint would
+silently overwrite each other's turn.
 
 **Verify the fallback actually fires.** The behaviour most worth confirming by hand: break
 the primary provider and check an answer still comes back via GPT-4o. The key is read by the
@@ -233,8 +237,8 @@ npm run typecheck ; npm run lint ; npm test
 spends money — every model is a fake, and the frontend's fixtures are real event streams recorded
 from the graph by `backend/scripts/capture_fixtures.py`.
 
-CI runs the backend checks on every push to `main` and every pull request. The frontend checks are
-not in CI yet.
+`ci.yml` runs both suites, plus `ruff format --check`, on every push to `main` and every pull
+request. It never calls a model.
 
 ## Evaluation
 
@@ -275,13 +279,18 @@ uv run python -m atlas_eval calibrate --run baseline   # judge-human agreement: 
 Then commit `atlas_eval/data/corpus/`, `atlas_eval/data/baseline.json` and
 `atlas_eval/data/runs/baseline.json`.
 
-**The CI gate fails closed.** Every push to `main` and every PR from this repository runs a 12-item
-smoke that fails if any item crashes. On `main`, on PRs labelled `run-eval`, and on any PR that
-touches prompts, graph topology, model config or the eval suite itself, the full 50-item run is
-gated against the baseline. A category fails when it regresses by more than 2pp *and* its 95%
-paired-bootstrap CI excludes zero. The gate also refuses to pass when it has no per-item baseline to
-pair against. **Until the files above are committed, the eval jobs fail on `main`.** That is the
-gate reporting it has nothing to compare against, not a flaky test.
+**The CI gate fails closed.** The paid runs live in `eval.yml`, which never fires on a plain push.
+Every PR from this repository runs a 12-item smoke that fails if any item crashes. The full 50-item
+run, gated against the baseline, runs on PRs that touch prompts, graph code, model config or the
+eval itself, on PRs labelled `run-eval`, every Monday, and on demand. A category fails when it
+regresses by more than 2pp *and* its 95% paired-bootstrap CI excludes zero. The gate also refuses to
+pass when it has no per-item baseline to pair against. **Until the files above are committed, every
+eval job fails.** That is the gate reporting it has nothing to compare against, not a flaky test.
+
+**Comparison runs.** `run --variant no-critic` runs the same graph without the review loop, and
+`run --variant single-call` answers each item with one search and Atlas's own synthesizer — same
+prompt, same corpus, no planner, researchers or critic. They exist to measure what the full graph
+buys, and a baseline can only be written from the production variant.
 
 ---
 
