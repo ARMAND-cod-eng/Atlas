@@ -95,7 +95,9 @@ async def execute_run(
     discover what the run actually produced.
     """
     config: RunnableConfig = {
-        "configurable": {"thread_id": thread_id},
+        # thread_id keys the checkpointer (the conversation); run_id keys the
+        # token budget (this one question). See atlas.budget.
+        "configurable": {"thread_id": thread_id, "run_id": run_id},
         "recursion_limit": recursion_limit(),
     }
     events = _Sequencer(run_id)

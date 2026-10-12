@@ -182,8 +182,18 @@ def cmd_run(args: argparse.Namespace) -> int:
         share = f"{det / total:.0%}" if total else "n/a"
         print(f"  {category:<11} {det} deterministic / {jdg} judge  ({share} deterministic)")
 
+    # Written even when something crashed: it is what the crash is debugged from.
     path = _write_run(args.name, records, scores)
     print(f"\nwrote {path}")
+
+    if failed:
+        # A crash is never a pass. This used to exit 0 however many items died,
+        # so the CI smoke — which exists to catch crashes — passed with all of
+        # them dead.
+        print(f"\nFAIL: {len(failed)} of {len(records)} run(s) crashed")
+        if args.write_baseline:
+            print("not writing a baseline: it would record these crashes as normal")
+        return 1
 
     if args.write_baseline:
         baseline = Baseline(

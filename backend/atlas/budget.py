@@ -4,7 +4,13 @@ The counter lives in Redis rather than graph state for a specific reason: every
 parallel branch reads the same pre-fan-out state snapshot, so a counter kept in
 state cannot see sibling spend while the fan-out is in flight. Five researchers
 would each believe they were the only one spending. Redis is already in the
-stack and gives one shared counter per ``thread_id``.
+stack and gives one shared counter per run.
+
+Per **run**, not per thread. ``MAX_TOKENS_PER_QUERY`` limits one question, and a
+thread holds a whole conversation of them. Keyed by thread, the counter kept
+climbing across follow-ups until an ordinary one was declared over budget at its
+first review, and went out unreviewed. The run id arrives in ``configurable``
+beside the thread id; :mod:`atlas.runner` puts it there.
 
 **Fails open.** Any Redis problem logs a warning and lets the run continue. A
 dead cache must not break queries, and the run stays bounded by
@@ -23,15 +29,15 @@ from atlas.config import get_settings
 
 logger = logging.getLogger(__name__)
 
-# Long enough to outlive any single run, short enough that abandoned threads do
+# Long enough to outlive any single run, short enough that abandoned runs do
 # not accumulate keys forever.
 _KEY_TTL_SECONDS = 3600
 
 _client: Redis | None = None
 
 
-def _key(thread_id: str) -> str:
-    return f"atlas:budget:{thread_id}"
+def _key(run_id: str) -> str:
+    return f"atlas:budget:{run_id}"
 
 
 def get_client() -> Redis:
@@ -55,33 +61,36 @@ async def close_client() -> None:
         _client = None
 
 
-def current_thread_id() -> str | None:
-    """The running graph's thread id, or None outside a graph.
+def current_run_id() -> str | None:
+    """The running graph's run id, or None outside a graph.
 
     Read from LangGraph's ambient config rather than threaded through every node
     signature. Returns None when called outside a graph run (in a unit test, for
-    instance), which callers treat as "no budget tracking".
+    instance) or when the caller did not supply a run id. Callers treat that as
+    "no budget tracking" and the critic records ``budget_check_unavailable`` —
+    deliberately not falling back to the thread id, which is the bug this
+    replaced.
     """
     try:
         config = get_config()
     except Exception:
         return None
     configurable = config.get("configurable") or {}
-    thread_id = configurable.get("thread_id")
-    return thread_id if isinstance(thread_id, str) else None
+    run_id = configurable.get("run_id")
+    return run_id if isinstance(run_id, str) else None
 
 
 async def record_spend(tokens: int) -> None:
-    """Add tokens to the running thread's total. Never raises."""
+    """Add tokens to the current run's total. Never raises."""
     if tokens <= 0:
         return
-    thread_id = current_thread_id()
-    if thread_id is None:
+    run_id = current_run_id()
+    if run_id is None:
         return
     try:
         client = get_client()
-        total = await client.incrby(_key(thread_id), tokens)
-        await client.expire(_key(thread_id), _KEY_TTL_SECONDS)
+        total = await client.incrby(_key(run_id), tokens)
+        await client.expire(_key(run_id), _KEY_TTL_SECONDS)
         logger.debug("recorded spend", extra={"tokens": tokens, "total": total})
     except Exception as exc:
         logger.warning(
@@ -91,17 +100,17 @@ async def record_spend(tokens: int) -> None:
 
 
 async def spent() -> int | None:
-    """Tokens spent by the running thread, or None if unknown.
+    """Tokens spent by the current run, or None if unknown.
 
     None means "could not check" — Redis down, or running outside a graph. It is
     deliberately distinct from 0, so callers can record that the guard was not
     running rather than silently treating an unknown as within budget.
     """
-    thread_id = current_thread_id()
-    if thread_id is None:
+    run_id = current_run_id()
+    if run_id is None:
         return None
     try:
-        raw = await get_client().get(_key(thread_id))
+        raw = await get_client().get(_key(run_id))
     except Exception as exc:
         logger.warning(
             "could not read token spend; failing open",
@@ -117,7 +126,7 @@ async def spent() -> int | None:
 
 
 async def is_exceeded() -> tuple[bool, int | None]:
-    """Whether the running thread has blown its budget.
+    """Whether the current run has blown its budget.
 
     Returns ``(exceeded, spent_tokens)``. ``spent_tokens`` is None when the check
     could not run, in which case ``exceeded`` is False — failing open, as agreed.

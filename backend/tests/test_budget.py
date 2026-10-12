@@ -14,10 +14,10 @@ regardless. Fail closed on breach, fail open on outage.
 from __future__ import annotations
 
 import asyncio
+from typing import Any
 
 import pytest
 from fastapi.testclient import TestClient
-from langchain_core.runnables import RunnableConfig
 from langgraph.checkpoint.memory import MemorySaver
 
 from atlas import budget
@@ -39,29 +39,29 @@ from tests.conftest import (
     make_call_model,
     make_call_structured,
     make_plan,
+    run_config,
 )
 
 THREAD = "budget-thread"
-KEY = f"atlas:budget:{THREAD}"
+RUN = "budget-run"
+KEY = f"atlas:budget:{RUN}"
 BRANCHES = 3
 
 
 @pytest.fixture
-def in_a_thread(monkeypatch: pytest.MonkeyPatch) -> None:
-    """Pretend we are inside a graph run on THREAD.
+def in_a_run(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Pretend we are inside graph run RUN.
 
-    ``current_thread_id`` reads LangGraph's ambient config, which does not exist
+    ``current_run_id`` reads LangGraph's ambient config, which does not exist
     when a node function is called directly.
     """
-    monkeypatch.setattr(budget, "current_thread_id", lambda: THREAD)
+    monkeypatch.setattr(budget, "current_run_id", lambda: RUN)
 
 
 # --- the counter itself -------------------------------------------------------
 
 
-async def test_spend_accumulates_on_the_threads_key(
-    in_a_thread: None, fake_redis: FakeRedis
-) -> None:
+async def test_spend_accumulates_on_the_runs_key(in_a_run: None, fake_redis: FakeRedis) -> None:
     await budget.record_spend(1200)
     await budget.record_spend(800)
 
@@ -69,16 +69,14 @@ async def test_spend_accumulates_on_the_threads_key(
     assert await budget.spent() == 2000
 
 
-async def test_the_key_gets_a_ttl_so_abandoned_threads_do_not_leak(
-    in_a_thread: None, fake_redis: FakeRedis
+async def test_the_key_gets_a_ttl_so_abandoned_runs_do_not_leak(
+    in_a_run: None, fake_redis: FakeRedis
 ) -> None:
     await budget.record_spend(10)
     assert fake_redis.expiries == {KEY: 3600}
 
 
-async def test_parallel_branches_share_one_counter(
-    in_a_thread: None, fake_redis: FakeRedis
-) -> None:
+async def test_parallel_branches_share_one_counter(in_a_run: None, fake_redis: FakeRedis) -> None:
     """The reason this is not in graph state.
 
     Five concurrent writers, one total. A counter carried in state would show 100
@@ -90,13 +88,13 @@ async def test_parallel_branches_share_one_counter(
     assert await budget.spent() == 500
 
 
-async def test_an_unspent_thread_reads_zero_not_unknown(in_a_thread: None) -> None:
+async def test_an_unspent_run_reads_zero_not_unknown(in_a_run: None) -> None:
     """0 and None mean different things: "nothing yet" versus "could not check"."""
     assert await budget.spent() == 0
     assert await budget.is_exceeded() == (False, 0)
 
 
-async def test_breach_is_strictly_above_the_limit(in_a_thread: None, fake_redis: FakeRedis) -> None:
+async def test_breach_is_strictly_above_the_limit(in_a_run: None, fake_redis: FakeRedis) -> None:
     limit = get_settings().max_tokens_per_query
     fake_redis.values[KEY] = limit
     assert await budget.is_exceeded() == (False, limit)
@@ -109,7 +107,7 @@ async def test_breach_is_strictly_above_the_limit(in_a_thread: None, fake_redis:
 
 
 async def test_a_redis_outage_reports_unknown_rather_than_zero(
-    in_a_thread: None, fake_redis: FakeRedis
+    in_a_run: None, fake_redis: FakeRedis
 ) -> None:
     fake_redis.fail = True
 
@@ -118,7 +116,7 @@ async def test_a_redis_outage_reports_unknown_rather_than_zero(
 
 
 async def test_recording_spend_never_raises_when_redis_is_down(
-    in_a_thread: None, fake_redis: FakeRedis
+    in_a_run: None, fake_redis: FakeRedis
 ) -> None:
     """A dead cache must not propagate an exception into a node."""
     fake_redis.fail = True
@@ -126,8 +124,8 @@ async def test_recording_spend_never_raises_when_redis_is_down(
 
 
 async def test_outside_a_graph_there_is_nothing_to_track() -> None:
-    """No thread id, no counter — and no crash. Unit tests call nodes directly."""
-    assert budget.current_thread_id() is None
+    """No run id, no counter — and no crash. Unit tests call nodes directly."""
+    assert budget.current_run_id() is None
     assert await budget.spent() is None
     assert await budget.is_exceeded() == (False, None)
 
@@ -150,7 +148,7 @@ def _reviewable_state() -> AtlasState:
 
 
 async def test_a_breach_accepts_without_calling_the_critic(
-    in_a_thread: None, fake_redis: FakeRedis, monkeypatch: pytest.MonkeyPatch
+    in_a_run: None, fake_redis: FakeRedis, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """Over budget means stop spending — including on the review itself."""
     called = False
@@ -171,7 +169,7 @@ async def test_a_breach_accepts_without_calling_the_critic(
 
 
 async def test_one_breach_is_reported_once_not_twice(
-    in_a_thread: None, fake_redis: FakeRedis, monkeypatch: pytest.MonkeyPatch
+    in_a_run: None, fake_redis: FakeRedis, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """Two checks, one signal.
 
@@ -199,7 +197,7 @@ async def test_one_breach_is_reported_once_not_twice(
 
 
 async def test_an_unavailable_check_is_recorded_and_the_run_continues(
-    in_a_thread: None, fake_redis: FakeRedis, monkeypatch: pytest.MonkeyPatch
+    in_a_run: None, fake_redis: FakeRedis, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """Degraded, not stopped. The client is told the guard was not running."""
     fake_redis.fail = True
@@ -239,10 +237,10 @@ async def test_a_breached_run_stops_at_one_iteration_with_an_answer(
     budget_graph: None, fake_redis: FakeRedis
 ) -> None:
     """The critic would have kept rejecting. The budget is what stops it."""
-    fake_redis.values[f"atlas:budget:{THREAD}"] = get_settings().max_tokens_per_query + 1
+    fake_redis.values[KEY] = get_settings().max_tokens_per_query + 1
 
     graph = build_state_graph().compile(checkpointer=MemorySaver())
-    config: RunnableConfig = {"configurable": {"thread_id": THREAD}}
+    config = run_config(THREAD, RUN)
     result = await graph.ainvoke(initial_state(), config=config)
 
     assert result["iteration"] == 1
@@ -263,11 +261,14 @@ def test_a_breach_returns_200_not_an_error(budget_graph: None, fake_redis: FakeR
     not change.
     """
     compiled = build_state_graph().compile(checkpointer=MemorySaver())
+
+    async def over_budget_run(run_id: str, query: str, thread_id: str) -> dict[str, Any]:
+        # The route mints the run id, so the breach is planted once it exists.
+        fake_redis.values[f"atlas:budget:{run_id}"] = get_settings().max_tokens_per_query + 1
+        return await execute_run(run_id, query, thread_id, compiled)
+
     app = create_app()
-    app.state.arq = FakeArq(
-        lambda run_id, query, thread_id: execute_run(run_id, query, thread_id, compiled)
-    )
-    fake_redis.values[f"atlas:budget:{THREAD}"] = get_settings().max_tokens_per_query + 1
+    app.state.arq = FakeArq(over_budget_run)
 
     response = TestClient(app).post("/query", json={"query": "what is RAG?", "thread_id": THREAD})
     body = response.json()

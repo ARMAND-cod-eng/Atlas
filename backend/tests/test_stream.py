@@ -19,16 +19,19 @@ from collections.abc import AsyncIterator
 
 import pytest
 from fastapi.testclient import TestClient
+from langchain_core.messages import AIMessage
 from langgraph.checkpoint.memory import MemorySaver
 from sse_starlette.event import ServerSentEvent
 
 from atlas import eventlog
 from atlas.api.main import create_app
 from atlas.api.streams import event_stream, parse_last_event_id
+from atlas.errors import ProviderError
 from atlas.events import RUN_COMPLETED, RUN_STARTED, AgentEvent
 from atlas.graph import nodes
 from atlas.graph.builder import build_state_graph
 from atlas.graph.state import Source
+from atlas.metrics import RunMetrics
 from atlas.runner import execute_run
 from tests.conftest import FakeArq, FakeRedis, make_call_model, make_call_structured, make_plan
 
@@ -361,6 +364,68 @@ def test_get_run_returns_the_full_result(fast_graph: None) -> None:
 
 def test_get_run_is_404_for_an_unknown_id(fast_graph: None) -> None:
     assert _app_with_inline_worker().get("/runs/nope").status_code == 404
+
+
+def test_get_run_reports_a_failed_run_as_failed(
+    fast_graph: None, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """It used to say "running" — for as long as the event log lived.
+
+    A result is stored only on success, so a failed run fell through to the
+    "known but unfinished" branch. The stream had already delivered
+    ``run_failed``; the status endpoint contradicted it for an hour.
+    """
+
+    async def synthesis_fails(
+        node: str,
+        messages: object,
+        metrics: RunMetrics,
+        temperature: float | None = None,
+        max_tokens: int | None = None,
+    ) -> AIMessage:
+        if node == nodes.SYNTHESIZER:
+            raise ProviderError(provider="openai", message="all providers failed", node=node)
+        return AIMessage(content="findings")
+
+    monkeypatch.setattr(nodes, "call_model", synthesis_fails)
+    client = _app_with_inline_worker()
+    run_id = client.post("/runs", json={"query": "what is RAG?"}).json()["run_id"]
+
+    body = client.get(f"/runs/{run_id}").json()
+
+    assert body == {
+        "run_id": run_id,
+        "status": "failed",
+        "result": None,
+        "error": "ProviderError: all providers failed",
+    }
+
+
+def test_a_completed_run_whose_result_was_lost_is_not_reported_running(
+    fast_graph: None, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """``store_result`` fails open. The terminal event still says how the run ended."""
+
+    async def lost(run_id: str, result: dict[str, object]) -> None:
+        return None
+
+    monkeypatch.setattr(eventlog, "store_result", lost)
+    client = _app_with_inline_worker()
+    run_id = client.post("/runs", json={"query": "what is RAG?"}).json()["run_id"]
+
+    body = client.get(f"/runs/{run_id}").json()
+
+    assert body == {"run_id": run_id, "status": "completed", "result": None, "error": None}
+
+
+def test_a_run_with_no_terminal_event_is_running(fast_graph: None) -> None:
+    """The control: registered, nothing finished, so neither completed nor failed."""
+    client = _app_with_inline_worker()
+    asyncio.run(eventlog.register("queued-run"))
+
+    body = client.get("/runs/queued-run").json()
+
+    assert body == {"run_id": "queued-run", "status": "running", "result": None, "error": None}
 
 
 def test_query_still_returns_the_phase_2_shape(fast_graph: None, fake_redis: FakeRedis) -> None:

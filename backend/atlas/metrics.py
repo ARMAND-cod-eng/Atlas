@@ -47,6 +47,10 @@ DEGRADED_CRITIC_UNAVAILABLE = "critic_unavailable"
 # meant to catch outliers, and a run that trips it is evidence the cap is set
 # below the prompt's typical output rather than above it.
 DEGRADED_SYNTHESIS_TRUNCATED = "synthesis_truncated"
+# The critic faulted a subtask id that is not in the plan. Its concern cannot be
+# routed to any branch, so it is dropped — and said so, rather than leaving a
+# "revise" verdict that quietly went nowhere.
+DEGRADED_CRITIC_UNKNOWN_SUBTASK = "critic_unknown_subtask"
 
 
 class LLMCall(BaseModel):
@@ -61,10 +65,14 @@ class LLMCall(BaseModel):
 
 
 class NodeTiming(BaseModel):
-    """Wall-clock time for one node."""
+    """Wall-clock time for one node execution."""
 
     node: str
     duration_s: float
+    # Set for researchers. One timing per execution, so this is the only record
+    # of how many times a subtask actually ran — research_results keeps one
+    # entry per subtask however often it was retried.
+    subtask_id: str | None = None
 
 
 class CriticRound(BaseModel):
@@ -119,7 +127,7 @@ def merge_run_metrics(left: RunMetrics, right: RunMetrics) -> RunMetrics:
 
 
 @asynccontextmanager
-async def track_node(node: str) -> AsyncIterator[RunMetrics]:
+async def track_node(node: str, subtask_id: str | None = None) -> AsyncIterator[RunMetrics]:
     """Time a node and give it a fresh :class:`RunMetrics` to fill in.
 
     Yields metrics scoped to this node only — the reducer merges it back into the
@@ -134,4 +142,6 @@ async def track_node(node: str) -> AsyncIterator[RunMetrics]:
     try:
         yield metrics
     finally:
-        metrics.node_timings.append(NodeTiming(node=node, duration_s=time.perf_counter() - started))
+        metrics.node_timings.append(
+            NodeTiming(node=node, duration_s=time.perf_counter() - started, subtask_id=subtask_id)
+        )

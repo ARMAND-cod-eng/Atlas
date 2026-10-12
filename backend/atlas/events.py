@@ -127,7 +127,7 @@ async def node_span(node: str, subtask_id: str | None = None) -> AsyncIterator[N
     emit(NODE_STARTED, node, subtask_id=subtask_id)
     span = NodeSpan()
     try:
-        async with track_node(node) as metrics:
+        async with track_node(node, subtask_id) as metrics:
             span.metrics = metrics
             yield span
     except Exception as exc:

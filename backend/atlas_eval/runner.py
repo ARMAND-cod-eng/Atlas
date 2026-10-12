@@ -18,6 +18,7 @@ import logging
 import time
 from contextvars import ContextVar
 from pathlib import Path
+from uuid import uuid4
 
 from langchain_core.runnables import RunnableConfig
 from langgraph.checkpoint.memory import MemorySaver
@@ -105,7 +106,9 @@ async def run_item(item: EvalItem, corpus_root: Path | None = None) -> RunRecord
 
     graph = build_state_graph().compile(checkpointer=MemorySaver())
     config: RunnableConfig = {
-        "configurable": {"thread_id": f"eval-{item.id}"},
+        # A fresh run id per execution, so re-running the suite within the budget
+        # key's TTL does not start an item at the previous run's spend.
+        "configurable": {"thread_id": f"eval-{item.id}", "run_id": str(uuid4())},
         "recursion_limit": recursion_limit(),
     }
 

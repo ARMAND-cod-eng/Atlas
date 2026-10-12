@@ -246,13 +246,50 @@ def test_an_improvement_never_trips() -> None:
     assert all(d.delta_pp > 0 for d in result.deltas)
 
 
-def test_a_missing_per_item_baseline_is_reported_not_papered_over() -> None:
-    """Without per-item scores there is no CI, and the gate says so."""
+def test_a_missing_per_item_baseline_fails_the_gate() -> None:
+    """Without per-item scores the gate cannot decide, so it does not pass.
+
+    It used to pass. No CI meant "not significant", which meant nothing could
+    trip — a -20pp collapse included — while the reason line claimed the gate had
+    fallen back to the point delta. CI never has the per-item baseline unless it
+    is committed, so this was the gate's behaviour on every run.
+    """
     base = _baseline(completion=0.80)
     current = {"completion": {f"q{i}": 0.60 for i in range(50)}}
 
     result = compare(base, current, baseline_scores=None)
 
-    assert any("no per-item baseline" in reason for reason in result.reasons)
-    # No CI means not significant, so the tripwire alone cannot fail the build.
+    assert result.passed is False
+    assert result.reasons == [
+        "completion: no per-item baseline scores, so no paired comparison is possible "
+        "— commit runs/baseline.json from `atlas_eval run --name baseline --write-baseline`",
+        "grounding: no scores in this run",
+        "tools: no scores in this run",
+    ]
+
+
+def test_a_per_item_baseline_with_no_overlap_fails_the_gate() -> None:
+    base = _baseline(completion=0.80)
+    baseline_items = {"completion": {f"old{i}": 0.80 for i in range(50)}}
+    current = {"completion": {f"q{i}": 0.80 for i in range(50)}}
+
+    result = compare(base, current, baseline_items)
+
+    assert result.passed is False
+    assert result.reasons == [
+        "completion: 50 item(s) missing from the baseline run; CI computed on the overlap only",
+        "completion: no item appears in both runs, so no paired comparison is possible",
+        "grounding: no scores in this run",
+        "tools: no scores in this run",
+    ]
+
+
+def test_an_unchanged_run_with_a_per_item_baseline_passes() -> None:
+    """The control for the two above: the same data, with what the gate needs."""
+    base = _baseline(completion=0.80)
+    baseline_items = {"completion": {f"q{i}": 0.80 for i in range(50)}}
+    current = {"completion": {f"q{i}": 0.80 for i in range(50)}}
+
+    result = compare(base, current, baseline_items)
+
     assert result.passed is True

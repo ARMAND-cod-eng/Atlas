@@ -11,7 +11,7 @@ can substitute them without standing up Postgres or Redis.
 from __future__ import annotations
 
 import logging
-from typing import Any
+from typing import Any, Literal
 from uuid import uuid4
 
 from arq.connections import ArqRedis
@@ -23,6 +23,7 @@ from sqlalchemy import text
 
 from atlas import eventlog
 from atlas.db.session import get_engine
+from atlas.events import RUN_FAILED
 from atlas.result import QueryResponse
 from atlas.worker import QUERY_WAIT_SECONDS, RUN_RESEARCH
 
@@ -61,8 +62,10 @@ class RunStatus(BaseModel):
     """Where a run has got to, and its result once there is one."""
 
     run_id: str
-    status: str
+    status: Literal["running", "completed", "failed"]
     result: QueryResponse | None = None
+    # The error the run ended on, when status is "failed".
+    error: str | None = None
 
 
 class HealthResponse(BaseModel):
@@ -164,6 +167,22 @@ async def get_run(run_id: str) -> RunStatus:
     result = await eventlog.load_result(run_id)
     if result is not None:
         return RunStatus(run_id=run_id, status="completed", result=QueryResponse(**result))
+
+    # No stored result does not mean "still running". A result is stored only on
+    # success, so a failed run used to land in the branch below and report
+    # "running" for as long as its event log lived — contradicting the
+    # run_failed its own stream had already delivered. The terminal event is
+    # written on every path, so it decides.
+    terminal = await eventlog.terminal_event(run_id)
+    if terminal is not None and terminal.type == RUN_FAILED:
+        error = terminal.payload.get("error")
+        return RunStatus(
+            run_id=run_id, status="failed", error=error if isinstance(error, str) else None
+        )
+    if terminal is not None:
+        # Completed, but store_result failed open. Say so rather than "running".
+        return RunStatus(run_id=run_id, status="completed")
+
     if await eventlog.exists(run_id):
         return RunStatus(run_id=run_id, status="running")
     raise HTTPException(status_code=404, detail=f"unknown run: {run_id}")

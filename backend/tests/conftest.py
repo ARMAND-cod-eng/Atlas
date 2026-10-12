@@ -12,6 +12,7 @@ from typing import Any
 
 import pytest
 from langchain_core.messages import AIMessage
+from langchain_core.runnables import RunnableConfig
 from pydantic import BaseModel
 
 from atlas import budget, eventlog
@@ -282,6 +283,16 @@ def make_call_structured(
         return plan
 
     return fake_structured
+
+
+def run_config(thread_id: str, run_id: str | None = None) -> RunnableConfig:
+    """Graph config for one run, shaped like the one ``execute_run`` builds.
+
+    ``run_id`` scopes the token budget. Defaulted from the thread so a test that
+    makes one run per thread needs to name nothing; a test of two runs on one
+    thread must pass distinct ids, exactly as production does.
+    """
+    return {"configurable": {"thread_id": thread_id, "run_id": run_id or f"run-{thread_id}"}}
 
 
 def initial_state(query: str = "what is retrieval-augmented generation?") -> AtlasState:

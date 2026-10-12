@@ -11,14 +11,19 @@ test that fails when the fan-out goes serial.
 from __future__ import annotations
 
 import pytest
-from langchain_core.runnables import RunnableConfig
 from langgraph.checkpoint.memory import MemorySaver
 
 from atlas.graph import nodes
 from atlas.graph.builder import build_state_graph
 from atlas.graph.state import Source
 from atlas.metrics import RunMetrics
-from tests.conftest import initial_state, make_call_model, make_call_structured, make_plan
+from tests.conftest import (
+    initial_state,
+    make_call_model,
+    make_call_structured,
+    make_plan,
+    run_config,
+)
 
 BRANCHES = 5
 
@@ -37,7 +42,7 @@ def graph_with_fakes(monkeypatch: pytest.MonkeyPatch) -> None:
 
 async def _run(thread: str) -> dict[str, object]:
     graph = build_state_graph().compile(checkpointer=MemorySaver())
-    config: RunnableConfig = {"configurable": {"thread_id": thread}}
+    config = run_config(thread)
     return dict(await graph.ainvoke(initial_state(), config=config))
 
 

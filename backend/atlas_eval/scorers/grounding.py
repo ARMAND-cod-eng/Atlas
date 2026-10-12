@@ -115,6 +115,12 @@ async def verify(claims: list[str], context: str) -> list[ClaimVerdict]:
 
 async def score_grounding(answer: str, context: str) -> GroundingScore:
     """Fraction of the answer's atomic claims the retrieved context supports."""
+    if not answer.strip():
+        # No answer is not an abstention. An abstention says something — that
+        # the sources do not cover this — and is scored below as asserting
+        # nothing unsupported. An empty answer says nothing at all.
+        return GroundingScore(score=0.0)
+
     claims = await decompose(answer)
     if not claims:
         # An answer that asserts nothing — an honest "the sources do not cover

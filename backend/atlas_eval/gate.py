@@ -21,6 +21,13 @@ The gate fires when **both** hold:
 
 The first keeps the résumé's claim literally true — it still blocks on a >2%
 category regression. The second is what stops it firing on noise.
+
+And it **refuses to pass** a category it cannot evaluate. Without per-item
+baseline scores there is no paired CI, and "no CI" used to mean "not
+significant", which meant nothing could trip: an 80pp collapse passed, while the
+report claimed the gate had fallen back to the point delta. CI never has the
+per-item baseline unless ``runs/baseline.json`` is committed, so that was the
+gate's behaviour on every run. A gate that cannot decide must say no.
 """
 
 from __future__ import annotations
@@ -134,12 +141,13 @@ def compare(
     """Compare a run against the baseline, per category.
 
     ``current_scores`` and ``baseline_scores`` are ``{category: {item_id: score}}``.
-    Per-item baseline scores enable the paired bootstrap; without them the gate
-    degrades to the point delta alone and says so, because pretending to a CI
-    that was never computed would be worse than admitting the limitation.
+    Per-item baseline scores are required: they are what the paired bootstrap
+    runs on. A category without them, or with no item in common, fails the gate
+    rather than passing it unexamined.
     """
     deltas: list[CategoryDelta] = []
     reasons: list[str] = []
+    undecided: list[str] = []
 
     for category in CATEGORIES:
         current_items = current_scores.get(category, {})
@@ -153,27 +161,32 @@ def compare(
             reasons.append(f"{category}: absent from baseline, not gated")
             continue
 
-        differences: list[float] = []
-        if baseline_scores and category in baseline_scores:
-            per_item = baseline_scores[category]
-            shared = sorted(set(current_items) & set(per_item))
-            if len(shared) != len(current_items):
-                reasons.append(
-                    f"{category}: {len(current_items) - len(shared)} item(s) missing from "
-                    "the baseline run; CI computed on the overlap only"
-                )
-            differences = [current_items[i] - per_item[i] for i in shared]
-
-        if differences:
-            low, high = paired_bootstrap(differences)
-            sd = statistics.stdev(differences) * 100 if len(differences) > 1 else 0.0
-        else:
-            low, high = (0.0, 0.0)
-            sd = 0.0
+        if not baseline_scores or category not in baseline_scores:
+            undecided.append(category)
             reasons.append(
-                f"{category}: no per-item baseline, so no CI — gate falls back to the "
-                "point delta alone"
+                f"{category}: no per-item baseline scores, so no paired comparison is "
+                "possible — commit runs/baseline.json from "
+                "`atlas_eval run --name baseline --write-baseline`"
             )
+            continue
+
+        per_item = baseline_scores[category]
+        shared = sorted(set(current_items) & set(per_item))
+        if len(shared) != len(current_items):
+            reasons.append(
+                f"{category}: {len(current_items) - len(shared)} item(s) missing from "
+                "the baseline run; CI computed on the overlap only"
+            )
+        if not shared:
+            undecided.append(category)
+            reasons.append(
+                f"{category}: no item appears in both runs, so no paired comparison is possible"
+            )
+            continue
+
+        differences = [current_items[i] - per_item[i] for i in shared]
+        low, high = paired_bootstrap(differences)
+        sd = statistics.stdev(differences) * 100 if len(differences) > 1 else 0.0
 
         deltas.append(
             CategoryDelta(
@@ -194,7 +207,12 @@ def compare(
             f"(CI [{delta.ci_low_pp:+.2f}, {delta.ci_high_pp:+.2f}]pp excludes zero)"
         )
 
-    return GateResult(passed=not tripped, threshold_pp=threshold_pp, deltas=deltas, reasons=reasons)
+    return GateResult(
+        passed=not tripped and not undecided,
+        threshold_pp=threshold_pp,
+        deltas=deltas,
+        reasons=reasons,
+    )
 
 
 def load_baseline(path: Path = BASELINE_PATH) -> Baseline:

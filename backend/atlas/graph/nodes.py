@@ -13,12 +13,11 @@ from __future__ import annotations
 
 import logging
 import re
-import uuid
 from typing import Any
 
 from langchain_core.messages import AIMessage, BaseMessage, HumanMessage, SystemMessage
 from langgraph.graph import END
-from langgraph.types import Send
+from langgraph.types import Overwrite, Send
 
 from atlas.budget import is_exceeded
 from atlas.config import get_settings
@@ -44,6 +43,7 @@ from atlas.metrics import (
     DEGRADED_CRITIC_MAX_ITERATIONS,
     DEGRADED_CRITIC_NOT_ACTIONABLE,
     DEGRADED_CRITIC_UNAVAILABLE,
+    DEGRADED_CRITIC_UNKNOWN_SUBTASK,
     DEGRADED_PLANNER_FALLBACK,
     DEGRADED_RESEARCHER_FAILED,
     DEGRADED_SYNTHESIS_TRUNCATED,
@@ -146,7 +146,7 @@ instead of faulting subtasks. That fixes the answer without re-running searches.
 def _single_subtask(query: str) -> Subtask:
     """The degraded plan: research the original question as one unit."""
     return Subtask(
-        id=str(uuid.uuid4()),
+        id="s0",
         question=query,
         rationale="Planning failed; researching the original question directly.",
     )
@@ -180,7 +180,20 @@ async def _plan(query: str, history: list[Any], metrics: RunMetrics) -> list[Sub
 
     # Truncate rather than reject: a planner that returns seven good subtasks
     # should not fail the run over a config limit.
-    return output.subtasks[: settings.max_subtasks]
+    return _with_server_ids(output.subtasks[: settings.max_subtasks])
+
+
+def _with_server_ids(subtasks: list[Subtask]) -> list[Subtask]:
+    """Key each subtask by its position, whatever id the model wrote.
+
+    ``subtask_id`` keys the upsert reducer, the retry ``Send`` payloads and the
+    critic's verdicts, so it has to be unique — and the model is not a reliable
+    source of unique keys. Two subtasks it labelled alike merged into one result,
+    and the second branch vanished from the answer without a trace.
+    """
+    return [
+        subtask.model_copy(update={"id": f"s{index}"}) for index, subtask in enumerate(subtasks)
+    ]
 
 
 async def planner(state: AtlasState) -> dict[str, Any]:
@@ -191,7 +204,16 @@ async def planner(state: AtlasState) -> dict[str, Any]:
     logger.info("planned subtasks", extra={"subtask_count": len(subtasks)})
     return {
         "subtasks": subtasks,
-        "run_metrics": metrics,
+        # A thread holds many runs, and these three keys belong to one of them.
+        # Graph input cannot clear them: LangGraph applies input through each
+        # key's reducer, and merging [] into the previous run's results keeps
+        # them. A follow-up was synthesised from the last question's research and
+        # read the last critic's feedback as its own. The planner runs exactly
+        # once, first, in every run, so it replaces them outright. ``messages``
+        # is left to its reducer on purpose — that is the conversation.
+        "research_results": Overwrite([]),
+        "critic_feedback": Overwrite([]),
+        "run_metrics": Overwrite(metrics),
         "messages": [HumanMessage(content=state["query"])],
     }
 
@@ -576,7 +598,9 @@ async def critic(state: AtlasState) -> dict[str, Any]:
                 metrics.degraded.append(DEGRADED_BUDGET_EXCEEDED)
             verdict = CriticVerdict(overall="accept")
         else:
-            verdict = await _review(state, metrics)
+            verdict = _drop_unknown_subtasks(
+                await _review(state, metrics), state["subtasks"], metrics
+            )
 
         metrics.critic_rounds.append(
             CriticRound(
@@ -624,6 +648,35 @@ async def critic(state: AtlasState) -> dict[str, Any]:
         "run_metrics": metrics,
         **update,
     }
+
+
+def _drop_unknown_subtasks(
+    verdict: CriticVerdict, subtasks: list[Subtask], metrics: RunMetrics
+) -> CriticVerdict:
+    """Keep only the critic's verdicts about subtasks that exist.
+
+    An id the critic invents — "subtask-1" for ``s0`` — names nothing routing can
+    send work to. Left in, it made a "revise" look actionable, so nothing was
+    recorded, routing found no branch to retry, and the run ended on an
+    unaddressed rejection with ``degraded`` empty. Dropped here, everything
+    downstream — the actionability check, the recorded round, the router — sees
+    the same verdict, and the loss is reported once.
+    """
+    known = {subtask.id for subtask in subtasks}
+    lost = [
+        v.subtask_id
+        for v in verdict.per_subtask
+        if v.subtask_id not in known and v.verdict == "revise"
+    ]
+    if lost:
+        logger.warning(
+            "critic faulted subtasks that are not in the plan; dropping them",
+            extra={"unknown_subtask_ids": lost, "known_subtask_ids": sorted(known)},
+        )
+        metrics.degraded.append(DEGRADED_CRITIC_UNKNOWN_SUBTASK)
+    return verdict.model_copy(
+        update={"per_subtask": [v for v in verdict.per_subtask if v.subtask_id in known]}
+    )
 
 
 def _exhaustion_note(verdict: CriticVerdict) -> str:

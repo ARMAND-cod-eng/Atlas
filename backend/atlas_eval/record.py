@@ -12,6 +12,7 @@ enough that replay has real documents for whatever wording turns up later.
 from __future__ import annotations
 
 import logging
+from uuid import uuid4
 
 from atlas.graph import nodes
 from atlas.graph.state import Source
@@ -87,7 +88,8 @@ async def _run_online(item: EvalItem) -> None:
     await graph.ainvoke(
         initial_state(item.query),
         config={
-            "configurable": {"thread_id": f"record-{item.id}"},
+            # One run id per pass: each pass is its own run with its own budget.
+            "configurable": {"thread_id": f"record-{item.id}", "run_id": str(uuid4())},
             "recursion_limit": recursion_limit(),
         },
     )

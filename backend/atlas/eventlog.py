@@ -25,7 +25,7 @@ from redis.asyncio import Redis
 from redis.typing import EncodableT, FieldT
 
 from atlas.config import get_settings
-from atlas.events import AgentEvent
+from atlas.events import TERMINAL_TYPES, AgentEvent
 
 logger = logging.getLogger(__name__)
 
@@ -129,6 +129,19 @@ async def replay(run_id: str, after_seq: int) -> list[AgentEvent]:
     entries = await get_client().xrange(events_key(run_id), min="-", max="+")
     events = [_decode(run_id, fields) for _, fields in entries]
     return [event for event in events if event.seq > after_seq]
+
+
+async def terminal_event(run_id: str) -> AgentEvent | None:
+    """The event the run ended on, or None if it has not ended.
+
+    The runner writes exactly one, success or failure, so this is the
+    authoritative answer to "how did it end" — unlike the stored result, which
+    exists only on success and only if storing it worked.
+    """
+    for event in reversed(await replay(run_id, 0)):
+        if event.type in TERMINAL_TYPES:
+            return event
+    return None
 
 
 async def tail(run_id: str, last_id: str, block_ms: int) -> AsyncIterator[tuple[str, AgentEvent]]:

@@ -12,6 +12,7 @@ from collections import Counter
 
 from pydantic import BaseModel, Field
 
+from atlas.graph.nodes import RESEARCHER
 from atlas_eval.dataset import EvalItem
 from atlas_eval.runner import RunRecord
 from atlas_eval.scorers.completion import CompletionScore, score_completion
@@ -72,9 +73,44 @@ class SuiteScore(BaseModel):
         }
 
 
+def researcher_runs(record: RunRecord) -> dict[str, int]:
+    """How many times each subtask's researcher actually executed.
+
+    Counted from node timings, one per execution — not from ``research_results``,
+    which the upsert reducer keeps at one entry per subtask however often it was
+    retried. Counting results gave every subtask exactly one run, so the
+    retry-cap check that reads this could not fail.
+    """
+    return dict(
+        Counter(
+            timing.subtask_id
+            for timing in record.metrics.node_timings
+            if timing.node == RESEARCHER and timing.subtask_id is not None
+        )
+    )
+
+
+def _crashed(item: EvalItem, record: RunRecord) -> ItemScore:
+    """Zero in every category, with nothing sent to the judge.
+
+    Scored normally, a crash did well: its empty answer decomposed into no
+    claims, which grounding reads as an honest abstention (1.0), and four of the
+    six tool checks passed vacuously on an empty plan. A regression that crashed
+    more items pushed the grounding mean *up*.
+    """
+    return ItemScore(
+        item_id=item.id,
+        completion=CompletionScore(score=0.0),
+        grounding=GroundingScore(score=0.0),
+        tools=ToolScore(score=0.0),
+        error=record.error,
+    )
+
+
 async def score_run(item: EvalItem, record: RunRecord) -> ItemScore:
     """Score one run across all three categories."""
-    run_counts = Counter(result.subtask_id for result in record.research_results)
+    if record.error is not None:
+        return _crashed(item, record)
 
     completion, grounding, tools = await asyncio.gather(
         score_completion(item, record.answer),
@@ -84,7 +120,7 @@ async def score_run(item: EvalItem, record: RunRecord) -> ItemScore:
             record.subtasks,
             [r.subtask_id for r in record.research_results],
             record.search_calls,
-            dict(run_counts),
+            researcher_runs(record),
         ),
     )
     return ItemScore(

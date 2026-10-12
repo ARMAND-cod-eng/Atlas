@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import pytest
 from langchain_core.messages import AIMessage
-from langchain_core.runnables import RunnableConfig
 from langgraph.checkpoint.memory import MemorySaver
 
 from atlas.errors import SearchError
@@ -12,7 +11,7 @@ from atlas.graph import nodes
 from atlas.graph.builder import build_state_graph
 from atlas.graph.state import ResearcherInput, Source, Subtask
 from atlas.metrics import DEGRADED_RESEARCHER_FAILED, RunMetrics
-from tests.conftest import initial_state, make_call_structured, make_plan
+from tests.conftest import initial_state, make_call_structured, make_plan, run_config
 
 SUBTASK = Subtask(id="s0", question="what is RAG?", rationale="r")
 
@@ -140,7 +139,7 @@ async def test_a_failing_branch_still_reaches_the_synthesizer(
     monkeypatch.setattr(nodes, "call_model", _ok_model)
 
     graph = build_state_graph().compile(checkpointer=MemorySaver())
-    config: RunnableConfig = {"configurable": {"thread_id": "partial-failure"}}
+    config = run_config("partial-failure")
     result = await graph.ainvoke(initial_state(), config=config)
 
     results = result["research_results"]

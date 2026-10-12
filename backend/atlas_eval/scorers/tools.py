@@ -135,13 +135,15 @@ async def score_tools(
         )
     )
 
+    # A subtask's researcher runs at most max_critic_iterations times: once, then
+    # once more after each critic pass but the last (the last pass ends the loop).
+    # The bounds below used iterations + 1, a run the graph cannot make, which left
+    # both checks with slack that no regression short of a runaway could reach.
+    runs_allowed = max(1, settings.max_critic_iterations)
+
     # 4. Search count bounded by the configured retry ladder. More searches than
-    #    branches x max attempts means the ladder is not being respected.
-    ceiling = (
-        max(1, count)
-        * settings.max_tool_calls_per_researcher
-        * (settings.max_critic_iterations + 1)
-    )
+    #    branches x attempts x runs means the ladder is not being respected.
+    ceiling = max(1, count) * settings.max_tool_calls_per_researcher * runs_allowed
     checks.append(
         Check(
             name="search_count_within_bounds",
@@ -151,8 +153,9 @@ async def score_tools(
         )
     )
 
-    # 5. No branch re-ran more than the critic loop allows.
-    cap = settings.max_critic_iterations + 1
+    # 5. No branch re-ran more than the critic loop allows. The counts must come
+    #    from executions — see atlas_eval.score.researcher_runs.
+    cap = runs_allowed
     over = {sid: n for sid, n in researcher_run_counts.items() if n > cap}
     checks.append(
         Check(

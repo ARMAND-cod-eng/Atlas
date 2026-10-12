@@ -3,11 +3,22 @@
 from __future__ import annotations
 
 import pytest
+from langgraph.checkpoint.memory import MemorySaver
+from langgraph.types import Overwrite
 
 from atlas.graph import nodes
-from atlas.graph.state import PlannerOutput, Subtask
+from atlas.graph.builder import build_state_graph
+from atlas.graph.state import PlannerOutput, Source, Subtask
 from atlas.metrics import DEGRADED_PLANNER_FALLBACK, RunMetrics
-from tests.conftest import initial_state
+from tests.conftest import initial_state, make_call_model, make_call_structured, run_config
+
+
+def _metrics(result: dict[str, object]) -> RunMetrics:
+    """The planner opens a run, so its metrics replace the last run's rather than merge."""
+    update = result["run_metrics"]
+    assert isinstance(update, Overwrite)
+    assert isinstance(update.value, RunMetrics)
+    return update.value
 
 
 def _subtasks(count: int) -> list[Subtask]:
@@ -48,7 +59,7 @@ async def test_records_its_own_timing(monkeypatch: pytest.MonkeyPatch) -> None:
     _patch_planner(monkeypatch, PlannerOutput(subtasks=_subtasks(2)))
     result = await nodes.planner(initial_state())
 
-    metrics = result["run_metrics"]
+    metrics = _metrics(result)
     assert [t.node for t in metrics.node_timings] == [nodes.PLANNER]
 
 
@@ -97,7 +108,7 @@ async def test_degradation_is_visible_in_metrics(
     monkeypatch.setattr(nodes, "call_structured", boom)
     result = await nodes.planner(initial_state())
 
-    assert DEGRADED_PLANNER_FALLBACK in result["run_metrics"].degraded
+    assert DEGRADED_PLANNER_FALLBACK in _metrics(result).degraded
 
 
 def test_json_encoded_subtask_list_is_accepted() -> None:
@@ -134,4 +145,79 @@ async def test_empty_plan_is_passed_through(monkeypatch: pytest.MonkeyPatch) -> 
 
     assert result["subtasks"] == []
     # Not a degradation — the planner succeeded, it just found nothing to split.
-    assert DEGRADED_PLANNER_FALLBACK not in result["run_metrics"].degraded
+    assert DEGRADED_PLANNER_FALLBACK not in _metrics(result).degraded
+
+
+# --- subtask identity -----------------------------------------------------------
+
+
+async def test_subtask_ids_are_assigned_by_the_server(monkeypatch: pytest.MonkeyPatch) -> None:
+    """The model writes the questions; it does not get to choose the keys.
+
+    ``subtask_id`` keys the upsert reducer, the ``Send`` payloads and the critic's
+    verdicts. A model that repeats an id, or leaves one blank, would otherwise
+    decide which branches survive the merge.
+    """
+    _patch_planner(
+        monkeypatch,
+        PlannerOutput(
+            subtasks=[
+                Subtask(id="a", question="q0", rationale="r"),
+                Subtask(id="a", question="q1", rationale="r"),
+                Subtask(id="", question="q2", rationale="r"),
+            ]
+        ),
+    )
+    result = await nodes.planner(initial_state())
+
+    assert [(s.id, s.question) for s in result["subtasks"]] == [
+        ("s0", "q0"),
+        ("s1", "q1"),
+        ("s2", "q2"),
+    ]
+
+
+async def test_the_degraded_plan_uses_the_same_id_scheme(monkeypatch: pytest.MonkeyPatch) -> None:
+    async def boom(
+        node: str,
+        messages: object,
+        schema: type[PlannerOutput],
+        metrics: RunMetrics,
+        temperature: float | None = None,
+    ) -> PlannerOutput:
+        raise RuntimeError("nope")
+
+    monkeypatch.setattr(nodes, "call_structured", boom)
+    result = await nodes.planner(initial_state())
+
+    assert [s.id for s in result["subtasks"]] == ["s0"]
+
+
+async def test_a_repeated_model_id_does_not_lose_a_branch(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Two subtasks the model labelled "1" are still two branches with two results.
+
+    Before ids were assigned here, both results arrived under ``subtask_id="1"``
+    and the upsert reducer kept only the second: a planned branch vanished from
+    the answer with nothing in ``degraded`` to say so.
+    """
+
+    async def fake_search(query: str, max_results: int | None = None) -> list[Source]:
+        return [Source(url=f"https://ex.example/{query}", title="T", snippet="s")]
+
+    plan = PlannerOutput(
+        subtasks=[
+            Subtask(id="1", question="q0", rationale="r"),
+            Subtask(id="1", question="q1", rationale="r"),
+        ]
+    )
+    monkeypatch.setattr(nodes, "search", fake_search)
+    monkeypatch.setattr(nodes, "call_model", make_call_model("findings"))
+    monkeypatch.setattr(nodes, "call_structured", make_call_structured(plan))
+
+    graph = build_state_graph().compile(checkpointer=MemorySaver())
+    result = await graph.ainvoke(initial_state(), config=run_config("repeated-ids"))
+
+    assert sorted((r.subtask_id, r.sources[0].url) for r in result["research_results"]) == [
+        ("s0", "https://ex.example/q0"),
+        ("s1", "https://ex.example/q1"),
+    ]

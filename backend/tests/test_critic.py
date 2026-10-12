@@ -16,7 +16,6 @@ from __future__ import annotations
 
 import pytest
 from langchain_core.messages import AIMessage
-from langchain_core.runnables import RunnableConfig
 from langgraph.checkpoint.memory import MemorySaver
 from langgraph.graph import END
 from pydantic import BaseModel
@@ -36,10 +35,17 @@ from atlas.metrics import (
     DEGRADED_CRITIC_MAX_ITERATIONS,
     DEGRADED_CRITIC_NOT_ACTIONABLE,
     DEGRADED_CRITIC_UNAVAILABLE,
+    DEGRADED_CRITIC_UNKNOWN_SUBTASK,
     DEGRADED_SYNTHESIS_TRUNCATED,
     RunMetrics,
 )
-from tests.conftest import initial_state, make_call_model, make_call_structured, make_plan
+from tests.conftest import (
+    initial_state,
+    make_call_model,
+    make_call_structured,
+    make_plan,
+    run_config,
+)
 
 BRANCHES = 3
 SNIPPET = "the 2024 benchmark reports 91.4 percent recall"
@@ -80,8 +86,7 @@ def _with_verdicts(monkeypatch: pytest.MonkeyPatch, verdicts: list[CriticVerdict
 
 async def _run(thread: str) -> dict[str, object]:
     graph = build_state_graph().compile(checkpointer=MemorySaver())
-    config: RunnableConfig = {"configurable": {"thread_id": thread}}
-    return dict(await graph.ainvoke(initial_state(), config=config))
+    return dict(await graph.ainvoke(initial_state(), config=run_config(thread)))
 
 
 def _calls(result: dict[str, object], node: str) -> int:
@@ -315,6 +320,55 @@ async def test_revise_with_nothing_actionable_exits_and_says_so(
     metrics = result["run_metrics"]
     assert isinstance(metrics, RunMetrics)
     assert metrics.degraded == [DEGRADED_CRITIC_NOT_ACTIONABLE]
+
+
+async def test_a_revise_naming_an_unknown_subtask_is_reported(
+    graph_fakes: None, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The critic faulted "subtask-1". The plan's ids are s0..s2.
+
+    This used to count as actionable — the verdict named *a* subtask — so the
+    critic recorded nothing, routing found nothing to send, and the run ended on
+    an unaddressed "revise" with ``degraded == []``: indistinguishable, from the
+    client, from a run whose concerns had been dealt with.
+    """
+    _with_verdicts(monkeypatch, [_revise("subtask-1")])
+    result = await _run("critic-unknown-id")
+
+    assert result["iteration"] == 1
+    assert _calls(result, nodes.RESEARCHER) == BRANCHES
+
+    metrics = result["run_metrics"]
+    assert isinstance(metrics, RunMetrics)
+    # The round records what routing acted on, which is nothing.
+    assert [(r.iteration, r.overall, r.faulted_subtask_ids) for r in metrics.critic_rounds] == [
+        (1, "revise", [])
+    ]
+    assert metrics.degraded == [DEGRADED_CRITIC_UNKNOWN_SUBTASK, DEGRADED_CRITIC_NOT_ACTIONABLE]
+
+
+async def test_an_unknown_id_does_not_stop_the_known_one_being_retried(
+    graph_fakes: None, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    mixed = CriticVerdict(
+        overall="revise",
+        per_subtask=[
+            SubtaskVerdict(subtask_id="s1", verdict="revise", reason="r", guidance="g"),
+            SubtaskVerdict(subtask_id="nope", verdict="revise", reason="r", guidance="g"),
+        ],
+    )
+    _with_verdicts(monkeypatch, [mixed, _accept()])
+    result = await _run("critic-mixed-ids")
+
+    assert _calls(result, nodes.RESEARCHER) == BRANCHES + 1
+
+    metrics = result["run_metrics"]
+    assert isinstance(metrics, RunMetrics)
+    assert [(r.iteration, r.overall, r.faulted_subtask_ids) for r in metrics.critic_rounds] == [
+        (1, "revise", ["s1"]),
+        (2, "accept", []),
+    ]
+    assert metrics.degraded == [DEGRADED_CRITIC_UNKNOWN_SUBTASK]
 
 
 async def test_synthesis_only_revision_re_writes_without_re_searching(

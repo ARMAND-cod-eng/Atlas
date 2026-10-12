@@ -20,13 +20,18 @@ import asyncio
 import time
 
 import pytest
-from langchain_core.runnables import RunnableConfig
 from langgraph.checkpoint.memory import MemorySaver
 
 from atlas.graph import nodes
 from atlas.graph.builder import build_state_graph
 from atlas.graph.state import Source
-from tests.conftest import initial_state, make_call_model, make_call_structured, make_plan
+from tests.conftest import (
+    initial_state,
+    make_call_model,
+    make_call_structured,
+    make_plan,
+    run_config,
+)
 
 BRANCHES = 4
 DELAY_S = 0.2
@@ -51,7 +56,7 @@ def slow_parallel_graph(monkeypatch: pytest.MonkeyPatch) -> None:
 
 async def test_researchers_run_concurrently(slow_parallel_graph: None) -> None:
     graph = build_state_graph().compile(checkpointer=MemorySaver())
-    config: RunnableConfig = {"configurable": {"thread_id": "concurrency"}}
+    config = run_config("concurrency")
 
     started = time.perf_counter()
     result = await graph.ainvoke(initial_state(), config=config)
@@ -77,7 +82,7 @@ async def test_timing_metrics_show_overlap(slow_parallel_graph: None) -> None:
     verification checks from the client via the metrics in the response.
     """
     graph = build_state_graph().compile(checkpointer=MemorySaver())
-    config: RunnableConfig = {"configurable": {"thread_id": "timings"}}
+    config = run_config("timings")
 
     started = time.perf_counter()
     result = await graph.ainvoke(initial_state(), config=config)

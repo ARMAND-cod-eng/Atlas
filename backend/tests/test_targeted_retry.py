@@ -24,7 +24,6 @@ from collections import Counter
 
 import pytest
 from langchain_core.messages import AIMessage
-from langchain_core.runnables import RunnableConfig
 from langgraph.checkpoint.memory import MemorySaver
 from langgraph.types import Send
 
@@ -40,7 +39,7 @@ from atlas.graph.state import (
     merge_research_results,
 )
 from atlas.metrics import RunMetrics
-from tests.conftest import initial_state, make_call_structured, make_plan
+from tests.conftest import initial_state, make_call_structured, make_plan, run_config
 
 BRANCHES = 5
 FAULTED = "s3"
@@ -246,7 +245,7 @@ def retry_graph(monkeypatch: pytest.MonkeyPatch) -> list[tuple[str, str | None]]
 
 async def _run(thread: str) -> dict[str, object]:
     graph = build_state_graph().compile(checkpointer=MemorySaver())
-    config: RunnableConfig = {"configurable": {"thread_id": thread}}
+    config = run_config(thread)
     return dict(await graph.ainvoke(initial_state(), config=config))
 
 
