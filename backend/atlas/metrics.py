@@ -55,6 +55,10 @@ DEGRADED_CRITIC_UNKNOWN_SUBTASK = "critic_unknown_subtask"
 # the fallback was asked instead. A primary that keeps doing this looks, from the
 # answers alone, exactly like a healthy one.
 DEGRADED_STRUCTURED_OUTPUT_FALLBACK = "structured_output_fallback"
+# The run's record could not be written to the durable store (atlas.store). The
+# answer is unaffected; what is missing is the trail that says it was produced —
+# and a missing audit record looks, from the answer, like nothing at all.
+DEGRADED_AUDIT_INCOMPLETE = "audit_incomplete"
 
 
 class LLMCall(BaseModel):

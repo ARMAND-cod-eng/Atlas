@@ -27,16 +27,18 @@ from arq.worker import Worker, create_worker
 
 from atlas import eventlog
 from atlas.config import get_settings
-from atlas.db.session import dispose_engine
+from atlas.db.session import dispose_engine, get_engine
 from atlas.graph.builder import build_graph
-from atlas.runner import execute_run
+from atlas.runner import execute_revision, execute_run
 from atlas.runtime import configure_logging
+from atlas.store import PostgresRunStore
 
 logger = logging.getLogger(__name__)
 
 # The job name the API enqueues. A constant so a rename cannot silently
 # disconnect the producer from the consumer.
 RUN_RESEARCH = "run_research"
+RUN_REVISION = "run_revision"
 
 # Ceiling on a single run. A run is bounded by MAX_CRITIC_ITERATIONS and the token
 # budget, but a hung provider connection is not. Generous against the 67s
@@ -55,10 +57,41 @@ def redis_settings() -> RedisSettings:
 
 
 async def run_research(
-    ctx: dict[str, Any], run_id: str, query: str, thread_id: str
+    ctx: dict[str, Any],
+    run_id: str,
+    query: str,
+    thread_id: str,
+    parent_run_id: str | None = None,
 ) -> dict[str, Any]:
     """Execute one research run, streaming its events to the log."""
-    return await execute_run(run_id, query, thread_id, ctx["graph"].graph)
+    return await execute_run(
+        run_id,
+        query,
+        thread_id,
+        ctx["graph"].graph,
+        parent_run_id=parent_run_id,
+        store=ctx["store"],
+    )
+
+
+async def run_revision(
+    ctx: dict[str, Any],
+    run_id: str,
+    thread_id: str,
+    parent_run_id: str,
+    subtask_id: str,
+    question: str,
+) -> dict[str, Any]:
+    """Re-run one edited branch of a finished run. See atlas.revision."""
+    return await execute_revision(
+        run_id,
+        thread_id,
+        ctx["graph"].graph,
+        parent_run_id=parent_run_id,
+        subtask_id=subtask_id,
+        question=question,
+        store=ctx["store"],
+    )
 
 
 async def startup(ctx: dict[str, Any]) -> None:
@@ -67,6 +100,12 @@ async def startup(ctx: dict[str, Any]) -> None:
     configure_logging(settings.log_level)
     logger.info("worker starting", extra={"primary_model": settings.primary_model})
     ctx["graph"] = await build_graph()
+    # The worker owns the schema, as it owns the checkpointer's: the API only
+    # reads and writes rows, and two processes racing CREATE TABLE at boot can
+    # collide on Postgres's own catalog.
+    store = PostgresRunStore(get_engine())
+    await store.setup()
+    ctx["store"] = store
     logger.info("worker ready")
 
 
@@ -104,7 +143,7 @@ class WorkerSettings(WorkerSettingsBase):
 
     # A tuple, not a list: arq only reads it, and a mutable class attribute is a
     # shared-state footgun the linter is right to flag.
-    functions = (run_research,)
+    functions = (run_research, run_revision)
     on_startup = staticmethod(startup)
     on_shutdown = staticmethod(shutdown)
 

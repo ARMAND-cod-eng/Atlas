@@ -1,9 +1,8 @@
 """Async SQLAlchemy engine and session factory.
 
-The checkpointer owns its own psycopg pool for graph state and Atlas has no
-tables of its own yet, so the only query through this engine today is the API's
-``/health`` probe. It exists so that a retrieval layer over pgvector, if one is
-built, has a typed, correctly-configured entry point to build on.
+The checkpointer owns its own psycopg pool for graph state. This engine carries
+everything else: the durable run record (``atlas.store``) and the API's
+``/health`` probe.
 
 Engine and factory are created lazily rather than at import so that importing
 ``atlas.db.session`` never requires a reachable database — which keeps the test

@@ -24,6 +24,7 @@ plausible answer built on someone else's state if it leaked:
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from typing import Any
 
 from langchain_core.messages import BaseMessage, HumanMessage, RemoveMessage
@@ -50,7 +51,7 @@ class UnknownSubtaskError(RevisionError):
     """The edit names a branch the parent run did not have."""
 
 
-async def _final_checkpoint(graph: Graph, thread_id: str, run_id: str) -> RunnableConfig:
+async def final_checkpoint(graph: Graph, thread_id: str, run_id: str) -> RunnableConfig:
     """The last checkpoint a run wrote on its thread.
 
     LangGraph copies the run's ``configurable`` keys into each checkpoint's
@@ -98,7 +99,7 @@ async def fork_for_revision(
     Resume with ``graph.astream(None, config)``: the edited branch is researched
     first, then the run continues to the synthesizer and the critic.
     """
-    parent = await _final_checkpoint(graph, thread_id, parent_run_id)
+    parent = await final_checkpoint(graph, thread_id, parent_run_id)
     snapshot = await graph.aget_state(parent)
     if snapshot.next:
         raise ParentRunError(f"run {parent_run_id!r} did not finish, so it cannot be revised")
@@ -137,3 +138,36 @@ async def fork_for_revision(
         as_node=HUMAN_EDIT,
     )
     return {"configurable": {**forked["configurable"], "run_id": run_id}}
+
+
+def revision_started_payload(values: Mapping[str, Any]) -> dict[str, Any]:
+    """What a client needs to draw a revision before its first branch reports.
+
+    Every branch, in plan order, marked edited or carried over. Carried branches
+    send no events in the revision's stream, so their sources travel here.
+    """
+    revision: Revision = values["revision"]
+    results = {result.subtask_id: result for result in values["research_results"]}
+    branches: list[dict[str, Any]] = []
+    for subtask in values["subtasks"]:
+        edited = subtask.id == revision.subtask_id
+        carried = None if edited else results.get(subtask.id)
+        branches.append(
+            {
+                "subtask_id": subtask.id,
+                "question": subtask.question,
+                "origin": "edited" if edited else "carried",
+                "sources": [
+                    {"url": source.url, "title": source.title}
+                    for source in (carried.sources if carried is not None else [])
+                ],
+                "error": carried.error if carried is not None else None,
+            }
+        )
+    return {
+        "parent_run_id": revision.parent_run_id,
+        "subtask_id": revision.subtask_id,
+        "before": revision.before,
+        "after": revision.after,
+        "branches": branches,
+    }

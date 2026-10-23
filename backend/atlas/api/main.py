@@ -29,9 +29,10 @@ from atlas.api.routes import router
 from atlas.api.streams import router as streams_router
 from atlas.api.topology import router as topology_router
 from atlas.config import get_settings
-from atlas.db.session import dispose_engine
+from atlas.db.session import dispose_engine, get_engine
 from atlas.errors import ProviderError, SearchError
 from atlas.runtime import JsonFormatter, configure_logging, loop_factory
+from atlas.store import PostgresRunStore
 from atlas.worker import redis_settings
 
 # Re-exported for `--loop atlas.api.main:loop_factory` and for tests that import
@@ -57,6 +58,8 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
 
     app.state.redis = redis
     app.state.arq = arq
+    # Reads and writes rows only; the worker creates the table. See atlas.store.
+    app.state.store = PostgresRunStore(get_engine())
     log.info("startup complete")
 
     try:

@@ -11,6 +11,7 @@ can substitute them without standing up Postgres or Redis.
 from __future__ import annotations
 
 import logging
+from datetime import datetime
 from typing import Any, Literal
 from uuid import uuid4
 
@@ -24,8 +25,10 @@ from sqlalchemy import text
 from atlas import eventlog
 from atlas.db.session import get_engine
 from atlas.events import RUN_FAILED
+from atlas.graph.state import Revision
 from atlas.result import QueryResponse
-from atlas.worker import QUERY_WAIT_SECONDS, RUN_RESEARCH
+from atlas.store import RunKind, RunRecord, RunStatusName, RunStore
+from atlas.worker import QUERY_WAIT_SECONDS, RUN_RESEARCH, RUN_REVISION
 
 logger = logging.getLogger(__name__)
 
@@ -45,6 +48,41 @@ class QueryRequest(BaseModel):
             "generated id is returned so the next call can resume this thread."
         ),
     )
+    parent_run_id: str | None = Field(
+        default=None,
+        description=(
+            "Continue from this run's answer rather than the thread's latest. "
+            "After a revision the latest is the revision's; a follow-up asked while "
+            "reading the original means the original. Implies its thread."
+        ),
+    )
+
+
+class RevisionRequest(BaseModel):
+    """Rewrite one branch's question in a finished run, and re-run that branch."""
+
+    subtask_id: str = Field(min_length=1, max_length=64)
+    question: str = Field(min_length=1, max_length=2000)
+
+
+class RunSummary(BaseModel):
+    """One run on a thread, as the versions list shows it."""
+
+    run_id: str
+    kind: RunKind
+    query: str
+    parent_run_id: str | None
+    revision: Revision | None
+    status: RunStatusName
+    created_at: datetime
+    finished_at: datetime | None
+
+
+class ThreadVersions(BaseModel):
+    """Every run on a thread, oldest first: questions, follow-ups and revisions."""
+
+    thread_id: str
+    runs: list[RunSummary]
 
 
 class RunAccepted(BaseModel):
@@ -125,11 +163,32 @@ async def health(request: Request) -> HealthResponse:
     )
 
 
-async def enqueue_run(request: Request, payload: QueryRequest) -> tuple[Job, str, str]:
-    """Put one run on the queue. Returns ``(job, run_id, thread_id)``."""
+def _store(request: Request) -> RunStore:
+    """The durable run record. Set at startup (atlas.api.main), or by a test."""
+    store: RunStore | None = getattr(request.app.state, "store", None)
+    if store is None:
+        raise HTTPException(status_code=503, detail="run history is unavailable")
+    return store
+
+
+async def _finished_run(request: Request, run_id: str, purpose: str) -> RunRecord:
+    """A run that completed, for a revision or a follow-up to build on."""
+    run = await _store(request).get(run_id)
+    if run is None:
+        raise HTTPException(status_code=404, detail=f"unknown run: {run_id}")
+    if run.status == "failed":
+        raise HTTPException(
+            status_code=409, detail=f"run {run_id} failed, so it has no answer to {purpose}"
+        )
+    if run.status != "completed":
+        raise HTTPException(status_code=409, detail=f"run {run_id} is still running")
+    return run
+
+
+async def _enqueue(request: Request, thread_id: str, function: str, *args: str) -> tuple[Job, str]:
+    """Claim the thread, then queue one job for a fresh run. Returns ``(job, run_id)``."""
     arq: ArqRedis = request.app.state.arq
     run_id = str(uuid4())
-    thread_id = payload.thread_id or str(uuid4())
 
     # Claimed before anything is queued or spent; released by the runner when the
     # run ends. See eventlog.claim_thread for why two runs on one thread is a bug.
@@ -146,7 +205,7 @@ async def enqueue_run(request: Request, payload: QueryRequest) -> tuple[Job, str
         await eventlog.register(run_id)
         # _job_id ties the arq job to the run, so the job's result and the run's
         # event stream are addressable by the same identifier.
-        job = await arq.enqueue_job(RUN_RESEARCH, run_id, payload.query, thread_id, _job_id=run_id)
+        job = await arq.enqueue_job(function, run_id, *args, _job_id=run_id)
     except BaseException:
         await eventlog.release_thread(thread_id, run_id)
         raise
@@ -158,7 +217,27 @@ async def enqueue_run(request: Request, payload: QueryRequest) -> tuple[Job, str
         await eventlog.release_thread(thread_id, run_id)
         logger.error("enqueue returned no job", extra={"run_id": run_id})
         raise HTTPException(status_code=503, detail="could not enqueue the run")
-    logger.info("run enqueued", extra={"run_id": run_id, "thread_id": thread_id})
+    logger.info("run enqueued", extra={"run_id": run_id, "thread_id": thread_id, "job": function})
+    return job, run_id
+
+
+async def enqueue_run(request: Request, payload: QueryRequest) -> tuple[Job, str, str]:
+    """Put one question on the queue. Returns ``(job, run_id, thread_id)``."""
+    thread_id = payload.thread_id
+    parent_run_id: tuple[str, ...] = ()
+    if payload.parent_run_id is not None:
+        parent = await _finished_run(request, payload.parent_run_id, "continue from")
+        if thread_id is not None and thread_id != parent.thread_id:
+            raise HTTPException(
+                status_code=422,
+                detail=f"run {parent.run_id} belongs to thread {parent.thread_id}, not {thread_id}",
+            )
+        thread_id = parent.thread_id
+        parent_run_id = (parent.run_id,)
+    thread_id = thread_id or str(uuid4())
+    job, run_id = await _enqueue(
+        request, thread_id, RUN_RESEARCH, payload.query, thread_id, *parent_run_id
+    )
     return job, run_id, thread_id
 
 
@@ -174,8 +253,63 @@ async def start_run(request: Request, payload: QueryRequest) -> RunAccepted:
     return RunAccepted(run_id=run_id, thread_id=thread_id, events_url=f"/runs/{run_id}/events")
 
 
+@router.post("/runs/{run_id}/revisions", response_model=RunAccepted, status_code=202)
+async def revise_run(request: Request, run_id: str, payload: RevisionRequest) -> RunAccepted:
+    """Rewrite one branch's question in a finished run, and re-run that branch.
+
+    The revision is a new run on the same thread. Every other branch's research
+    is carried over from the parent, so only the edited branch searches again;
+    the answer is then re-written and reviewed. See atlas.revision.
+    """
+    parent = await _finished_run(request, run_id, "revise")
+    questions = {
+        str(subtask["id"]): str(subtask["question"])
+        for subtask in (parent.result or {}).get("subtasks", [])
+    }
+    if payload.subtask_id not in questions:
+        known = ", ".join(questions) or "none"
+        raise HTTPException(
+            status_code=422,
+            detail=f"run {run_id} has no subtask {payload.subtask_id} (it has: {known})",
+        )
+    question = payload.question.strip()
+    if not question:
+        raise HTTPException(status_code=422, detail="the edited question is empty")
+    if question == questions[payload.subtask_id].strip():
+        # A re-run on the same question is a retry: a search and three model
+        # calls to learn nothing anyone asked for.
+        raise HTTPException(
+            status_code=422, detail=f"the question for {payload.subtask_id} is unchanged"
+        )
+
+    _job, revision_id = await _enqueue(
+        request,
+        parent.thread_id,
+        RUN_REVISION,
+        parent.thread_id,
+        parent.run_id,
+        payload.subtask_id,
+        question,
+    )
+    return RunAccepted(
+        run_id=revision_id, thread_id=parent.thread_id, events_url=f"/runs/{revision_id}/events"
+    )
+
+
+@router.get("/threads/{thread_id}/versions", response_model=ThreadVersions)
+async def thread_versions(request: Request, thread_id: str) -> ThreadVersions:
+    """Every run on a thread, with what each revision changed."""
+    runs = await _store(request).thread(thread_id)
+    if not runs:
+        raise HTTPException(status_code=404, detail=f"unknown thread: {thread_id}")
+    return ThreadVersions(
+        thread_id=thread_id,
+        runs=[RunSummary.model_validate(run.model_dump()) for run in runs],
+    )
+
+
 @router.get("/runs/{run_id}", response_model=RunStatus)
-async def get_run(run_id: str) -> RunStatus:
+async def get_run(request: Request, run_id: str) -> RunStatus:
     """The full result of a run.
 
     ``run_completed`` carries a summary only, so this is where a client fetches
@@ -203,6 +337,19 @@ async def get_run(run_id: str) -> RunStatus:
 
     if await eventlog.exists(run_id):
         return RunStatus(run_id=run_id, status="running")
+
+    # Redis keeps a run for an hour. The record keeps it for as long as its
+    # thread: a revision's parent, opened from the versions list a day later,
+    # is still a run.
+    store: RunStore | None = getattr(request.app.state, "store", None)
+    record = await store.get(run_id) if store is not None else None
+    if record is not None:
+        return RunStatus(
+            run_id=run_id,
+            status=record.status,
+            result=QueryResponse(**record.result) if record.result is not None else None,
+            error=record.error,
+        )
     raise HTTPException(status_code=404, detail=f"unknown run: {run_id}")
 
 

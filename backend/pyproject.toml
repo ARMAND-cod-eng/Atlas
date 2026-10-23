@@ -80,3 +80,8 @@ ignore_missing_imports = true
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
 testpaths = ["tests"]
+# Tests that need a real Postgres (ATLAS_TEST_DATABASE_URL). Deselected by
+# default and run in their own CI step with a Postgres service: deselection is
+# visible in the summary, where a skip on a missing database would read as a pass.
+markers = ["postgres: needs a real Postgres at ATLAS_TEST_DATABASE_URL"]
+addopts = "-m 'not postgres'"

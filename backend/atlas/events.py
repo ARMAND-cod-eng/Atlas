@@ -41,6 +41,9 @@ NODE_FAILED = "node_failed"
 FAN_OUT = "fan_out"
 ITERATION_STARTED = "iteration_started"
 CRITIC_VERDICT = "critic_verdict"
+# A run that revises another: which branch was edited, and which were carried
+# over. Those send no events of their own — they did their work in the parent.
+REVISION_STARTED = "revision_started"
 RUN_COMPLETED = "run_completed"
 RUN_FAILED = "run_failed"
 

@@ -39,6 +39,40 @@ jobs:
       - name: dataset validates and the provenance claim is honest
         run: uv run python -m atlas_eval claim
 
+  # The tests marked `postgres`, against a real one: the durable run store's SQL
+  # cannot be checked by the in-memory double it shares a contract with. They are
+  # deselected by default (pyproject.toml), so this job runs them explicitly.
+  backend-postgres:
+    name: backend — Postgres store
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend
+    services:
+      postgres:
+        image: pgvector/pgvector:pg16
+        env:
+          POSTGRES_USER: atlas
+          POSTGRES_PASSWORD: atlas
+          POSTGRES_DB: atlas
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U atlas"
+          --health-interval 2s
+          --health-timeout 5s
+          --health-retries 15
+    env:
+      ATLAS_TEST_DATABASE_URL: postgresql+psycopg://atlas:atlas@localhost:5432/atlas
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+      - run: uv sync --frozen
+      - name: pytest -m postgres
+        run: uv run pytest -q -m postgres
+
   frontend:
     name: frontend — types, lint, tests
     runs-on: ubuntu-latest

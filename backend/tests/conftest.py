@@ -19,6 +19,21 @@ from atlas import budget, eventlog
 from atlas.config import get_settings
 from atlas.graph.state import AtlasState, CriticVerdict, PlannerOutput, Subtask
 from atlas.metrics import RunMetrics
+from atlas.runtime import loop_factory
+
+
+def pytest_asyncio_loop_factories(
+    config: pytest.Config, item: pytest.Item
+) -> dict[str, Callable[[], asyncio.AbstractEventLoop]]:
+    """Run every async test on the event loop production runs on.
+
+    On Windows that is not asyncio's default: psycopg's async driver refuses the
+    ProactorEventLoop, so the API and worker build a SelectorEventLoop (see
+    atlas.runtime.loop_factory). Tests that reach a real Postgres need the same,
+    and the rest are better for matching production than for not.
+    """
+    return {"selector": loop_factory}
+
 
 FAKE_ENV: dict[str, str] = {
     "ANTHROPIC_API_KEY": "sk-ant-test-not-a-real-key",
@@ -219,28 +234,32 @@ class FakeArq:
     Inline rather than deferred keeps the API tests deterministic: by the time
     ``enqueue_job`` returns, the run has happened and its events are in the log.
     The queue itself is arq's to test, not ours.
+
+    ``handler`` runs research jobs; ``handlers`` maps any other job name to its
+    own. Each call is recorded in ``calls`` as ``(function, *args)``.
     """
 
-    def __init__(self, handler: Callable[[str, str, str], Coroutine[Any, Any, Any]]) -> None:
+    def __init__(
+        self,
+        handler: Callable[..., Coroutine[Any, Any, Any]],
+        handlers: dict[str, Callable[..., Coroutine[Any, Any, Any]]] | None = None,
+    ) -> None:
         self.handler = handler
-        self.calls: list[tuple[str, str, str, str]] = []
+        self.handlers = handlers or {}
+        self.calls: list[tuple[object, ...]] = []
 
     async def enqueue_job(
-        self,
-        function: str,
-        run_id: str,
-        query: str,
-        thread_id: str,
-        _job_id: str | None = None,
+        self, function: str, *args: object, _job_id: str | None = None
     ) -> FakeJob:
-        self.calls.append((function, run_id, query, thread_id))
+        self.calls.append((function, *args))
+        handler = self.handlers.get(function, self.handler)
         try:
-            payload = await self.handler(run_id, query, thread_id)
+            payload = await handler(*args)
         except BaseException as exc:
             # Mirrors arq, which stores a failed job's exception rather than
             # letting it escape the enqueue call.
-            return FakeJob(run_id, exc)
-        return FakeJob(run_id, payload)
+            return FakeJob(str(_job_id), exc)
+        return FakeJob(str(_job_id), payload)
 
 
 # The two fake signatures mirror atlas.models exactly. They are spelled out rather
