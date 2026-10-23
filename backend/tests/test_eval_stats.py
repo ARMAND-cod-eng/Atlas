@@ -9,15 +9,20 @@ against themselves.
 
 from __future__ import annotations
 
+import json
 import math
 
 import pytest
 
 from atlas_eval.calibration import KAPPA_THRESHOLD, Agreement, CalibrationReport, agreement
+from atlas_eval.dataset import DATA_DIR
 from atlas_eval.gate import (
     CATEGORIES,
+    THRESHOLDS_MEASURED_ON,
+    THRESHOLDS_PP,
     Baseline,
     CategoryDelta,
+    GateResult,
     NoiseEstimate,
     compare,
     noise_floor,
@@ -202,14 +207,15 @@ def test_a_real_regression_trips_the_gate() -> None:
 
     assert result.passed is False
     assert math.isclose(grounding.delta_pp, -10.0, abs_tol=1e-9)
-    assert grounding.trips(2.0) is True
+    assert grounding.threshold_pp == 4.0
+    assert grounding.trips() is True
     assert any("grounding regressed" in reason for reason in result.reasons)
 
 
 def test_noise_below_significance_does_not_trip_the_gate() -> None:
     """The condition that stops the tripwire firing on sampling noise.
 
-    A -3pp point delta is past the 2pp threshold, but it is driven by a handful
+    A -3pp point delta is past a 2pp threshold, but it is driven by a handful
     of items moving in both directions, so the CI spans zero and the gate holds.
     """
     base = _baseline(completion=0.80)
@@ -217,12 +223,12 @@ def test_noise_below_significance_does_not_trip_the_gate() -> None:
     noisy = [0.80] * 40 + [0.30] * 5 + [1.00] * 5  # mean 0.77, wide spread
     current = {"completion": {f"q{i}": noisy[i] for i in range(50)}}
 
-    result = compare(base, current, baseline_items)
+    result = compare(base, current, baseline_items, thresholds=dict.fromkeys(CATEGORIES, 2.0))
     completion = next(d for d in result.deltas if d.category == "completion")
 
     assert completion.delta_pp < -2.0
     assert completion.significant is False
-    assert completion.trips(2.0) is False
+    assert completion.trips() is False
     assert result.passed is True
 
 
@@ -236,11 +242,82 @@ def test_the_threshold_boundary_is_exact() -> None:
         ci_low_pp=-3.0,
         ci_high_pp=-1.0,
         paired_sd_pp=0.5,
+        threshold_pp=2.0,
     )
     past_threshold = at_threshold.model_copy(update={"delta_pp": -2.01})
 
-    assert at_threshold.trips(2.0) is False
-    assert past_threshold.trips(2.0) is True
+    assert at_threshold.trips() is False
+    assert past_threshold.trips() is True
+
+
+def _shifted(base: float, delta: float) -> dict[str, float]:
+    """50 items, every one moved by ``delta``: a significant shift of exactly ``delta``."""
+    return {f"q{i}": base + delta for i in range(50)}
+
+
+def test_each_category_is_gated_at_its_own_noise_floor() -> None:
+    """The same -4.5pp, consistent across every item and so significant, is
+    noise for completion (floor 5pp) and a regression for grounding (floor 4pp).
+    One threshold for all three was either too tight for completion's judge
+    wobble or too loose for tool use, which barely moves between reruns."""
+    base = _baseline(completion=0.80, grounding=0.80, tools=0.80)
+    baseline_items = {c: _shifted(0.80, 0.0) for c in CATEGORIES}
+    current = {
+        "completion": _shifted(0.80, -0.045),
+        "grounding": _shifted(0.80, -0.045),
+        "tools": _shifted(0.80, 0.0),
+    }
+
+    result = compare(base, current, baseline_items)
+    by_category = {d.category: d for d in result.deltas}
+
+    assert {c: d.threshold_pp for c, d in by_category.items()} == {
+        "completion": 5.0,
+        "grounding": 4.0,
+        "tools": 3.0,
+    }
+    assert by_category["completion"].significant is True
+    assert by_category["completion"].trips() is False
+    assert by_category["grounding"].trips() is True
+    assert result.passed is False
+
+
+def test_one_threshold_can_still_be_forced_for_every_category() -> None:
+    """The control for the test above: forced to 2pp, completion trips too."""
+    base = _baseline(completion=0.80)
+    baseline_items = {"completion": _shifted(0.80, 0.0)}
+    current = {"completion": _shifted(0.80, -0.045)}
+
+    result = compare(base, current, baseline_items, thresholds=dict.fromkeys(CATEGORIES, 2.0))
+
+    assert [(d.category, d.threshold_pp, d.trips()) for d in result.deltas] == [
+        ("completion", 2.0, True)
+    ]
+    assert result.passed is False
+
+
+def test_the_report_names_each_category_s_threshold() -> None:
+    delta = CategoryDelta(
+        category="grounding",
+        baseline=0.955,
+        current=0.943,
+        delta_pp=-1.2,
+        ci_low_pp=-3.5,
+        ci_high_pp=1.1,
+        paired_sd_pp=8.58,
+        threshold_pp=4.0,
+    )
+
+    report = GateResult(passed=True, deltas=[delta]).report()
+
+    assert report.splitlines() == [
+        "gate: PASS",
+        "  ok   grounding   0.955 -> 0.943  delta -1.20pp  95% CI [-3.50, +1.10]pp  threshold 4pp",
+    ]
+
+
+def test_the_shipped_thresholds_cover_all_three_categories() -> None:
+    assert set(THRESHOLDS_PP) == set(CATEGORIES)
 
 
 def test_an_improvement_never_trips() -> None:
@@ -393,3 +470,17 @@ def test_a_run_with_no_scores_fails_the_gate() -> None:
         "grounding: the baseline has scores, this run has none",
         "tools: the baseline has scores, this run has none",
     ]
+
+
+def test_the_shipped_thresholds_are_the_measured_noise_floor() -> None:
+    """Each threshold is what `atlas_eval noise` measured on the committed reruns,
+    rounded up — not a number typed in and left behind when the runs change.
+    Below it, the gate would claim to tell a regression from a bad roll."""
+    runs = [
+        json.loads((DATA_DIR / "runs" / f"{name}.json").read_text(encoding="utf-8"))["per_item"]
+        for name in THRESHOLDS_MEASURED_ON
+    ]
+
+    measured = {e.category: float(math.ceil(e.detectable_pp)) for e in noise_floor(runs)}
+
+    assert measured == THRESHOLDS_PP

@@ -310,12 +310,21 @@ def test_noise_reports_each_category_and_what_binds(
     monkeypatch.setattr(cli, "RUNS_DIR", runs)
 
     code = cli.cmd_noise(cli.build_parser().parse_args(["noise", "--runs", "baseline", "rerun1"]))
+    forced = cli.cmd_noise(
+        cli.build_parser().parse_args(["noise", "--runs", "baseline", "rerun1", "--threshold", "2"])
+    )
 
-    assert code == 0
+    lines = capsys.readouterr().out.splitlines()
+    assert (code, forced) == (0, 0)
+    # Completion's own threshold is 5pp, so 4.00pp is caught; a forced 2pp is not.
     assert (
         "  completion  n=50  paired SD 10.10pp  drift 0.00pp  detectable >= 4.00pp"
-        "  -> raise the threshold to at least 5pp"
-    ) in capsys.readouterr().out.splitlines()
+        "  threshold 5pp  -> the threshold binds"
+    ) in lines
+    assert (
+        "  completion  n=50  paired SD 10.10pp  drift 0.00pp  detectable >= 4.00pp"
+        "  threshold 2pp  -> raise the threshold to at least 5pp"
+    ) in lines
 
 
 def test_noise_refuses_to_mix_variants(

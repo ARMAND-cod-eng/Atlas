@@ -2,8 +2,8 @@
 # why it is not triggered by pushes to main (the free checks live in ci.yml).
 #
 # The gap this is shaped around, stated rather than left implicit: a 12-item smoke
-# run CANNOT gate on completion or grounding. SE at n=12 is 11.55pp, so a 2pp
-# threshold there would be pure noise. The smoke therefore gates only on what has
+# run CANNOT gate on completion or grounding. SE at n=12 is 11.55pp, so any
+# threshold of a few pp there would be pure noise. The smoke therefore gates only on what has
 # near-zero variance: an item that crashes fails the job.
 #
 # Score regressions are caught by the full 50-item run, gated against the

@@ -19,8 +19,10 @@ The gate fires when **both** hold:
 * the point delta is worse than the threshold, and
 * the 95% paired bootstrap CI on that delta excludes zero
 
-The first is the gate's stated contract: it blocks on a category regression of
-more than 2pp. The second is what stops it firing on noise.
+The first is the gate's stated contract: it blocks on a category regression
+larger than that category's threshold — the smallest regression its measured
+run-to-run noise lets a 50-item run detect. The second is what stops it firing on
+noise.
 
 And it **refuses to pass** a category it cannot evaluate. Without per-item
 baseline scores there is no paired CI, and "no CI" used to mean "not
@@ -47,10 +49,20 @@ BASELINE_PATH = DATA_DIR / "baseline.json"
 
 CATEGORIES = ("completion", "grounding", "tools")
 
-# Percentage points. Provisional until the measured paired SD says otherwise —
-# see the README. If the measured SD exceeds this, the honest move is to raise it
-# and say so, not to keep a number the data contradicts.
-DEFAULT_THRESHOLD_PP = 2.0
+# Percentage points, per category: the smallest regression each category's
+# run-to-run noise lets the gate detect (80% power, two-sided 5%), rounded up.
+# Measured by `atlas_eval noise` on two runs of identical code, 50 items each:
+#
+#   completion  paired SD 10.41pp  detectable >= 4.13pp
+#   grounding   paired SD  8.58pp  detectable >= 3.40pp
+#   tools       paired SD  6.70pp  detectable >= 2.65pp
+#
+# The gate started at a provisional 2pp for all three. That sat under every
+# floor: a "regression" between 2pp and the floor was a coin toss the gate
+# claimed to call. A test recomputes these from the runs named below, so they
+# cannot drift from the measurement that justifies them.
+THRESHOLDS_PP: dict[str, float] = {"completion": 5.0, "grounding": 4.0, "tools": 3.0}
+THRESHOLDS_MEASURED_ON = ("baseline", "rerun1")
 
 BOOTSTRAP_SAMPLES = 10_000
 BOOTSTRAP_SEED = 20260810
@@ -77,31 +89,32 @@ class CategoryDelta(BaseModel):
     ci_low_pp: float
     ci_high_pp: float
     paired_sd_pp: float
+    threshold_pp: float
 
     @property
     def significant(self) -> bool:
         """The bootstrap CI excludes zero."""
         return self.ci_low_pp > 0 or self.ci_high_pp < 0
 
-    def trips(self, threshold_pp: float) -> bool:
-        return self.delta_pp < -threshold_pp and self.significant
+    def trips(self) -> bool:
+        return self.delta_pp < -self.threshold_pp and self.significant
 
 
 class GateResult(BaseModel):
     passed: bool
-    threshold_pp: float
     deltas: list[CategoryDelta] = Field(default_factory=list)
     reasons: list[str] = Field(default_factory=list)
 
     def report(self) -> str:
-        lines = [f"gate: {'PASS' if self.passed else 'FAIL'} (threshold {self.threshold_pp}pp)"]
+        lines = [f"gate: {'PASS' if self.passed else 'FAIL'}"]
         for delta in self.deltas:
-            marker = "FAIL" if delta.trips(self.threshold_pp) else "ok  "
+            marker = "FAIL" if delta.trips() else "ok  "
             lines.append(
                 f"  {marker} {delta.category:<11} "
                 f"{delta.baseline:.3f} -> {delta.current:.3f}  "
                 f"delta {delta.delta_pp:+.2f}pp  "
-                f"95% CI [{delta.ci_low_pp:+.2f}, {delta.ci_high_pp:+.2f}]pp"
+                f"95% CI [{delta.ci_low_pp:+.2f}, {delta.ci_high_pp:+.2f}]pp  "
+                f"threshold {delta.threshold_pp:g}pp"
             )
         lines.extend(f"  {reason}" for reason in self.reasons)
         return "\n".join(lines)
@@ -139,7 +152,7 @@ def compare(
     baseline: Baseline,
     current_scores: dict[str, dict[str, float]],
     baseline_scores: dict[str, dict[str, float]] | None = None,
-    threshold_pp: float = DEFAULT_THRESHOLD_PP,
+    thresholds: Mapping[str, float] = THRESHOLDS_PP,
 ) -> GateResult:
     """Compare a run against the baseline, per category.
 
@@ -204,10 +217,11 @@ def compare(
                 ci_low_pp=low,
                 ci_high_pp=high,
                 paired_sd_pp=sd,
+                threshold_pp=thresholds[category],
             )
         )
 
-    tripped = [d for d in deltas if d.trips(threshold_pp)]
+    tripped = [d for d in deltas if d.trips()]
     for delta in tripped:
         reasons.append(
             f"{delta.category} regressed {abs(delta.delta_pp):.2f}pp "
@@ -216,7 +230,6 @@ def compare(
 
     return GateResult(
         passed=not tripped and not undecided,
-        threshold_pp=threshold_pp,
         deltas=deltas,
         reasons=reasons,
     )
@@ -233,7 +246,7 @@ def load_baseline(path: Path = BASELINE_PATH) -> Baseline:
 
 # --- the noise floor -------------------------------------------------------------
 #
-# DEFAULT_THRESHOLD_PP is provisional until measured. This is the measurement:
+# THRESHOLDS_PP come from this measurement:
 # run the same code several times against the same corpus, and the per-item
 # differences between those runs are pure run-to-run noise — the agent's own
 # sampling, the judge's wobble. Their SD sets the smallest regression the gate

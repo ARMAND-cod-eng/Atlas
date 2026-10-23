@@ -310,7 +310,9 @@ uv run python -m atlas_eval report --runs baseline no-critic single-call --out .
 Every PR from this repository runs a 12-item smoke that fails if any item crashes. The full 50-item
 run, gated against the baseline, runs on PRs that touch prompts, graph code, model config or the
 eval itself, on PRs labelled `run-eval`, and on demand. A category fails when it regresses by more
-than 2pp *and* its 95% paired-bootstrap CI excludes zero. The gate also refuses to pass when it has
+than its threshold *and* its 95% paired-bootstrap CI excludes zero. The thresholds are the noise floor
+`noise` measured on two runs of identical code: 5pp for completion, 4pp for grounding, 3pp for tool
+use. The gate began at 2pp for all three, below every one of them, so it was raised. The gate also refuses to pass when it has
 no per-item baseline to pair against. **Until the files above are committed, every eval job
 fails.** That is the gate reporting it has nothing to compare against, not a flaky test.
 

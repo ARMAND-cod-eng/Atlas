@@ -43,7 +43,14 @@ from atlas_eval.dataset import (
     provenance_summary,
     write_jsonl,
 )
-from atlas_eval.gate import DEFAULT_THRESHOLD_PP, Baseline, compare, load_baseline, noise_floor
+from atlas_eval.gate import (
+    CATEGORIES,
+    THRESHOLDS_PP,
+    Baseline,
+    compare,
+    load_baseline,
+    noise_floor,
+)
 from atlas_eval.runner import RunRecord, Variant, run_item, run_items
 from atlas_eval.score import SuiteScore, score_all
 
@@ -445,6 +452,11 @@ def cmd_rescore(args: argparse.Namespace) -> int:
 # --- gate ----------------------------------------------------------------------
 
 
+def _thresholds(forced: float | None) -> dict[str, float]:
+    """Each category's measured threshold, or one value for all if forced."""
+    return dict(THRESHOLDS_PP) if forced is None else dict.fromkeys(CATEGORIES, forced)
+
+
 def cmd_gate(args: argparse.Namespace) -> int:
     baseline = load_baseline()
     current = json.loads((RUNS_DIR / f"{args.run}.json").read_text(encoding="utf-8"))
@@ -453,7 +465,9 @@ def cmd_gate(args: argparse.Namespace) -> int:
     if baseline_run_path.exists():
         baseline_per_item = json.loads(baseline_run_path.read_text(encoding="utf-8"))["per_item"]
 
-    result = compare(baseline, current["per_item"], baseline_per_item, threshold_pp=args.threshold)
+    result = compare(
+        baseline, current["per_item"], baseline_per_item, thresholds=_thresholds(args.threshold)
+    )
     print(result.report())
     return 0 if result.passed else 1
 
@@ -483,16 +497,18 @@ def cmd_noise(args: argparse.Namespace) -> int:
         print(exc)
         return 2
 
+    thresholds = _thresholds(args.threshold)
     print(f"noise across {len(runs)} runs of the same code ({variants[0]})\n")
     for e in estimates:
+        threshold = thresholds[e.category]
         print(
             f"  {e.category:<11} n={e.items}  paired SD {e.paired_sd_pp:.2f}pp  "
             f"drift {e.drift_pp:.2f}pp  detectable >= {e.detectable_pp:.2f}pp  "
-            f"-> {e.verdict(args.threshold)}"
+            f"threshold {threshold:g}pp  -> {e.verdict(threshold)}"
         )
     print(
         "\nA regression smaller than 'detectable' cannot be told apart from run-to-run"
-        f" noise at this n, whatever the threshold (now {args.threshold}pp)."
+        " noise at this n, whatever the threshold."
     )
     return 0
 
@@ -595,7 +611,12 @@ def build_parser() -> argparse.ArgumentParser:
     gate = sub.add_parser("gate", help="compare a run against the baseline")
     gate.add_argument("--run", default="latest")
     gate.add_argument("--baseline-run", default="baseline")
-    gate.add_argument("--threshold", type=float, default=2.0)
+    gate.add_argument(
+        "--threshold",
+        type=float,
+        default=None,
+        help="one threshold in pp for every category (default: each category's measured one)",
+    )
     gate.set_defaults(func=cmd_gate)
 
     rescore = sub.add_parser("rescore", help="re-judge a run's answers without re-running it")
@@ -607,7 +628,12 @@ def build_parser() -> argparse.ArgumentParser:
 
     noise = sub.add_parser("noise", help="run-to-run noise from reruns of identical code")
     noise.add_argument("--runs", nargs="+", required=True, help="run names, two or more")
-    noise.add_argument("--threshold", type=float, default=DEFAULT_THRESHOLD_PP)
+    noise.add_argument(
+        "--threshold",
+        type=float,
+        default=None,
+        help="compare against one threshold in pp instead of each category's own",
+    )
     noise.set_defaults(func=cmd_noise)
 
     report = sub.add_parser("report", help="results table and chart from run files")
