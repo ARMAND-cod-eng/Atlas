@@ -517,3 +517,96 @@ def test_run_files_are_written_with_unix_line_endings(
 
     assert b"\r\n" not in (tmp_path / "runs" / "t.json").read_bytes()
     assert b"\r\n" not in (tmp_path / "baseline.json").read_bytes()
+
+
+# --- a run must measure the primary ------------------------------------------------------
+#
+# Anthropic's credit ran out partway through the second rerun. The agent's
+# fallback did what it exists to do — every remaining call went to GPT-4o and
+# every run completed — and three runs exited 0: one half GPT-4o, two entirely
+# GPT-4o. They measured a different model, not the system, and nothing said so.
+# A timeout or two handed to the fallback is real production behaviour and
+# belongs in a run's numbers; most of a run answered by it is a broken
+# environment, and those numbers are refused.
+
+
+def _records_with_providers(providers: list[str]) -> list[RunRecord]:
+    from atlas.metrics import LLMCall
+
+    calls = [LLMCall(node="researcher", provider=p, model=p, duration_s=1.0) for p in providers]
+    item = load_dataset().items[0]
+    return [
+        RunRecord(
+            item_id=item.id, query=item.query, answer="a", metrics=RunMetrics(llm_calls=calls)
+        )
+    ]
+
+
+@pytest.mark.parametrize(
+    ("providers", "code"),
+    [
+        (["anthropic"] * 39 + ["openai"], 0),  # one timeout in forty: production behaviour
+        (["anthropic"] * 2 + ["openai"] * 2, 1),  # half the run on the fallback
+    ],
+)
+def test_a_run_mostly_answered_by_the_fallback_fails(
+    judge_calls: list[str],
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+    providers: list[str],
+    code: int,
+) -> None:
+    async def fake_run_items(
+        items: list[Any], concurrency: int = 5, run_one: Any = None
+    ) -> list[RunRecord]:
+        return _records_with_providers(providers)
+
+    monkeypatch.setattr(cli, "run_items", fake_run_items)
+    monkeypatch.setattr(cli, "RUNS_DIR", tmp_path / "runs")
+    monkeypatch.setattr(cli, "DATA_DIR", tmp_path)
+    args = cli.build_parser().parse_args(
+        ["run", "--only", "q01", "--name", "t", "--write-baseline"]
+    )
+
+    assert cli.cmd_run(args) == code
+    assert (tmp_path / "baseline.json").exists() is (code == 0)
+    off = providers.count("openai")
+    assert (
+        f"agent calls answered by the fallback: {off} of {len(providers)}"
+        in capsys.readouterr().out
+    )
+
+
+def test_noise_and_report_refuse_a_run_answered_by_the_fallback(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    runs = tmp_path / "runs"
+    runs.mkdir()
+    for name, providers in (("good", ["anthropic"] * 4), ("bad", ["openai"] * 4)):
+        records = [json.loads(r.model_dump_json()) for r in _records_with_providers(providers)]
+        payload = {
+            "name": name,
+            "variant": "atlas",
+            "primary_provider": "anthropic",
+            "per_item": {"completion": {"q01": 1.0}},
+            "records": records,
+        }
+        (runs / f"{name}.json").write_text(json.dumps(payload), encoding="utf-8")
+    monkeypatch.setattr(cli, "RUNS_DIR", runs)
+
+    noise = cli.cmd_noise(cli.build_parser().parse_args(["noise", "--runs", "good", "bad"]))
+    report = cli.cmd_report(
+        cli.build_parser().parse_args(["report", "--runs", "bad", "--reference", "good"])
+    )
+
+    assert (noise, report) == (2, 2)
+    assert (
+        capsys.readouterr()
+        .out.splitlines()
+        .count(
+            "refusing run 'bad': 4 of 4 agent calls (100%) were answered by the fallback, "
+            "not the primary (anthropic)"
+        )
+        == 2
+    )

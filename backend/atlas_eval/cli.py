@@ -23,7 +23,7 @@ import asyncio
 import functools
 import json
 import subprocess
-from collections.abc import Awaitable, Callable, Iterator, Mapping
+from collections.abc import Awaitable, Callable, Iterator, Mapping, Sequence
 from contextlib import contextmanager
 from datetime import UTC, datetime
 from pathlib import Path
@@ -31,6 +31,7 @@ from typing import Any
 
 from langchain_core.callbacks import get_usage_metadata_callback
 
+from atlas.models import primary_provider
 from atlas.runtime import configure_logging
 from atlas_eval.baselines import run_single_call
 from atlas_eval.dataset import (
@@ -152,6 +153,34 @@ def runner_for(variant: Variant) -> Callable[[EvalItem], Awaitable[RunRecord]]:
 # {model: {"input_tokens": n, "output_tokens": n}}
 Spend = dict[str, dict[str, int]]
 
+# Past this share of agent calls answered by a provider other than the primary,
+# a run measures the fallback, not the system. Anthropic's credit ran out partway
+# through the second rerun: the fallback answered everything after that, three
+# runs exited 0 — two entirely on GPT-4o — and nothing said so. A timeout or two
+# handed to the fallback is real production behaviour and stays in the numbers;
+# most of a run answered by it is a broken environment, and is refused.
+FALLBACK_LIMIT = 0.05
+
+
+def _off_primary(providers: Sequence[str], primary: str) -> tuple[int, int]:
+    """(calls answered by anything but ``primary``, all calls)."""
+    return sum(1 for provider in providers if provider != primary), len(providers)
+
+
+def _refused_for_fallback(name: str, run: Mapping[str, Any]) -> bool:
+    """Print why and return True if a run file was mostly answered by the fallback."""
+    primary = str(run.get("primary_provider") or primary_provider())
+    records = run.get("records", [])
+    providers = [c["provider"] for r in records for c in r["metrics"]["llm_calls"]]
+    off, total = _off_primary(providers, primary)
+    if total and off / total > FALLBACK_LIMIT:
+        print(
+            f"refusing run {name!r}: {off} of {total} agent calls ({off / total:.0%}) were "
+            f"answered by the fallback, not the primary ({primary})"
+        )
+        return True
+    return False
+
 
 @contextmanager
 def measured_spend() -> Iterator[Spend]:
@@ -191,6 +220,7 @@ def _write_run(
     variant: Variant = "atlas",
     spend: Mapping[str, Spend] | None = None,
     agent_commit: str | None = None,
+    primary: str | None = None,
 ) -> Path:
     RUNS_DIR.mkdir(parents=True, exist_ok=True)
     path = RUNS_DIR / f"{name}.json"
@@ -204,6 +234,9 @@ def _write_run(
         # same for a fresh run; different after `rescore`.
         "commit": agent_commit or scored_commit,
         "scored_commit": scored_commit,
+        # Which provider the run was meant to measure. A run file alone could not
+        # say, so a fallback-answered run looked like any other.
+        "primary_provider": primary or primary_provider(),
         "means": scores.means(),
         "per_item": scores.per_item(),
         "check_split": {k: list(v) for k, v in scores.check_split().items()},
@@ -269,6 +302,15 @@ def cmd_run(args: argparse.Namespace) -> int:
         return 1
     spend = {"agent": agent_spend, "judge": judge_spend}
     print(_format_spend(spend))
+    primary = primary_provider()
+    on_fallback, agent_calls = _off_primary(
+        [c.provider for r in records for c in r.metrics.llm_calls], primary
+    )
+    fallback_share = on_fallback / agent_calls if agent_calls else 0.0
+    print(
+        f"\nagent calls answered by the fallback: {on_fallback} of {agent_calls}"
+        f" ({fallback_share:.0%})"
+    )
 
     print("\nmeans:")
     for category, mean in scores.means().items():
@@ -280,7 +322,7 @@ def cmd_run(args: argparse.Namespace) -> int:
         print(f"  {category:<11} {det} deterministic / {jdg} judge  ({share} deterministic)")
 
     # Written even when something crashed: it is what the crash is debugged from.
-    path = _write_run(args.name, records, scores, args.variant, spend)
+    path = _write_run(args.name, records, scores, args.variant, spend, primary=primary)
     print(f"\nwrote {path}")
 
     if failed:
@@ -290,6 +332,16 @@ def cmd_run(args: argparse.Namespace) -> int:
         print(f"\nFAIL: {len(failed)} of {len(records)} run(s) crashed")
         if args.write_baseline:
             print("not writing a baseline: it would record these crashes as normal")
+        return 1
+
+    if fallback_share > FALLBACK_LIMIT:
+        print(
+            f"\nFAIL: {fallback_share:.0%} of agent calls were answered by the fallback, not "
+            f"{primary}. This run measures the fallback, not the system — check the "
+            "primary's credit, quota and status, then run it again."
+        )
+        if args.write_baseline:
+            print("not writing a baseline from it")
         return 1
 
     if args.write_baseline:
@@ -367,7 +419,15 @@ def cmd_rescore(args: argparse.Namespace) -> int:
         print(f"  {category:<11} {mean:.3f}")
 
     agent_commit = str(payload.get("commit") or "unknown")
-    path = _write_run(args.run, records, scores, variant, spend, agent_commit=agent_commit)
+    path = _write_run(
+        args.run,
+        records,
+        scores,
+        variant,
+        spend,
+        agent_commit=agent_commit,
+        primary=str(payload.get("primary_provider") or primary_provider()),
+    )
     print(f"\nrewrote {path}")
     if args.write_baseline:
         _write_baseline(
@@ -409,6 +469,10 @@ def _load_run(name: str) -> dict[str, Any]:
 def cmd_noise(args: argparse.Namespace) -> int:
     """Run-to-run noise from reruns of identical code, and what the gate can catch."""
     runs = [_load_run(name) for name in args.runs]
+    if [
+        name for name, run in zip(args.runs, runs, strict=True) if _refused_for_fallback(name, run)
+    ]:
+        return 2
     variants = sorted({str(run.get("variant", "atlas")) for run in runs})
     if len(variants) > 1:
         print(f"noise is measured between reruns of one variant; got {', '.join(variants)}")
@@ -448,6 +512,8 @@ def cmd_report(args: argparse.Namespace) -> int:
 
     names = [args.reference, *(name for name in args.runs if name != args.reference)]
     runs = {name: _load_run(name) for name in names}
+    if [name for name, run in runs.items() if _refused_for_fallback(name, run)]:
+        return 2
     reference = runs[args.reference]
     variant = str(reference.get("variant", "atlas"))
     if variant != "atlas":

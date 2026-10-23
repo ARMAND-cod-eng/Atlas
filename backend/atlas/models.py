@@ -189,6 +189,11 @@ def _provider_for(model_name: str) -> str:
     return "unknown"
 
 
+def primary_provider() -> str:
+    """The provider the configured primary model belongs to."""
+    return _provider_for(get_settings().primary_model)
+
+
 def _model_name(response: object) -> str:
     """The model a response says it came from, or "unknown".
 
