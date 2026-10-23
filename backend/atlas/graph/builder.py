@@ -25,20 +25,24 @@ from psycopg_pool import AsyncConnectionPool
 from atlas.config import get_settings
 from atlas.graph.nodes import (
     CRITIC,
+    HUMAN_EDIT,
     PLANNER,
     RESEARCHER,
     SYNTHESIZER,
     critic,
     fan_out,
+    human_edit,
     planner,
     researcher,
     route_after_critic,
+    route_after_edit,
     synthesizer,
 )
 from atlas.graph.state import (
     AtlasState,
     CriticVerdict,
     ResearchResult,
+    Revision,
     Source,
     Subtask,
     SubtaskVerdict,
@@ -59,6 +63,7 @@ CHECKPOINT_TYPES: tuple[type, ...] = (
     Source,
     CriticVerdict,
     SubtaskVerdict,
+    Revision,
     RunMetrics,
     LLMCall,
     NodeTiming,
@@ -127,6 +132,11 @@ def build_state_graph(
         builder.add_node(CRITIC, critic)
 
     builder.add_edge(START, PLANNER)
+    # The second way into a run: a person's edit to one branch of a finished one.
+    # Nothing routes here — atlas.revision writes the edit as this node's update,
+    # and this edge then dispatches the edited branch alone.
+    builder.add_node(HUMAN_EDIT, human_edit)
+    builder.add_conditional_edges(HUMAN_EDIT, route_after_edit, [RESEARCHER])
     # The conditional edge is where parallelism comes from: fan_out returns one
     # Send per subtask and LangGraph runs them concurrently. path_map lists both
     # possible destinations, because fan_out short-circuits to the synthesizer

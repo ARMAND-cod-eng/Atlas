@@ -38,6 +38,7 @@ def test_state_schema_keys() -> None:
         "run_metrics",
         "iteration",
         "critic_feedback",
+        "revision",
     }
 
 

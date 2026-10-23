@@ -167,6 +167,21 @@ class CriticVerdict(BaseModel):
         return None
 
 
+class Revision(BaseModel):
+    """A person's edit to one branch of a finished run: the question it now asks.
+
+    Kept in state, not just in the request that caused it, so the checkpoint
+    history records that a human redirected this branch and from what — the run's
+    own audit trail — and so the routing that dispatches the edited branch can
+    read which one it is.
+    """
+
+    parent_run_id: str
+    subtask_id: str
+    before: str
+    after: str
+
+
 def merge_research_results(
     left: list[ResearchResult], right: list[ResearchResult]
 ) -> list[ResearchResult]:
@@ -220,6 +235,9 @@ class AtlasState(TypedDict):
     # researcher must be able to see what was wrong last time.
     iteration: int
     critic_feedback: Annotated[list[CriticVerdict], operator.add]
+    # Set only on a run that revises another (see atlas.revision). No reducer, so
+    # a new question's input (``revision: None``) replaces the last edit outright.
+    revision: Revision | None
 
 
 class ResearcherInput(TypedDict):

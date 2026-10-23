@@ -25,6 +25,7 @@ EXPECTED_NODES = {
     nodes.RESEARCHER,
     nodes.SYNTHESIZER,
     nodes.CRITIC,
+    nodes.HUMAN_EDIT,
     "__end__",
 }
 
@@ -37,6 +38,8 @@ EXPECTED_EDGES = {
     (nodes.CRITIC, nodes.RESEARCHER, True),
     (nodes.CRITIC, nodes.SYNTHESIZER, True),
     (nodes.CRITIC, "__end__", True),
+    # A person's edit to a finished run enters here, never from START.
+    (nodes.HUMAN_EDIT, nodes.RESEARCHER, True),
 }
 
 

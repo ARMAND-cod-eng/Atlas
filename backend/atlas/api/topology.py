@@ -70,7 +70,8 @@ def build_topology() -> Topology:
     Compiles against an in-memory checkpointer: the shape is a property of the
     assembly, not of the store behind it, so this needs no database.
     """
-    drawable = build_state_graph().compile(checkpointer=MemorySaver()).get_graph()
+    builder = build_state_graph()
+    drawable = builder.compile(checkpointer=MemorySaver()).get_graph()
 
     nodes = [
         TopologyNode(
@@ -88,6 +89,19 @@ def build_topology() -> Topology:
             conditional=edge.conditional,
         )
         for edge in drawable.edges
+    ]
+    # get_graph() finds edges by simulating a run from START, so a node entered
+    # some other way is drawn with none. human_edit is entered only through
+    # aupdate_state, and its edge to the researcher went missing — the one edge
+    # that shows a person can redirect a branch. The builder's declared routing
+    # is the same graph's own record of it, so read the missing edges from there.
+    drawn = {(edge.source, edge.target) for edge in edges}
+    edges += [
+        TopologyEdge(id=f"{source}->{target}", source=source, target=target, conditional=True)
+        for source, branches in builder.branches.items()
+        for branch in branches.values()
+        for target in (branch.ends or {}).values()
+        if (source, target) not in drawn
     ]
     return Topology(nodes=nodes, edges=edges)
 

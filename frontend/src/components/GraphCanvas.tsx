@@ -17,6 +17,7 @@ const LABELS: Record<string, string> = {
   researcher: 'Researchers',
   synthesizer: 'Synthesizer',
   critic: 'Critic',
+  human_edit: 'Your edit',
 };
 
 interface Props {

@@ -67,6 +67,8 @@ PLANNER = "planner"
 RESEARCHER = "researcher"
 SYNTHESIZER = "synthesizer"
 CRITIC = "critic"
+# Never executed: the entry point a revision writes through (see atlas.revision).
+HUMAN_EDIT = "human_edit"
 
 PLANNER_SYSTEM = """You are the planning stage of a research system.
 
@@ -252,6 +254,32 @@ def fan_out(state: AtlasState) -> list[Send] | str:
         )
         for subtask in subtasks
     ]
+
+
+async def human_edit(state: AtlasState) -> dict[str, Any]:
+    """The node a person's edit is written as. It never runs.
+
+    A revision is applied with ``aupdate_state(..., as_node=HUMAN_EDIT)``, which
+    runs only this node's writers and its routing edge — never the function. It
+    has no incoming edge, so the graph cannot reach it either. Raising rather than
+    passing keeps it that way: a refactor that wires an edge here fails loudly
+    instead of running a no-op step in the middle of a run.
+    """
+    raise RuntimeError("human_edit is applied with aupdate_state, never executed")
+
+
+def route_after_edit(state: AtlasState) -> list[Send]:
+    """Routing edge for a human edit: research the edited branch, nothing else.
+
+    No guidance. A person changing the question is not a reviewer rejecting the
+    old answer, and the researcher frames guidance as exactly that rejection.
+    """
+    revision = state["revision"]
+    if revision is None:
+        raise RuntimeError("a human edit was applied without a revision")
+    by_id = {subtask.id: subtask for subtask in state["subtasks"]}
+    edited = by_id[revision.subtask_id]
+    return [Send(RESEARCHER, ResearcherInput(subtask=edited, query=state["query"], guidance=None))]
 
 
 async def _search_with_retries(subtask: Subtask, max_attempts: int) -> list[Source]:

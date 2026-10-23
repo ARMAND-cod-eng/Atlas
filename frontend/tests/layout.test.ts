@@ -14,7 +14,15 @@ import retry from './fixtures/retry.json';
 
 import type { AgentEvent, Topology } from '../src/lib/events';
 import { clearLayoutCache, layout, shapeFor, signatureOf } from '../src/lib/layout';
-import { CRITIC, PLANNER, RESEARCHER, SYNTHESIZER, acceptAll, initialState } from '../src/lib/reducer';
+import {
+  CRITIC,
+  HUMAN_EDIT,
+  PLANNER,
+  RESEARCHER,
+  SYNTHESIZER,
+  acceptAll,
+  initialState,
+} from '../src/lib/reducer';
 
 const ACCEPTED = accepted as readonly AgentEvent[];
 const RETRY = retry as readonly AgentEvent[];
@@ -27,6 +35,7 @@ const TOPOLOGY: Topology = {
     { id: RESEARCHER, fan_out: true, terminal: false },
     { id: SYNTHESIZER, fan_out: false, terminal: false },
     { id: CRITIC, fan_out: false, terminal: false },
+    { id: HUMAN_EDIT, fan_out: false, terminal: false },
     { id: '__end__', fan_out: false, terminal: true },
   ],
   edges: [
@@ -38,6 +47,7 @@ const TOPOLOGY: Topology = {
     { id: 'critic->researcher', source: CRITIC, target: RESEARCHER, conditional: true },
     { id: 'critic->synthesizer', source: CRITIC, target: SYNTHESIZER, conditional: true },
     { id: 'critic->__end__', source: CRITIC, target: '__end__', conditional: true },
+    { id: 'human_edit->researcher', source: HUMAN_EDIT, target: RESEARCHER, conditional: true },
   ],
 };
 
@@ -51,7 +61,7 @@ describe('the drawable shape', () => {
   it('drops LangGraph plumbing', () => {
     const shape = shapeAfter([]);
 
-    expect(shape.nodeIds).toEqual([PLANNER, RESEARCHER, SYNTHESIZER, CRITIC]);
+    expect(shape.nodeIds).toEqual([PLANNER, RESEARCHER, SYNTHESIZER, CRITIC, HUMAN_EDIT]);
     expect(shape.edges.map((e) => e.id)).not.toContain('__start__->planner');
     expect(shape.edges.map((e) => e.id)).not.toContain('critic->__end__');
   });
@@ -59,7 +69,7 @@ describe('the drawable shape', () => {
   it('shows one researcher placeholder before fan_out', () => {
     const shape = shapeAfter(ACCEPTED.slice(0, 3));
 
-    expect(shape.nodeIds).toEqual([PLANNER, RESEARCHER, SYNTHESIZER, CRITIC]);
+    expect(shape.nodeIds).toEqual([PLANNER, RESEARCHER, SYNTHESIZER, CRITIC, HUMAN_EDIT]);
   });
 
   it('expands into one lane per subtask after fan_out', () => {
@@ -74,6 +84,7 @@ describe('the drawable shape', () => {
       'researcher:s4',
       SYNTHESIZER,
       CRITIC,
+      HUMAN_EDIT,
     ]);
   });
 
@@ -89,6 +100,19 @@ describe('the drawable shape', () => {
       'critic->researcher:s2',
       'critic->researcher:s3',
       'critic->researcher:s4',
+    ]);
+  });
+
+  it('fans the edit edge out to every lane, since any branch can be edited', () => {
+    const shape = shapeAfter(ACCEPTED);
+    const editEdges = shape.edges.filter((e) => e.source === HUMAN_EDIT);
+
+    expect(editEdges.map((e) => [e.id, e.feedback])).toEqual([
+      ['human_edit->researcher:s0', false],
+      ['human_edit->researcher:s1', false],
+      ['human_edit->researcher:s2', false],
+      ['human_edit->researcher:s3', false],
+      ['human_edit->researcher:s4', false],
     ]);
   });
 

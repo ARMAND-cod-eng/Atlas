@@ -56,6 +56,7 @@ def initial_state(query: str) -> AtlasState:
         "run_metrics": RunMetrics(),
         "iteration": 0,
         "critic_feedback": [],
+        "revision": None,
     }
 
 

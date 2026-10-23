@@ -102,6 +102,8 @@ export const PLANNER = 'planner';
 export const RESEARCHER = 'researcher';
 export const SYNTHESIZER = 'synthesizer';
 export const CRITIC = 'critic';
+/** Where a person's edit to one branch enters a finished run. Never runs itself. */
+export const HUMAN_EDIT = 'human_edit';
 
 function idleNode(id: string): NodeState {
   return { id, status: 'idle', startedAt: null, finishedAt: null, error: null, runs: 0 };
