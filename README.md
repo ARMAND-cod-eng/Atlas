@@ -268,24 +268,35 @@ was retrieved; it cannot catch a real URL cited for something it does not say. T
 real graph in-process against a **frozen corpus** of recorded Tavily results, so two runs are
 comparable and CI never touches live search. The judge is GPT-4o at temperature 0: a fixed
 temperature is impossible on the Claude models Atlas runs on, and a model should not grade its own
-answers. The exception is a run the fallback answered, where GPT-4o is grading itself. Each run's
-metrics record which provider answered, so those runs can be told apart.
+answers. The exception is a run the fallback answered, where GPT-4o would be grading itself. Each
+run's metrics record which provider answered every call, and a run the fallback answered more than
+5% of is refused by `run`, `noise` and `report`: it measures the fallback, not the system.
 
-**Status: dataset reviewed, suite not yet run.** Every one of the 50 items was read and approved by
-a person, and nine were corrected first: rubric lines that were wrong, ambiguous, out of date, or
-asked for more than the question did. No corpus has been recorded and there is no baseline.
-`atlas_eval claim` prints the strongest description the dataset supports, and a test keeps it
-honest:
+**Status: baseline committed, comparisons pending.** Every one of the 50 items was read and
+approved by a person, and nine were corrected first: rubric lines that were wrong, ambiguous, out of
+date, or asked for more than the question did. The corpus is recorded (1,229 documents, 4.6 MB
+gzipped), and the baseline has been run twice on identical code to measure the noise:
+
+| | Baseline | Rerun, identical code | Gate threshold (measured noise floor) |
+|---|---|---|---|
+| Completion | 0.995 | 0.970 | 5pp |
+| Grounding | 0.955 | 0.943 | 4pp |
+| Tool use | 0.963 | 0.970 | 3pp |
+
+Completion is at the ceiling: 49 of 50 baseline items score 1.0, so this dataset cannot separate
+systems on completion, and grounding is where differences can show. The comparison against simpler
+systems has not been run yet. `atlas_eval claim` prints the strongest description the dataset
+supports, and a test keeps it honest:
 
 ```
 50 hand-labeled query traces
 ```
 
-So this README quotes no eval scores yet. Producing the first ones, from `backend/`:
+Reproducing them, from `backend/`:
 
 ```powershell
 uv run python -m atlas_eval review      # approve or skip each item; resumable
-uv run python -m atlas_eval record      # the only online step: live models and Tavily, 3 passes per item
+uv run python -m atlas_eval record      # the only step that searches the web: live Tavily, 3 passes per item
 uv run python -m atlas_eval run --name baseline --write-baseline --corpus-date <YYYY-MM-DD>
 uv run python -m atlas_eval run --name rerun1          # identical code again: pure noise
 uv run python -m atlas_eval noise --runs baseline rerun1
