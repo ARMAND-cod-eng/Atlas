@@ -1,0 +1,21 @@
+Atlas includes the text of the following EU legal acts, in
+backend/atlas/library/sources/:
+
+  Regulation (EU) 2024/1689 (Artificial Intelligence Act)
+  http://data.europa.eu/eli/reg/2024/1689/oj
+
+  Regulation (EU) 2016/679 (General Data Protection Regulation)
+  http://data.europa.eu/eli/reg/2016/679/oj
+
+Source: EUR-Lex, https://eur-lex.europa.eu, © European Union, 1998-2026.
+Retrieved through the Publications Office of the European Union; see
+backend/atlas/library/sources/manifest.json for the retrieval date and the
+checksum of each file.
+
+Reuse is authorised under Commission Decision 2011/833/EU on the reuse of
+Commission documents, provided the source is acknowledged. Only the European
+Union legislation published in the paper editions of the Official Journal of the
+European Union is deemed authentic. These are the acts as originally published;
+amendments adopted since are not included.
+
+Atlas is a research aid. Nothing it produces is legal advice.

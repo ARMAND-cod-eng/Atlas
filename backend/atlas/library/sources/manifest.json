@@ -1,0 +1,16 @@
+{
+  "aia": {
+    "celex": "32024R1689",
+    "eli": "http://data.europa.eu/eli/reg/2024/1689/oj",
+    "retrieved_at": "2026-10-23",
+    "sha256": "8f0b656302f9864cc87e040c371f209a9d65ae1a6cecc25ca5eb737e872d721a",
+    "source": "http://publications.europa.eu/resource/celex/32024R1689"
+  },
+  "gdpr": {
+    "celex": "32016R0679",
+    "eli": "http://data.europa.eu/eli/reg/2016/679/oj",
+    "retrieved_at": "2026-10-23",
+    "sha256": "962539af03738bf552319ff4ce42d69e5f95a576307c4dfed7bf87e81b646b9d",
+    "source": "http://publications.europa.eu/resource/celex/32016R0679"
+  }
+}
