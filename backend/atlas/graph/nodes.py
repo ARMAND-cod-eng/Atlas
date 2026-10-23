@@ -395,15 +395,22 @@ async def researcher(state: ResearcherInput) -> dict[str, Any]:
     return {"research_results": [result], "run_metrics": metrics}
 
 
-def _render_findings(results: list[ResearchResult]) -> str:
-    """Format results for the synthesizer, marking failures explicitly."""
+def _render_findings(results: list[ResearchResult], subtasks: list[Subtask]) -> str:
+    """Format results for the synthesizer, each under the question it answers.
+
+    The question is shown because a person can now rewrite it: without it the
+    synthesizer had only the findings to guess from what a branch was asked.
+    """
+    questions = {subtask.id: subtask.question for subtask in subtasks}
     blocks: list[str] = []
     for result in results:
+        question = questions.get(result.subtask_id, "(unknown subtask)")
+        header = f"Subtask {result.subtask_id}\nQuestion: {question}"
         if result.error is not None:
-            blocks.append(f"Subtask {result.subtask_id}: FAILED — {result.error}")
+            blocks.append(f"{header}\nFAILED — {result.error}")
             continue
         urls = "\n".join(f"- {s.url}" for s in result.sources) or "- (none)"
-        blocks.append(f"Subtask {result.subtask_id}:\n{result.findings}\n\nSources:\n{urls}")
+        blocks.append(f"{header}\n\n{result.findings}\n\nSources:\n{urls}")
     return "\n\n---\n\n".join(blocks)
 
 
@@ -500,9 +507,8 @@ async def _synthesize(state: AtlasState, metrics: RunMetrics) -> str:
         )
 
     settings = get_settings()
-    prompt = (
-        f"Original question: {state['query']}\n\nResearch findings:\n\n{_render_findings(results)}"
-    )
+    findings = _render_findings(results, state["subtasks"])
+    prompt = f"Original question: {state['query']}\n\nResearch findings:\n\n{findings}"
     # On a synthesis-only revision the critic faulted the write-up, not the
     # research. Passing its feedback is the only thing that makes the second
     # attempt different from the first.

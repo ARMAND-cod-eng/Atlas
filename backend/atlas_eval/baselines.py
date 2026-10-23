@@ -17,7 +17,7 @@ import time
 from pathlib import Path
 
 from atlas.graph import nodes
-from atlas.graph.state import ResearchResult
+from atlas.graph.state import ResearchResult, Subtask
 from atlas.metrics import RunMetrics
 from atlas.runner import initial_state
 from atlas_eval.corpus import FrozenSearch, load_corpus
@@ -54,6 +54,9 @@ async def run_single_call(item: EvalItem, corpus_root: Path | None = None) -> Ru
             subtask_id="s0", findings=nodes.render_sources(sources), sources=sources
         )
         state = initial_state(item.query)
+        # One branch asking the question itself: the shape the graph's prompt
+        # takes, so the comparison measures the pipeline and not the prompt.
+        state["subtasks"] = [Subtask(id="s0", question=item.query, rationale="single call")]
         state["research_results"] = [evidence]
         answer = await nodes._synthesize(state, metrics)
         nodes._check_citations(answer, [evidence], metrics)

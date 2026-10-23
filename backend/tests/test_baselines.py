@@ -77,6 +77,8 @@ async def test_one_search_and_one_synthesis(
     # The ten retrieved snippets reach the prompt; the two below the cut do not.
     prompt = synthesis[0][1]
     assert [f"snippet-{i:02d}" in prompt for i in range(12)] == [True] * 10 + [False] * 2
+    # Framed like one of the graph's branches, asking the question itself.
+    assert f"Subtask s0\nQuestion: {item.query}\n\n" in prompt
 
 
 def test_the_baseline_reads_as_many_sources_as_documented() -> None:

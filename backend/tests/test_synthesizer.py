@@ -6,7 +6,7 @@ import pytest
 from langchain_core.messages import AIMessage
 
 from atlas.graph import nodes
-from atlas.graph.state import AtlasState, ResearchResult, Source
+from atlas.graph.state import AtlasState, ResearchResult, Source, Subtask
 from atlas.metrics import DEGRADED_UNGROUNDED_CITATION, RunMetrics
 from tests.conftest import initial_state
 
@@ -128,11 +128,36 @@ def test_render_marks_failures_and_lists_urls() -> None:
         *_good_results(),
         ResearchResult(subtask_id="s2", findings="", sources=[], error="boom"),
     ]
-    rendered = nodes._render_findings(results)
+    rendered = nodes._render_findings(results, [])
 
     assert "FAILED" in rendered
     assert URL_A in rendered
     assert URL_B in rendered
+
+
+def test_each_branch_is_shown_with_the_question_it_was_asked() -> None:
+    """Findings without their question are an answer without its question.
+
+    Harmless while the planner wrote every question; not once a person can
+    rewrite one. The synthesizer was shown "Subtask s1:" and the findings, and had
+    to guess from them what s1 had been asked — after an edit, the very thing
+    that changed.
+    """
+    subtasks = [
+        Subtask(id="s0", question="How does RAG work?", rationale="r"),
+        Subtask(id="s1", question="What indexes the corpus?", rationale="r"),
+    ]
+    results = [
+        _good_results()[0],
+        ResearchResult(subtask_id="s1", findings="", sources=[], error="boom"),
+    ]
+
+    assert nodes._render_findings(results, subtasks) == (
+        "Subtask s0\nQuestion: How does RAG work?\n\n"
+        f"RAG retrieves documents first.\n\nSources:\n- {URL_A}"
+        "\n\n---\n\n"
+        "Subtask s1\nQuestion: What indexes the corpus?\nFAILED — boom"
+    )
 
 
 # --- the empty case -----------------------------------------------------------
