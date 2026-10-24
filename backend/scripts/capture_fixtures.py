@@ -316,6 +316,7 @@ async def main() -> None:
     )
 
     write_demo()
+    write_citation_cases()
 
 
 def write_demo() -> None:
@@ -330,6 +331,39 @@ def write_demo() -> None:
         json.dumps(topology, indent=2) + "\n", encoding="utf-8", newline="\n"
     )
     print(f"demo/                    compliance.json, topology.json -> {DEMO}")
+
+
+# Citations as models write them, and some that are not citations. The frontend
+# marks citations in an answer with its own port of the parser, held to these.
+CITATION_INPUTS = [
+    "[AI Act Art. 6(2)]",
+    "[AI Act Article 6 (2)]",
+    "[ai act art 6(2)(a)]",
+    "[AI Act Art. 5(1)(A)]",
+    "[GDPR Art. 33(1); GDPR Art. 34(1)]",
+    "[GDPR Art. 6(1)(a), GDPR Art. 9(2)(a)]",
+    "[GDPR Art. 6(1)(a), (b)]",
+    "[AI Act Annex iii(4)(a)]",
+    "[AI Act Recital 85]",
+    "[GDPR Recital 071]",
+    "[AI Act Art. 6(2)] and [GDPR Art. 35(1)]",
+    "[1]",
+    "[see the guidance]",
+    "[https://example.com]",
+    "[The AI Act Art. 6]",
+    "[GDPR Article 4(11)",
+]
+
+
+def write_citation_cases() -> None:
+    """What the backend makes of each citation input, for the frontend's parser."""
+    from atlas.library.citations import cited_labels
+
+    cases = [{"text": text, "labels": cited_labels(text)} for text in CITATION_INPUTS]
+    (FIXTURES / "citation-cases.json").write_text(
+        json.dumps(cases, indent=2) + "\n", encoding="utf-8", newline="\n"
+    )
+    print(f"citation-cases.json       {len(cases)} cases")
 
 
 if __name__ == "__main__":

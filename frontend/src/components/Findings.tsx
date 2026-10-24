@@ -43,8 +43,9 @@ export function Findings({ state }: Props): React.JSX.Element | null {
               </p>
             ) : (
               <ul className="mt-1 space-y-0.5 pl-7">
-                {branch.sources.map((source) => (
-                  <li key={source.url} className="truncate text-2xs">
+                {branch.sources.map((source, index) => (
+                  // Keyed by position too: two paragraphs of one article share its URL.
+                  <li key={`${source.label ?? source.url}:${index}`} className="truncate text-2xs">
                     <a
                       href={source.url}
                       target="_blank"
@@ -52,9 +53,14 @@ export function Findings({ state }: Props): React.JSX.Element | null {
                       className="text-ink-muted hover:text-accent"
                       title={source.title}
                     >
+                      {source.label !== null && source.label !== undefined && (
+                        <span className="mr-1.5 font-medium text-law">{source.label}</span>
+                      )}
                       {source.title}
                     </a>
-                    <span className="ml-1.5 text-ink-faint">{hostOf(source.url)}</span>
+                    {(source.label === null || source.label === undefined) && (
+                      <span className="ml-1.5 text-ink-faint">{hostOf(source.url)}</span>
+                    )}
                   </li>
                 ))}
               </ul>
