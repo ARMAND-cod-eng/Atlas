@@ -18,6 +18,7 @@ to every reconnecting client.
 
 from __future__ import annotations
 
+import json
 from collections.abc import Iterator, Mapping, Sequence
 from contextlib import contextmanager
 from contextvars import ContextVar
@@ -81,7 +82,7 @@ class AgentCall(BaseModel):
 
     def summary(self) -> dict[str, Any]:
         """What the live stream carries: enough to list the call, not its contents."""
-        text = self.response if isinstance(self.response, str) else str(self.response)
+        text = self._readable()
         preview = text if len(text) <= PREVIEW_CHARS else text[:PREVIEW_CHARS] + "..."
         return {
             "call_id": self.call_id,
@@ -95,6 +96,18 @@ class AgentCall(BaseModel):
             "error": self.error,
             "preview": preview,
         }
+
+    def _readable(self) -> str:
+        """The response as a person skims it: a search's hits, an output as JSON."""
+        if self.response is None or isinstance(self.response, str):
+            return self.response or ""
+        if self.kind == "tool" and isinstance(self.response, list):
+            return "; ".join(
+                str(ref.get("label") or ref.get("url"))
+                for ref in self.response
+                if isinstance(ref, Mapping)
+            )
+        return json.dumps(self.response, default=str)
 
 
 def as_messages(messages: object) -> list[dict[str, str]]:

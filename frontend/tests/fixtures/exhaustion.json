@@ -2,7 +2,7 @@
   {
     "run_id": "exhaustion",
     "seq": 1,
-    "ts": "2026-10-24T04:34:16.356193Z",
+    "ts": "2026-10-24T20:17:56.503785Z",
     "type": "run_started",
     "node": null,
     "payload": {
@@ -13,29 +13,29 @@
   {
     "run_id": "exhaustion",
     "seq": 2,
-    "ts": "2026-10-24T04:34:16.356193Z",
+    "ts": "2026-10-24T20:17:56.503785Z",
     "type": "node_started",
     "node": "planner",
     "payload": {
       "subtask_id": null,
-      "span_id": "a88e3aee6ad7"
+      "span_id": "aeee0a76faa2"
     }
   },
   {
     "run_id": "exhaustion",
     "seq": 3,
-    "ts": "2026-10-24T04:34:16.356193Z",
+    "ts": "2026-10-24T20:17:56.503785Z",
     "type": "node_completed",
     "node": "planner",
     "payload": {
       "subtask_id": null,
-      "span_id": "a88e3aee6ad7"
+      "span_id": "aeee0a76faa2"
     }
   },
   {
     "run_id": "exhaustion",
     "seq": 4,
-    "ts": "2026-10-24T04:34:16.356193Z",
+    "ts": "2026-10-24T20:17:56.503785Z",
     "type": "fan_out",
     "node": "planner",
     "payload": {
@@ -55,42 +55,42 @@
   {
     "run_id": "exhaustion",
     "seq": 5,
-    "ts": "2026-10-24T04:34:16.372019Z",
+    "ts": "2026-10-24T20:17:56.519509Z",
     "type": "node_started",
     "node": "researcher",
     "payload": {
       "subtask_id": "s0",
-      "span_id": "183f0ea7dd04"
+      "span_id": "9a66d0621882"
     }
   },
   {
     "run_id": "exhaustion",
     "seq": 6,
-    "ts": "2026-10-24T04:34:16.372019Z",
+    "ts": "2026-10-24T20:17:56.519509Z",
     "type": "agent_call",
     "node": "researcher",
     "payload": {
-      "call_id": "fb747bcbcfb04f4482e138122f09ee5b",
-      "span_id": "183f0ea7dd04",
+      "call_id": "5c01d3681e1a4978ab8116e543a35c6f",
+      "span_id": "9a66d0621882",
       "subtask_id": "s0",
       "kind": "tool",
       "name": "web",
-      "duration_s": 4.759989678859711e-05,
+      "duration_s": 1.800013706088066e-05,
       "input_tokens": null,
       "output_tokens": null,
       "error": null,
-      "preview": "[{'url': 'https://example.com/how-0', 'title': 'how result 0'}, {'url': 'https://example.com/how-1', 'title': 'how result 1'}]"
+      "preview": "https://example.com/how-0; https://example.com/how-1"
     }
   },
   {
     "run_id": "exhaustion",
     "seq": 7,
-    "ts": "2026-10-24T04:34:16.372019Z",
+    "ts": "2026-10-24T20:17:56.519509Z",
     "type": "node_completed",
     "node": "researcher",
     "payload": {
       "subtask_id": "s0",
-      "span_id": "183f0ea7dd04",
+      "span_id": "9a66d0621882",
       "sources": [
         {
           "url": "https://example.com/how-0",
@@ -112,42 +112,42 @@
   {
     "run_id": "exhaustion",
     "seq": 8,
-    "ts": "2026-10-24T04:34:16.372019Z",
+    "ts": "2026-10-24T20:17:56.519509Z",
     "type": "node_started",
     "node": "researcher",
     "payload": {
       "subtask_id": "s1",
-      "span_id": "c3099d4ef6b9"
+      "span_id": "b5b73a20a7bd"
     }
   },
   {
     "run_id": "exhaustion",
     "seq": 9,
-    "ts": "2026-10-24T04:34:16.372019Z",
+    "ts": "2026-10-24T20:17:56.519509Z",
     "type": "agent_call",
     "node": "researcher",
     "payload": {
-      "call_id": "32ba6338b5f6412ea17aa18411383475",
-      "span_id": "c3099d4ef6b9",
+      "call_id": "4c6eb13cdbbf45a6983f5f33646df539",
+      "span_id": "b5b73a20a7bd",
       "subtask_id": "s1",
       "kind": "tool",
       "name": "web",
-      "duration_s": 3.550015389919281e-05,
+      "duration_s": 1.2499978765845299e-05,
       "input_tokens": null,
       "output_tokens": null,
       "error": null,
-      "preview": "[{'url': 'https://example.com/how-0', 'title': 'how result 0'}, {'url': 'https://example.com/how-1', 'title': 'how result 1'}]"
+      "preview": "https://example.com/how-0; https://example.com/how-1"
     }
   },
   {
     "run_id": "exhaustion",
     "seq": 10,
-    "ts": "2026-10-24T04:34:16.372019Z",
+    "ts": "2026-10-24T20:17:56.519509Z",
     "type": "node_completed",
     "node": "researcher",
     "payload": {
       "subtask_id": "s1",
-      "span_id": "c3099d4ef6b9",
+      "span_id": "b5b73a20a7bd",
       "sources": [
         {
           "url": "https://example.com/how-0",
@@ -169,42 +169,42 @@
   {
     "run_id": "exhaustion",
     "seq": 11,
-    "ts": "2026-10-24T04:34:16.372019Z",
+    "ts": "2026-10-24T20:17:56.519509Z",
     "type": "node_started",
     "node": "researcher",
     "payload": {
       "subtask_id": "s2",
-      "span_id": "799460d02a39"
+      "span_id": "1e6202c49c9b"
     }
   },
   {
     "run_id": "exhaustion",
     "seq": 12,
-    "ts": "2026-10-24T04:34:16.372019Z",
+    "ts": "2026-10-24T20:17:56.519509Z",
     "type": "agent_call",
     "node": "researcher",
     "payload": {
-      "call_id": "8fcaeffb35a34482aa4fcf6fffbb36b4",
-      "span_id": "799460d02a39",
+      "call_id": "b39dae0848444dc48c53f93e27a66767",
+      "span_id": "1e6202c49c9b",
       "subtask_id": "s2",
       "kind": "tool",
       "name": "web",
-      "duration_s": 3.310013562440872e-05,
+      "duration_s": 1.1299969628453255e-05,
       "input_tokens": null,
       "output_tokens": null,
       "error": null,
-      "preview": "[{'url': 'https://example.com/what-0', 'title': 'what result 0'}, {'url': 'https://example.com/what-1', 'title': 'what result 1'}]"
+      "preview": "https://example.com/what-0; https://example.com/what-1"
     }
   },
   {
     "run_id": "exhaustion",
     "seq": 13,
-    "ts": "2026-10-24T04:34:16.372019Z",
+    "ts": "2026-10-24T20:17:56.519509Z",
     "type": "node_completed",
     "node": "researcher",
     "payload": {
       "subtask_id": "s2",
-      "span_id": "799460d02a39",
+      "span_id": "1e6202c49c9b",
       "sources": [
         {
           "url": "https://example.com/what-0",
@@ -226,29 +226,29 @@
   {
     "run_id": "exhaustion",
     "seq": 14,
-    "ts": "2026-10-24T04:34:16.372019Z",
+    "ts": "2026-10-24T20:17:56.519509Z",
     "type": "node_started",
     "node": "synthesizer",
     "payload": {
       "subtask_id": null,
-      "span_id": "b7de14ea040b"
+      "span_id": "1ea77baeed18"
     }
   },
   {
     "run_id": "exhaustion",
     "seq": 15,
-    "ts": "2026-10-24T04:34:16.372019Z",
+    "ts": "2026-10-24T20:17:56.519509Z",
     "type": "node_completed",
     "node": "synthesizer",
     "payload": {
       "subtask_id": null,
-      "span_id": "b7de14ea040b"
+      "span_id": "1ea77baeed18"
     }
   },
   {
     "run_id": "exhaustion",
     "seq": 16,
-    "ts": "2026-10-24T04:34:16.372019Z",
+    "ts": "2026-10-24T20:17:56.519509Z",
     "type": "iteration_started",
     "node": "critic",
     "payload": {
@@ -258,29 +258,29 @@
   {
     "run_id": "exhaustion",
     "seq": 17,
-    "ts": "2026-10-24T04:34:16.372019Z",
+    "ts": "2026-10-24T20:17:56.519509Z",
     "type": "node_started",
     "node": "critic",
     "payload": {
       "subtask_id": null,
-      "span_id": "a15ed854bbfa"
+      "span_id": "fbac4cf42479"
     }
   },
   {
     "run_id": "exhaustion",
     "seq": 18,
-    "ts": "2026-10-24T04:34:16.372019Z",
+    "ts": "2026-10-24T20:17:56.519509Z",
     "type": "node_completed",
     "node": "critic",
     "payload": {
       "subtask_id": null,
-      "span_id": "a15ed854bbfa"
+      "span_id": "fbac4cf42479"
     }
   },
   {
     "run_id": "exhaustion",
     "seq": 19,
-    "ts": "2026-10-24T04:34:16.372019Z",
+    "ts": "2026-10-24T20:17:56.519509Z",
     "type": "critic_verdict",
     "node": "critic",
     "payload": {
@@ -304,42 +304,42 @@
   {
     "run_id": "exhaustion",
     "seq": 20,
-    "ts": "2026-10-24T04:34:16.372019Z",
+    "ts": "2026-10-24T20:17:56.519509Z",
     "type": "node_started",
     "node": "researcher",
     "payload": {
       "subtask_id": "s1",
-      "span_id": "d42f820bcb82"
+      "span_id": "74b88c72dfa6"
     }
   },
   {
     "run_id": "exhaustion",
     "seq": 21,
-    "ts": "2026-10-24T04:34:16.372019Z",
+    "ts": "2026-10-24T20:17:56.519509Z",
     "type": "agent_call",
     "node": "researcher",
     "payload": {
-      "call_id": "e3df68ce3ff74624a01338e2cd6d796b",
-      "span_id": "d42f820bcb82",
+      "call_id": "ce00067f71034a51b6d7eff463f3a45a",
+      "span_id": "74b88c72dfa6",
       "subtask_id": "s1",
       "kind": "tool",
       "name": "web",
-      "duration_s": 2.4099834263324738e-05,
+      "duration_s": 1.5399884432554245e-05,
       "input_tokens": null,
       "output_tokens": null,
       "error": null,
-      "preview": "[{'url': 'https://example.com/how-0', 'title': 'how result 0'}, {'url': 'https://example.com/how-1', 'title': 'how result 1'}]"
+      "preview": "https://example.com/how-0; https://example.com/how-1"
     }
   },
   {
     "run_id": "exhaustion",
     "seq": 22,
-    "ts": "2026-10-24T04:34:16.372019Z",
+    "ts": "2026-10-24T20:17:56.519509Z",
     "type": "node_completed",
     "node": "researcher",
     "payload": {
       "subtask_id": "s1",
-      "span_id": "d42f820bcb82",
+      "span_id": "74b88c72dfa6",
       "sources": [
         {
           "url": "https://example.com/how-0",
@@ -361,29 +361,29 @@
   {
     "run_id": "exhaustion",
     "seq": 23,
-    "ts": "2026-10-24T04:34:16.372019Z",
+    "ts": "2026-10-24T20:17:56.519509Z",
     "type": "node_started",
     "node": "synthesizer",
     "payload": {
       "subtask_id": null,
-      "span_id": "bbb3898fde0f"
+      "span_id": "8984490e5e49"
     }
   },
   {
     "run_id": "exhaustion",
     "seq": 24,
-    "ts": "2026-10-24T04:34:16.372019Z",
+    "ts": "2026-10-24T20:17:56.519509Z",
     "type": "node_completed",
     "node": "synthesizer",
     "payload": {
       "subtask_id": null,
-      "span_id": "bbb3898fde0f"
+      "span_id": "8984490e5e49"
     }
   },
   {
     "run_id": "exhaustion",
     "seq": 25,
-    "ts": "2026-10-24T04:34:16.387664Z",
+    "ts": "2026-10-24T20:17:56.519509Z",
     "type": "iteration_started",
     "node": "critic",
     "payload": {
@@ -393,29 +393,29 @@
   {
     "run_id": "exhaustion",
     "seq": 26,
-    "ts": "2026-10-24T04:34:16.387664Z",
+    "ts": "2026-10-24T20:17:56.519509Z",
     "type": "node_started",
     "node": "critic",
     "payload": {
       "subtask_id": null,
-      "span_id": "5de3eeaf88e6"
+      "span_id": "00413cbf9c62"
     }
   },
   {
     "run_id": "exhaustion",
     "seq": 27,
-    "ts": "2026-10-24T04:34:16.387664Z",
+    "ts": "2026-10-24T20:17:56.519509Z",
     "type": "node_completed",
     "node": "critic",
     "payload": {
       "subtask_id": null,
-      "span_id": "5de3eeaf88e6"
+      "span_id": "00413cbf9c62"
     }
   },
   {
     "run_id": "exhaustion",
     "seq": 28,
-    "ts": "2026-10-24T04:34:16.387664Z",
+    "ts": "2026-10-24T20:17:56.519509Z",
     "type": "critic_verdict",
     "node": "critic",
     "payload": {
@@ -439,7 +439,7 @@
   {
     "run_id": "exhaustion",
     "seq": 29,
-    "ts": "2026-10-24T04:34:16.387664Z",
+    "ts": "2026-10-24T20:17:56.519509Z",
     "type": "run_completed",
     "node": null,
     "payload": {

@@ -13,7 +13,8 @@ because replay re-sends the whole stream to every reconnecting client.
 
 from __future__ import annotations
 
-from typing import Any
+from datetime import UTC, datetime
+from typing import Any, Literal
 
 import pytest
 from langchain_core.language_models.fake_chat_models import FakeListChatModel
@@ -29,7 +30,7 @@ from atlas.graph.state import CriticVerdict, PlannerOutput, Source, Subtask
 from atlas.prompts import GENERAL_PLANNER
 from atlas.runner import execute_run
 from atlas.store import InMemoryRunStore
-from atlas.trace import PREVIEW_CHARS
+from atlas.trace import PREVIEW_CHARS, AgentCall
 
 PLAN = PlannerOutput(
     subtasks=[
@@ -173,3 +174,33 @@ async def test_without_a_store_the_stream_still_has_its_summaries(
     events = await _run(None)
 
     assert len([e for e in events if e.type == AGENT_CALL]) == 7
+
+
+def _call(kind: Literal["model", "tool"], response: object) -> AgentCall:
+    return AgentCall(
+        node=nodes.RESEARCHER,
+        kind=kind,
+        name="library" if kind == "tool" else "m",
+        started_at=datetime(2026, 10, 24, tzinfo=UTC),
+        duration_s=0.1,
+        request={"query": "q"},
+        response=response,
+    )
+
+
+def test_a_search_previews_as_what_it_found() -> None:
+    call = _call(
+        "tool",
+        [
+            {"label": "AI Act Art. 6(2)", "title": "Classification rules"},
+            {"url": "https://example.com/a", "title": "A guide"},
+        ],
+    )
+
+    assert call.summary()["preview"] == "AI Act Art. 6(2); https://example.com/a"
+
+
+def test_a_structured_output_previews_as_json() -> None:
+    call = _call("model", {"verdict": "accept", "notes": None})
+
+    assert call.summary()["preview"] == '{"verdict": "accept", "notes": null}'

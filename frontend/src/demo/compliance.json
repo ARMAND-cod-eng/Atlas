@@ -2,7 +2,7 @@
   {
     "run_id": "compliance",
     "seq": 1,
-    "ts": "2026-10-24T04:49:22.088965Z",
+    "ts": "2026-10-24T20:18:29.381166Z",
     "type": "run_started",
     "node": null,
     "payload": {
@@ -13,29 +13,29 @@
   {
     "run_id": "compliance",
     "seq": 2,
-    "ts": "2026-10-24T04:49:22.088965Z",
+    "ts": "2026-10-24T20:18:29.391272Z",
     "type": "node_started",
     "node": "planner",
     "payload": {
       "subtask_id": null,
-      "span_id": "ea77379cb48f"
+      "span_id": "784e0dd1a747"
     }
   },
   {
     "run_id": "compliance",
     "seq": 3,
-    "ts": "2026-10-24T04:49:22.088965Z",
+    "ts": "2026-10-24T20:18:29.391272Z",
     "type": "node_completed",
     "node": "planner",
     "payload": {
       "subtask_id": null,
-      "span_id": "ea77379cb48f"
+      "span_id": "784e0dd1a747"
     }
   },
   {
     "run_id": "compliance",
     "seq": 4,
-    "ts": "2026-10-24T04:49:22.088965Z",
+    "ts": "2026-10-24T20:18:29.393368Z",
     "type": "fan_out",
     "node": "planner",
     "payload": {
@@ -53,61 +53,61 @@
   {
     "run_id": "compliance",
     "seq": 5,
-    "ts": "2026-10-24T04:49:25.744731Z",
+    "ts": "2026-10-24T20:18:33.005111Z",
     "type": "node_started",
     "node": "researcher",
     "payload": {
       "subtask_id": "s0",
-      "span_id": "7abb01181913"
+      "span_id": "d63cb5bae1f0"
     }
   },
   {
     "run_id": "compliance",
     "seq": 6,
-    "ts": "2026-10-24T04:49:25.744731Z",
+    "ts": "2026-10-24T20:18:33.005111Z",
     "type": "agent_call",
     "node": "researcher",
     "payload": {
-      "call_id": "2ba2525c2f9f454a934baf6d6d80c1b0",
-      "span_id": "7abb01181913",
+      "call_id": "33d7cc4a0e1a49bd87606b3c3ed50a2d",
+      "span_id": "d63cb5bae1f0",
       "subtask_id": "s0",
       "kind": "tool",
       "name": "library",
-      "duration_s": 3.6464869000483304,
+      "duration_s": 3.600263000000268,
       "input_tokens": null,
       "output_tokens": null,
       "error": null,
-      "preview": "[{'label': 'AI Act Annex III(4)(a)', 'title': 'High-risk AI systems referred to in Article 6(2)'}, {'label': 'AI Act Annex VIII(7)', 'title': 'Information to be submitted upon the registration of high-risk AI systems in accordance with Article 49'}, {'label': 'AI Act Art. 16(b)',..."
+      "preview": "AI Act Annex III(4)(a); AI Act Annex VIII(7); AI Act Art. 16(b); AI Act Art. 20(2); AI Act Art. 80(1); AI Act Art. 26(7)"
     }
   },
   {
     "run_id": "compliance",
     "seq": 7,
-    "ts": "2026-10-24T04:49:25.744731Z",
+    "ts": "2026-10-24T20:18:33.005111Z",
     "type": "agent_call",
     "node": "researcher",
     "payload": {
-      "call_id": "a7bbe44809d14dbf9ab58b448c1a6911",
-      "span_id": "7abb01181913",
+      "call_id": "7cbd94df820d4ae599d0ebc79ff8f57e",
+      "span_id": "d63cb5bae1f0",
       "subtask_id": "s0",
       "kind": "tool",
       "name": "web",
-      "duration_s": 2.050003968179226e-05,
+      "duration_s": 2.7300091460347176e-05,
       "input_tokens": null,
       "output_tokens": null,
       "error": null,
-      "preview": "[{'url': 'https://example.com/is-0', 'title': 'is result 0'}, {'url': 'https://example.com/is-1', 'title': 'is result 1'}]"
+      "preview": "https://example.com/is-0; https://example.com/is-1"
     }
   },
   {
     "run_id": "compliance",
     "seq": 8,
-    "ts": "2026-10-24T04:49:25.744731Z",
+    "ts": "2026-10-24T20:18:33.005111Z",
     "type": "node_completed",
     "node": "researcher",
     "payload": {
       "subtask_id": "s0",
-      "span_id": "7abb01181913",
+      "span_id": "d63cb5bae1f0",
       "sources": [
         {
           "url": "http://data.europa.eu/eli/reg/2024/1689/oj#anx_III",
@@ -165,61 +165,61 @@
   {
     "run_id": "compliance",
     "seq": 9,
-    "ts": "2026-10-24T04:49:25.744731Z",
+    "ts": "2026-10-24T20:18:33.005111Z",
     "type": "node_started",
     "node": "researcher",
     "payload": {
       "subtask_id": "s1",
-      "span_id": "091ed961c910"
+      "span_id": "c4543e2b2882"
     }
   },
   {
     "run_id": "compliance",
     "seq": 10,
-    "ts": "2026-10-24T04:49:25.744731Z",
+    "ts": "2026-10-24T20:18:33.005111Z",
     "type": "agent_call",
     "node": "researcher",
     "payload": {
-      "call_id": "490e65df0c0f43afa67a0f0389c3cfe5",
-      "span_id": "091ed961c910",
+      "call_id": "8bbc7650140b412a8ec06094498b5320",
+      "span_id": "c4543e2b2882",
       "subtask_id": "s1",
       "kind": "tool",
       "name": "library",
-      "duration_s": 0.005605400074273348,
+      "duration_s": 0.006400400074198842,
       "input_tokens": null,
       "output_tokens": null,
       "error": null,
-      "preview": "[{'label': 'AI Act Art. 16', 'title': 'Obligations of providers of high-risk AI systems'}, {'label': 'AI Act Art. 60(1)', 'title': 'Testing of high-risk AI systems in real world conditions outside AI regulatory sandboxes'}, {'label': 'AI Act Recital 85', 'title': 'AI Act Recital ..."
+      "preview": "AI Act Art. 16; AI Act Art. 60(1); AI Act Recital 85; AI Act Art. 72(1); AI Act Art. 22(3)(d); AI Act Art. 31(4)"
     }
   },
   {
     "run_id": "compliance",
     "seq": 11,
-    "ts": "2026-10-24T04:49:25.744731Z",
+    "ts": "2026-10-24T20:18:33.005111Z",
     "type": "agent_call",
     "node": "researcher",
     "payload": {
-      "call_id": "f359c5e06cd643228065fb50f8111203",
-      "span_id": "091ed961c910",
+      "call_id": "4ed3a06ce06743889c6306a7db611e59",
+      "span_id": "c4543e2b2882",
       "subtask_id": "s1",
       "kind": "tool",
       "name": "web",
-      "duration_s": 1.600012183189392e-05,
+      "duration_s": 1.659989356994629e-05,
       "input_tokens": null,
       "output_tokens": null,
       "error": null,
-      "preview": "[{'url': 'https://example.com/what-0', 'title': 'what result 0'}, {'url': 'https://example.com/what-1', 'title': 'what result 1'}]"
+      "preview": "https://example.com/what-0; https://example.com/what-1"
     }
   },
   {
     "run_id": "compliance",
     "seq": 12,
-    "ts": "2026-10-24T04:49:25.744731Z",
+    "ts": "2026-10-24T20:18:33.005111Z",
     "type": "node_completed",
     "node": "researcher",
     "payload": {
       "subtask_id": "s1",
-      "span_id": "091ed961c910",
+      "span_id": "c4543e2b2882",
       "sources": [
         {
           "url": "http://data.europa.eu/eli/reg/2024/1689/oj#art_16",
@@ -277,18 +277,18 @@
   {
     "run_id": "compliance",
     "seq": 13,
-    "ts": "2026-10-24T04:49:25.751807Z",
+    "ts": "2026-10-24T20:18:33.005111Z",
     "type": "node_started",
     "node": "synthesizer",
     "payload": {
       "subtask_id": null,
-      "span_id": "d97dceb01919"
+      "span_id": "57b6988b7eab"
     }
   },
   {
     "run_id": "compliance",
     "seq": 14,
-    "ts": "2026-10-24T04:49:25.751807Z",
+    "ts": "2026-10-24T20:18:33.005111Z",
     "type": "citation_check",
     "node": "synthesizer",
     "payload": {
@@ -310,18 +310,18 @@
   {
     "run_id": "compliance",
     "seq": 15,
-    "ts": "2026-10-24T04:49:25.751807Z",
+    "ts": "2026-10-24T20:18:33.005111Z",
     "type": "node_completed",
     "node": "synthesizer",
     "payload": {
       "subtask_id": null,
-      "span_id": "d97dceb01919"
+      "span_id": "57b6988b7eab"
     }
   },
   {
     "run_id": "compliance",
     "seq": 16,
-    "ts": "2026-10-24T04:49:25.751807Z",
+    "ts": "2026-10-24T20:18:33.010173Z",
     "type": "iteration_started",
     "node": "critic",
     "payload": {
@@ -331,29 +331,29 @@
   {
     "run_id": "compliance",
     "seq": 17,
-    "ts": "2026-10-24T04:49:25.751807Z",
+    "ts": "2026-10-24T20:18:33.010173Z",
     "type": "node_started",
     "node": "critic",
     "payload": {
       "subtask_id": null,
-      "span_id": "84d1000e139c"
+      "span_id": "8a939dfc6249"
     }
   },
   {
     "run_id": "compliance",
     "seq": 18,
-    "ts": "2026-10-24T04:49:25.751807Z",
+    "ts": "2026-10-24T20:18:33.010173Z",
     "type": "node_completed",
     "node": "critic",
     "payload": {
       "subtask_id": null,
-      "span_id": "84d1000e139c"
+      "span_id": "8a939dfc6249"
     }
   },
   {
     "run_id": "compliance",
     "seq": 19,
-    "ts": "2026-10-24T04:49:25.751807Z",
+    "ts": "2026-10-24T20:18:33.010173Z",
     "type": "critic_verdict",
     "node": "critic",
     "payload": {
@@ -368,18 +368,18 @@
   {
     "run_id": "compliance",
     "seq": 20,
-    "ts": "2026-10-24T04:49:25.751807Z",
+    "ts": "2026-10-24T20:18:33.010173Z",
     "type": "node_started",
     "node": "synthesizer",
     "payload": {
       "subtask_id": null,
-      "span_id": "f9b7fe38ea4e"
+      "span_id": "5ff6402d316b"
     }
   },
   {
     "run_id": "compliance",
     "seq": 21,
-    "ts": "2026-10-24T04:49:25.751807Z",
+    "ts": "2026-10-24T20:18:33.010173Z",
     "type": "citation_check",
     "node": "synthesizer",
     "payload": {
@@ -398,18 +398,18 @@
   {
     "run_id": "compliance",
     "seq": 22,
-    "ts": "2026-10-24T04:49:25.751807Z",
+    "ts": "2026-10-24T20:18:33.010173Z",
     "type": "node_completed",
     "node": "synthesizer",
     "payload": {
       "subtask_id": null,
-      "span_id": "f9b7fe38ea4e"
+      "span_id": "5ff6402d316b"
     }
   },
   {
     "run_id": "compliance",
     "seq": 23,
-    "ts": "2026-10-24T04:49:25.751807Z",
+    "ts": "2026-10-24T20:18:33.010173Z",
     "type": "iteration_started",
     "node": "critic",
     "payload": {
@@ -419,29 +419,29 @@
   {
     "run_id": "compliance",
     "seq": 24,
-    "ts": "2026-10-24T04:49:25.751807Z",
+    "ts": "2026-10-24T20:18:33.010173Z",
     "type": "node_started",
     "node": "critic",
     "payload": {
       "subtask_id": null,
-      "span_id": "19dd6295282f"
+      "span_id": "58673c859605"
     }
   },
   {
     "run_id": "compliance",
     "seq": 25,
-    "ts": "2026-10-24T04:49:25.751807Z",
+    "ts": "2026-10-24T20:18:33.010173Z",
     "type": "node_completed",
     "node": "critic",
     "payload": {
       "subtask_id": null,
-      "span_id": "19dd6295282f"
+      "span_id": "58673c859605"
     }
   },
   {
     "run_id": "compliance",
     "seq": 26,
-    "ts": "2026-10-24T04:49:25.751807Z",
+    "ts": "2026-10-24T20:18:33.010173Z",
     "type": "critic_verdict",
     "node": "critic",
     "payload": {
@@ -456,7 +456,7 @@
   {
     "run_id": "compliance",
     "seq": 27,
-    "ts": "2026-10-24T04:49:25.751807Z",
+    "ts": "2026-10-24T20:18:33.010173Z",
     "type": "run_completed",
     "node": null,
     "payload": {
