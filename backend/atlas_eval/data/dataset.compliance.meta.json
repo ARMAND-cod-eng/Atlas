@@ -1,0 +1,16 @@
+{
+  "schema_version": 1,
+  "dataset_version": "compliance-v1",
+  "created": "2026-10-23",
+  "smoke_ids": [
+    "c01",
+    "c05",
+    "c10",
+    "c15",
+    "c19",
+    "c21",
+    "c36",
+    "c37"
+  ],
+  "notes": "Questions on the EU AI Act (Regulation (EU) 2024/1689) and GDPR (Regulation (EU) 2016/679), answered from the regulation library. Every item names the provisions an answer must cite, as library labels; tests check that each resolves to the Official Journal text. Drafted by a model from that text; each item needs human review (atlas_eval review --dataset compliance) before the set may be called hand-labeled. A research benchmark, not legal advice."
+}

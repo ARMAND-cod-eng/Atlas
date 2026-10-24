@@ -16,13 +16,30 @@ from __future__ import annotations
 import json
 from collections.abc import Iterator, Sequence
 from pathlib import Path
-from typing import Literal
+from typing import Any, Literal
 
-from pydantic import BaseModel, Field, model_validator
+from pydantic import (
+    BaseModel,
+    Field,
+    SerializerFunctionWrapHandler,
+    model_serializer,
+    model_validator,
+)
 
 DATA_DIR = Path(__file__).resolve().parent / "data"
 DATASET_PATH = DATA_DIR / "dataset.v1.jsonl"
 META_PATH = DATA_DIR / "dataset.meta.json"
+
+# The compliance domain: questions on the EU AI Act and GDPR, answered from the
+# regulation library (atlas.library). Same schema; items also name the law
+# their answer must cite.
+COMPLIANCE_PATH = DATA_DIR / "dataset.compliance.v1.jsonl"
+COMPLIANCE_META_PATH = DATA_DIR / "dataset.compliance.meta.json"
+
+DATASETS: dict[str, tuple[Path, Path]] = {
+    "general": (DATASET_PATH, META_PATH),
+    "compliance": (COMPLIANCE_PATH, COMPLIANCE_META_PATH),
+}
 
 # How a rubric entry is checked. Recorded per entry so the deterministic:judge
 # split is data we can print, rather than a ratio anyone has to take on trust.
@@ -76,6 +93,29 @@ class ExpectedSubtasks(BaseModel):
         return self
 
 
+class ExpectedCitations(BaseModel):
+    """The provisions an answer has to cite, and the ones it may.
+
+    Labels as the library names them: "AI Act Art. 6(2)", "GDPR Art. 35(3)(a)".
+    ``must`` is the law the answer rests on — an answer that reaches the right
+    conclusion without citing it has not shown its work, which in compliance is
+    most of the work. ``acceptable`` is relevant law that does not count against
+    an answer's precision. That every label resolves is checked against the
+    library in tests, not here: the schema should not need the Official Journal
+    to load.
+    """
+
+    must: list[str] = Field(min_length=1)
+    acceptable: list[str] = Field(default_factory=list)
+
+    @model_validator(mode="after")
+    def _disjoint(self) -> ExpectedCitations:
+        both = set(self.must) & set(self.acceptable)
+        if both:
+            raise ValueError(f"listed as both must and acceptable: {sorted(both)}")
+        return self
+
+
 class Provenance(BaseModel):
     """Who drafted this item and who reviewed it.
 
@@ -102,6 +142,21 @@ class EvalItem(BaseModel):
     recency: Recency
     tags: list[str] = Field(default_factory=list)
     provenance: Provenance = Field(default_factory=Provenance)
+    # Compliance items only: the law the answer has to cite.
+    citations: ExpectedCitations | None = None
+
+    @model_serializer(mode="wrap")
+    def _omit_absent_citations(self, handler: SerializerFunctionWrapHandler) -> dict[str, Any]:
+        """Leave the field out of items that have none, rather than writing null.
+
+        The general dataset is reviewed and committed; every rewrite of it (each
+        approval in ``review``) would otherwise add ``"citations": null`` to all
+        fifty lines, burying the one change a reviewer made.
+        """
+        data: dict[str, Any] = handler(self)
+        if data.get("citations") is None:
+            data.pop("citations", None)
+        return data
 
     @model_validator(mode="after")
     def _rubric_ids_unique(self) -> EvalItem:

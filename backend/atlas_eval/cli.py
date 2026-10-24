@@ -31,12 +31,13 @@ from typing import Any
 
 from langchain_core.callbacks import get_usage_metadata_callback
 
+from atlas.library import Unit, load_library
 from atlas.models import primary_provider
 from atlas.runtime import configure_logging
 from atlas_eval.baselines import run_single_call
 from atlas_eval.dataset import (
     DATA_DIR,
-    DATASET_PATH,
+    DATASETS,
     Dataset,
     EvalItem,
     load_dataset,
@@ -79,7 +80,8 @@ def cmd_review(args: argparse.Namespace) -> int:
     that is what ``claim`` reports — the point is that the description of the
     dataset tracks the work actually done on it.
     """
-    dataset = load_dataset()
+    path, meta_path = DATASETS[args.dataset]
+    dataset = load_dataset(path, meta_path)
     pending = [i for i in dataset.items if i.provenance.reviewed_by is None]
     if not pending:
         print("every item is already reviewed")
@@ -101,6 +103,8 @@ def cmd_review(args: argparse.Namespace) -> int:
                 print(f"        patterns: {entry.patterns}")
             if entry.number is not None:
                 print(f"        number: {entry.number} +/- {entry.tolerance}")
+        if item.citations is not None:
+            _print_citations(item)
         print(f"\nWRONG BUT PLAUSIBLE\n  {item.wrong_but_plausible}")
 
         choice = input("\napprove? ").strip().lower()
@@ -112,17 +116,51 @@ def cmd_review(args: argparse.Namespace) -> int:
         item.provenance.reviewed_at = _now()
         # Written immediately: an interrupted session keeps everything approved
         # so far.
-        write_jsonl(DATASET_PATH, dataset.items)
+        write_jsonl(path, dataset.items)
 
-    summary = provenance_summary(load_dataset())
+    summary = provenance_summary(load_dataset(path, meta_path))
     print(f"\n{summary.reviewed}/{summary.total} reviewed")
     print(f'the dataset currently supports: "{summary.claim}"')
     return 0
 
 
+# Enough of a provision to check it is the right one, without scrolling past it.
+CITATION_PREVIEW_CHARS = 320
+
+
+def _print_citations(item: EvalItem) -> None:
+    """Each expected citation with the law's own words, from the library.
+
+    The answer key of a compliance item is article numbers, drafted by a model
+    — the failure the dataset measures. Showing the text a number resolves to
+    lets a reviewer check it against the law rather than against the draft.
+    """
+    if item.citations is None:
+        return
+    library = load_library()
+    print("\nMUST CITE")
+    for label in item.citations.must:
+        _print_provision(library.resolve(label), label)
+    if item.citations.acceptable:
+        print("\nMAY ALSO CITE")
+        for label in item.citations.acceptable:
+            _print_provision(library.resolve(label), label)
+
+
+def _print_provision(unit: Unit | None, label: str) -> None:
+    if unit is None:
+        print(f"  {label}: NOT IN THE LIBRARY — this citation names no provision")
+        return
+    text = unit.text
+    if len(text) > CITATION_PREVIEW_CHARS:
+        text = text[:CITATION_PREVIEW_CHARS].rsplit(" ", 1)[0] + " ..."
+    heading = f" [{unit.title}]" if unit.title else ""
+    print(f"  {label}{heading}\n    {text}")
+
+
 def cmd_claim(args: argparse.Namespace) -> int:
     """Print the strongest description the dataset's provenance supports."""
-    summary = provenance_summary(load_dataset())
+    summary = provenance_summary(load_dataset(*DATASETS[args.dataset]))
     print(summary.claim)
     if not summary.fully_reviewed:
         print(
@@ -581,9 +619,11 @@ def build_parser() -> argparse.ArgumentParser:
     sub = parser.add_subparsers(dest="command", required=True)
 
     review = sub.add_parser("review", help="mark dataset items reviewed, one at a time")
+    review.add_argument("--dataset", choices=sorted(DATASETS), default="general")
     review.set_defaults(func=cmd_review)
 
     claim = sub.add_parser("claim", help="what the dataset's provenance supports claiming")
+    claim.add_argument("--dataset", choices=sorted(DATASETS), default="general")
     claim.set_defaults(func=cmd_claim)
 
     record = sub.add_parser("record", help="hit live Tavily and write the frozen corpus")
