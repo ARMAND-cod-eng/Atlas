@@ -63,6 +63,11 @@ DEGRADED_AUDIT_INCOMPLETE = "audit_incomplete"
 # provisions it had read from the library. The law is all an answer needs to
 # cite; the guidance that would have sat beside it is missing.
 DEGRADED_WEB_SEARCH_FAILED = "web_search_failed"
+# A compliance answer went out with a citation that failed the check against the
+# law (atlas.library.citations): a provision that does not exist, one never
+# retrieved, or a misquotation. Only when no round was left to fix it; the
+# answer carries an "Unverified" note naming the problem.
+DEGRADED_UNVERIFIED_CITATION = "unverified_citation"
 
 
 class LLMCall(BaseModel):

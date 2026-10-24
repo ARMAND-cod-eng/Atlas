@@ -23,6 +23,7 @@ from atlas.budget import is_exceeded
 from atlas.config import get_settings
 from atlas.domains import current_domain
 from atlas.events import (
+    CITATION_CHECK,
     CRITIC_VERDICT,
     FAN_OUT,
     ITERATION_STARTED,
@@ -38,6 +39,8 @@ from atlas.graph.state import (
     Source,
     Subtask,
 )
+from atlas.library import load_library
+from atlas.library.citations import CitationReport, check_citations
 from atlas.library.sources import law_sources, with_authority
 from atlas.metrics import (
     DEGRADED_BUDGET_CHECK_UNAVAILABLE,
@@ -50,6 +53,7 @@ from atlas.metrics import (
     DEGRADED_RESEARCHER_FAILED,
     DEGRADED_SYNTHESIS_TRUNCATED,
     DEGRADED_UNGROUNDED_CITATION,
+    DEGRADED_UNVERIFIED_CITATION,
     DEGRADED_WEB_SEARCH_FAILED,
     CriticRound,
     RunMetrics,
@@ -544,6 +548,9 @@ async def synthesizer(state: AtlasState) -> dict[str, Any]:
         answer = await _synthesize(state, metrics)
         _check_citations(answer, state["research_results"], metrics)
         _check_budget(state, metrics)
+        if current_domain().library:
+            report = check_citations(answer, state["research_results"], load_library())
+            emit(CITATION_CHECK, SYNTHESIZER, ok=report.ok, **report.model_dump())
     return {
         "answer": answer,
         "run_metrics": metrics,
@@ -651,6 +658,15 @@ async def critic(state: AtlasState) -> dict[str, Any]:
                 await _review(state, metrics), state["subtasks"], metrics
             )
 
+        if current_domain().library:
+            report = check_citations(state["answer"], state["research_results"], load_library())
+            if not report.ok:
+                last_round = exceeded or iteration >= get_settings().max_critic_iterations
+                if last_round:
+                    metrics.degraded.append(DEGRADED_UNVERIFIED_CITATION)
+                if not exceeded:
+                    verdict = _with_citation_feedback(verdict, report)
+
         metrics.critic_rounds.append(
             CriticRound(
                 iteration=iteration,
@@ -726,6 +742,18 @@ def _drop_unknown_subtasks(
     return verdict.model_copy(
         update={"per_subtask": [v for v in verdict.per_subtask if v.subtask_id in known]}
     )
+
+
+def _with_citation_feedback(verdict: CriticVerdict, report: CitationReport) -> CriticVerdict:
+    """Send the answer back for a rewrite that fixes its citations.
+
+    Whatever the model critic decided: it is a model, and a model can approve
+    an answer citing an article that does not exist. The check against the law
+    is not a judgement, so it does not defer to one. Any research the critic
+    faulted stays faulted.
+    """
+    feedback = "\n\n".join(part for part in (verdict.synthesis_feedback, report.feedback()) if part)
+    return verdict.model_copy(update={"overall": "revise", "synthesis_feedback": feedback})
 
 
 def _exhaustion_note(verdict: CriticVerdict) -> str:

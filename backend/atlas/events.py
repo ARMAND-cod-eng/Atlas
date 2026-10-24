@@ -44,6 +44,10 @@ CRITIC_VERDICT = "critic_verdict"
 # A run that revises another: which branch was edited, and which were carried
 # over. Those send no events of their own — they did their work in the parent.
 REVISION_STARTED = "revision_started"
+# A compliance answer's citations, checked against the law after each draft:
+# which provisions it cites, and any that do not exist, were never retrieved, or
+# are misquoted. What a client draws its citation chips from.
+CITATION_CHECK = "citation_check"
 RUN_COMPLETED = "run_completed"
 RUN_FAILED = "run_failed"
 
