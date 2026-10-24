@@ -25,6 +25,7 @@ from fastapi.responses import JSONResponse
 from redis.asyncio import Redis
 
 from atlas import eventlog
+from atlas.api.library import router as library_router
 from atlas.api.routes import router
 from atlas.api.streams import router as streams_router
 from atlas.api.topology import router as topology_router
@@ -168,6 +169,7 @@ def create_app() -> FastAPI:
     app.include_router(router)
     app.include_router(streams_router)
     app.include_router(topology_router)
+    app.include_router(library_router)
     return app
 
 

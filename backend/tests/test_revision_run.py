@@ -290,3 +290,19 @@ async def test_a_follow_up_continues_from_the_version_it_names(
         ["first question", "answer (edited)", "from the latest"],
         ["first question", "answer", "from v1"],
     ]
+
+
+async def test_the_result_carries_each_branchs_research_whole(
+    planner_inputs: list[list[str]],
+) -> None:
+    """The inspector's Output tab for a finished run: what each branch found."""
+    graph = _graph()
+
+    result = await execute_run("run-1", "first question", THREAD, graph)
+
+    assert [(r["subtask_id"], r["findings"]) for r in result["research_results"]] == [
+        ("s0", "researcher: Question: q0"),
+        ("s1", "researcher: Question: q1"),
+        ("s2", "researcher: Question: q2"),
+    ]
+    assert result["research_results"][0]["sources"][0]["url"] == "https://ex.example/q0"

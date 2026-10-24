@@ -35,6 +35,9 @@ class QueryResponse(BaseModel):
     # quality gate visible: 1 with an "accept" round means it reviewed and
     # approved, which is very different from it never having run.
     iterations: int = 0
+    # Each branch's research, whole: what the inspector shows a branch produced.
+    # ``sources`` above is the same sources merged and deduplicated for the answer.
+    research_results: list[ResearchResult] = Field(default_factory=list)
 
 
 def validate_list[ModelT: BaseModel](raw: object, model: type[ModelT]) -> list[ModelT]:
@@ -85,6 +88,7 @@ def build_response(state: dict[str, Any], thread_id: str) -> QueryResponse:
         sources=dedupe_sources(results),
         metrics=validate_metrics(state.get("run_metrics")),
         iterations=raw_iterations if isinstance(raw_iterations, int) else 0,
+        research_results=results,
     )
 
 
