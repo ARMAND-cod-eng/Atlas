@@ -76,7 +76,9 @@ export function shapeFor(topology: Topology, state: RunState): GraphShape {
   const structural = topology.edges.filter(
     (edge) => !isTerminalId(edge.source) && !isTerminalId(edge.target),
   );
-  const feedback = findFeedbackEdges(structural);
+  // Searched over the whole graph, `__start__` included: the loop is whatever
+  // closes a cycle as seen from where a run begins.
+  const feedback = findFeedbackEdges(topology.edges);
 
   const present = new Set(nodeIds);
   const edges = structural
@@ -99,6 +101,12 @@ function isTerminalId(id: string): boolean {
  * current stack closes a cycle. Derived so that a graph change in a later phase
  * — a second loop, a different retry target — is handled without anyone
  * remembering to update a list of edge names here.
+ *
+ * The search starts where runs start: at the nodes nothing points into
+ * (`__start__`, and the human edit). Started from whichever edge the API listed
+ * first, a cycle is "closed" by a different edge: from the critic, the forward
+ * edge synthesizer -> critic looked like the loop, and the critic was drawn
+ * before the planner.
  */
 function findFeedbackEdges(
   edges: readonly { id: string; source: string; target: string }[],
@@ -127,8 +135,11 @@ function findFeedbackEdges(
     onStack.delete(node);
   };
 
-  for (const edge of edges) {
-    if (!visited.has(edge.source)) visit(edge.source);
+  const targets = new Set(edges.map((edge) => edge.target));
+  const entries = edges.map((edge) => edge.source).filter((source) => !targets.has(source));
+  // Then anything only reachable around a cycle, so every edge is classified.
+  for (const node of [...entries, ...edges.map((edge) => edge.source)]) {
+    if (!visited.has(node)) visit(node);
   }
   return back;
 }

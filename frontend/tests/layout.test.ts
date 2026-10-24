@@ -11,6 +11,7 @@ import { describe, expect, it } from 'vitest';
 
 import accepted from './fixtures/accepted.json';
 import retry from './fixtures/retry.json';
+import demoTopology from '../src/demo/topology.json';
 
 import type { AgentEvent, Topology } from '../src/lib/events';
 import { clearLayoutCache, layout, shapeFor, signatureOf } from '../src/lib/layout';
@@ -27,7 +28,8 @@ import {
 const ACCEPTED = accepted as readonly AgentEvent[];
 const RETRY = retry as readonly AgentEvent[];
 
-// Exactly what GET /graph/topology returns, pinned by backend/tests/test_topology.py.
+// The nodes and edges GET /graph/topology returns (pinned by backend/tests/test_topology.py),
+// listed in flow order. The API's own order is in src/demo/topology.json.
 const TOPOLOGY: Topology = {
   nodes: [
     { id: '__start__', fan_out: false, terminal: true },
@@ -123,6 +125,27 @@ describe('the drawable shape', () => {
     const feedback = shape.edges.filter((e) => e.feedback).map((e) => e.id);
 
     expect(feedback.sort()).toEqual(['critic->researcher', 'critic->synthesizer']);
+  });
+
+  it('finds the same loop whatever order the API lists the edges in', () => {
+    // The API's real order lists the critic's edges first. Searched from the
+    // first edge's source, the critic looked like the start of the graph and
+    // synthesizer->critic like the loop: the critic was drawn before the
+    // planner.
+    const state = acceptAll(initialState(SKELETON), ACCEPTED.slice(0, 3));
+    const orders = [
+      demoTopology.edges,
+      TOPOLOGY.edges,
+      [...TOPOLOGY.edges].reverse(),
+    ];
+
+    for (const edges of orders) {
+      const shape = shapeFor({ ...TOPOLOGY, edges }, state);
+      expect(shape.edges.filter((e) => e.feedback).map((e) => e.id).sort()).toEqual([
+        'critic->researcher',
+        'critic->synthesizer',
+      ]);
+    }
   });
 });
 
