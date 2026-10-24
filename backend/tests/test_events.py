@@ -23,6 +23,7 @@ from langgraph.checkpoint.memory import MemorySaver
 from atlas import eventlog
 from atlas.errors import ProviderError, SearchError
 from atlas.events import (
+    AGENT_CALL,
     CRITIC_VERDICT,
     FAN_OUT,
     ITERATION_STARTED,
@@ -97,14 +98,17 @@ async def test_a_full_run_emits_this_exact_sequence(one_branch: None) -> None:
         (3, NODE_COMPLETED, nodes.PLANNER),
         (4, FAN_OUT, nodes.PLANNER),
         (5, NODE_STARTED, nodes.RESEARCHER),
-        (6, NODE_COMPLETED, nodes.RESEARCHER),
-        (7, NODE_STARTED, nodes.SYNTHESIZER),
-        (8, NODE_COMPLETED, nodes.SYNTHESIZER),
-        (9, ITERATION_STARTED, nodes.CRITIC),
-        (10, NODE_STARTED, nodes.CRITIC),
-        (11, NODE_COMPLETED, nodes.CRITIC),
-        (12, CRITIC_VERDICT, nodes.CRITIC),
-        (13, RUN_COMPLETED, None),
+        # The branch's search, recorded (atlas.trace). The model calls are faked
+        # above atlas.models here, so they send none.
+        (6, AGENT_CALL, nodes.RESEARCHER),
+        (7, NODE_COMPLETED, nodes.RESEARCHER),
+        (8, NODE_STARTED, nodes.SYNTHESIZER),
+        (9, NODE_COMPLETED, nodes.SYNTHESIZER),
+        (10, ITERATION_STARTED, nodes.CRITIC),
+        (11, NODE_STARTED, nodes.CRITIC),
+        (12, NODE_COMPLETED, nodes.CRITIC),
+        (13, CRITIC_VERDICT, nodes.CRITIC),
+        (14, RUN_COMPLETED, None),
     ]
 
 
@@ -250,10 +254,11 @@ async def test_every_branch_event_is_attributable_to_its_subtask(
 
     assert sorted(researcher_events) == sorted(
         [(NODE_STARTED, f"s{i}") for i in range(BRANCHES)]
+        + [(AGENT_CALL, f"s{i}") for i in range(BRANCHES)]
         + [(NODE_COMPLETED, f"s{i}") for i in range(BRANCHES)]
     )
     # No branch reports twice and none is missing.
-    assert len(researcher_events) == BRANCHES * 2
+    assert len(researcher_events) == BRANCHES * 3
     assert {sid for _, sid in researcher_events} == {f"s{i}" for i in range(BRANCHES)}
 
 

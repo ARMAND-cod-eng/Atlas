@@ -16,6 +16,7 @@ from langgraph.checkpoint.memory import MemorySaver
 
 from atlas import eventlog
 from atlas.events import (
+    AGENT_CALL,
     CRITIC_VERDICT,
     ITERATION_STARTED,
     NODE_COMPLETED,
@@ -105,6 +106,8 @@ async def test_a_revision_streams_the_edited_branch_alone(
         (RUN_STARTED, None),
         (REVISION_STARTED, None),
         (NODE_STARTED, nodes.RESEARCHER),
+        # The edited branch's search: the only one the revision makes.
+        (AGENT_CALL, nodes.RESEARCHER),
         (NODE_COMPLETED, nodes.RESEARCHER),
         (NODE_STARTED, nodes.SYNTHESIZER),
         (NODE_COMPLETED, nodes.SYNTHESIZER),
