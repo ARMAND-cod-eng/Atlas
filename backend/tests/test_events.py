@@ -72,12 +72,13 @@ def test_emit_outside_a_graph_is_a_no_op() -> None:
 # --- a full run, exactly -------------------------------------------------------
 
 
+async def _fake_search(query: str, max_results: int | None = None) -> list[Source]:
+    return [Source(url=f"https://ex.example/{query}", title="T", snippet="s")]
+
+
 @pytest.fixture
 def one_branch(monkeypatch: pytest.MonkeyPatch) -> None:
-    async def fake_search(query: str, max_results: int | None = None) -> list[Source]:
-        return [Source(url=f"https://ex.example/{query}", title="T", snippet="s")]
-
-    monkeypatch.setattr(nodes, "search", fake_search)
+    monkeypatch.setattr(nodes, "search", _fake_search)
     monkeypatch.setattr(nodes, "call_model", make_call_model("the answer"))
     monkeypatch.setattr(nodes, "call_structured", make_call_structured(make_plan(1)))
 
@@ -166,9 +167,11 @@ async def test_a_branch_reports_its_sources_when_it_completes(one_branch: None) 
     )
 
     assert completed.payload["sources"] == [
-        {"url": "https://ex.example/q0", "title": "T"},
+        {"url": "https://ex.example/q0", "title": "T", "label": None, "authority": "secondary"},
     ]
     assert completed.payload["question"] == "q0"
+    # What the branch concluded, to read before the answer is written.
+    assert completed.payload["findings_preview"] == "the answer"
 
 
 async def test_a_failed_branch_still_reports_what_it_found(
@@ -369,3 +372,48 @@ async def test_a_telemetry_failure_does_not_kill_the_run(
 
     assert result["answer"] == "the answer"
     assert eventlog.events_key("telemetry-down") not in fake_redis.streams
+
+
+async def test_a_verdict_says_why_and_what_to_do_about_it(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The timeline shows the critic's reasons, not only which branches it faulted."""
+    from atlas.graph.state import CriticVerdict, SubtaskVerdict
+
+    monkeypatch.setattr(nodes, "search", _fake_search)
+    monkeypatch.setattr(nodes, "call_model", make_call_model("the answer"))
+    monkeypatch.setattr(
+        nodes,
+        "call_structured",
+        make_call_structured(
+            make_plan(1),
+            [
+                CriticVerdict(
+                    overall="revise",
+                    per_subtask=[
+                        SubtaskVerdict(
+                            subtask_id="s0",
+                            verdict="revise",
+                            reason="no source for the 2024 figure",
+                            guidance="find the 2024 benchmark",
+                        )
+                    ],
+                    synthesis_feedback="cite the benchmark",
+                ),
+                CriticVerdict(overall="accept"),
+            ],
+        ),
+    )
+
+    await _run("verdict-reasons")
+    first = next(e for e in await _events("verdict-reasons") if e.type == CRITIC_VERDICT)
+
+    assert first.payload["per_subtask"] == [
+        {
+            "subtask_id": "s0",
+            "verdict": "revise",
+            "reason": "no source for the 2024 figure",
+            "guidance": "find the 2024 benchmark",
+        }
+    ]
+    assert first.payload["synthesis_feedback"] == "cite the benchmark"

@@ -81,6 +81,9 @@ CRITIC = "critic"
 # Never executed: the entry point a revision writes through (see atlas.revision).
 HUMAN_EDIT = "human_edit"
 
+# Characters of a branch's findings on its node_completed event.
+FINDINGS_PREVIEW_CHARS = 600
+
 
 def _single_subtask(query: str) -> Subtask:
     """The degraded plan: research the original question as one unit."""
@@ -416,8 +419,18 @@ async def researcher(state: ResearcherInput) -> dict[str, Any]:
         # synthesizer then spends 20-45s producing nothing observable — this is
         # what a watching client reads during that silence.
         span.report(
-            sources=[{"url": source.url, "title": source.title} for source in result.sources],
+            sources=[
+                {
+                    "url": source.url,
+                    "title": source.title,
+                    "label": source.label,
+                    "authority": source.authority,
+                }
+                for source in result.sources
+            ],
             question=subtask.question,
+            # What the branch concluded, readable before the answer is written.
+            findings_preview=result.findings[:FINDINGS_PREVIEW_CHARS],
         )
         if result.error is not None:
             # A failed branch does not raise — Phase 1 turns it into a result so
@@ -750,6 +763,9 @@ async def critic(state: AtlasState) -> dict[str, Any]:
         overall=verdict.overall,
         faulted_subtask_ids=verdict.faulted_ids(),
         has_synthesis_feedback=verdict.synthesis_feedback is not None,
+        # Why, and what to do about it: what a timeline shows of the review.
+        per_subtask=[v.model_dump() for v in verdict.per_subtask],
+        synthesis_feedback=verdict.synthesis_feedback,
     )
     logger.info(
         "critic verdict",
