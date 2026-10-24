@@ -15,6 +15,8 @@ export interface AgentNodeData extends Record<string, unknown> {
   /** > 1 means the critic sent this branch back. */
   readonly runs: number;
   readonly sourceCount: number | null;
+  /** A branch a person rewrote, or one carried over from the version revised. */
+  readonly origin: 'planned' | 'edited' | 'carried' | null;
   readonly now: number;
 }
 
@@ -33,7 +35,7 @@ const STATUS_STYLES: Record<NodeStatus, { ring: string; dot: string; text: strin
   failed: { ring: 'border-failed/70', dot: 'bg-failed', text: 'text-failed' },
 };
 
-export function AgentNode({ data }: NodeProps<AgentNodeType>): React.JSX.Element {
+export function AgentNode({ data, selected }: NodeProps<AgentNodeType>): React.JSX.Element {
   const style = STATUS_STYLES[data.status];
   const elapsed =
     data.status === 'running'
@@ -42,7 +44,9 @@ export function AgentNode({ data }: NodeProps<AgentNodeType>): React.JSX.Element
 
   return (
     <div
-      className={`w-[210px] rounded-md border bg-canvas/90 px-3 py-2 ${style.ring}`}
+      className={`w-[210px] cursor-pointer rounded-md border bg-canvas/90 px-3 py-2 ${style.ring} ${
+        selected ? 'ring-2 ring-accent ring-offset-1 ring-offset-canvas' : ''
+      } ${data.origin === 'carried' ? 'opacity-70' : ''}`}
       data-testid={`node-${data.label}`}
       data-status={data.status}
     >
@@ -51,6 +55,16 @@ export function AgentNode({ data }: NodeProps<AgentNodeType>): React.JSX.Element
       <div className="flex items-center gap-2">
         <span className={`h-2 w-2 shrink-0 rounded-full ${style.dot}`} />
         <span className="truncate text-sm font-medium text-ink">{data.label}</span>
+        {data.origin === 'edited' && (
+          <span className="ml-auto shrink-0 rounded bg-edited/15 px-1.5 py-0.5 text-2xs font-medium text-edited">
+            edited
+          </span>
+        )}
+        {data.origin === 'carried' && (
+          <span className="ml-auto shrink-0 rounded bg-raised px-1.5 py-0.5 text-2xs text-ink-muted">
+            carried over
+          </span>
+        )}
         {data.runs > 1 && (
           // The visible marker of a targeted retry, on the branch that earned it.
           <span className="ml-auto shrink-0 rounded bg-retry/15 px-1.5 py-0.5 text-2xs font-medium text-retry">

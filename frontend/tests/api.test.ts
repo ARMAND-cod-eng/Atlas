@@ -9,7 +9,7 @@
 
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-import { runExists, startRun } from '../src/lib/api';
+import { fetchCall, fetchProvision, reviseRun, runExists, startRun } from '../src/lib/api';
 
 function respond(status: number, body: unknown): void {
   vi.stubGlobal(
@@ -105,5 +105,67 @@ describe('runExists', () => {
     respond(500, { error: 'internal_error' });
 
     expect(await runExists('r-1')).toBe('known');
+  });
+});
+
+describe('reviseRun', () => {
+  it('returns the revision run on 202', async () => {
+    respond(202, { run_id: 'r-2', thread_id: 't-1', events_url: '/runs/r-2/events' });
+
+    expect(await reviseRun('r-1', 's2', 'edited')).toEqual({ kind: 'started', runId: 'r-2' });
+  });
+
+  it('says the thread is busy on 409', async () => {
+    respond(409, { detail: 'thread t-1 already has a run in progress: r-9' });
+
+    expect(await reviseRun('r-1', 's2', 'edited')).toEqual({ kind: 'busy' });
+  });
+
+  it("passes on why the API refused an edit", async () => {
+    respond(422, { detail: 'the question for s2 is unchanged' });
+
+    expect(await reviseRun('r-1', 's2', 'same')).toEqual({
+      kind: 'error',
+      message: 'the API refused the edit (422): the question for s2 is unchanged',
+    });
+  });
+});
+
+describe('startRun from a version', () => {
+  it('names the version the follow-up continues', async () => {
+    const sent: unknown[] = [];
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (_url: string, init?: RequestInit) => {
+        sent.push(JSON.parse(String(init?.body)));
+        return new Response(JSON.stringify({ run_id: 'r-3' }), { status: 202 });
+      }),
+    );
+
+    await startRun('and then?', 't-1', 'r-1');
+
+    expect(sent).toEqual([{ query: 'and then?', thread_id: 't-1', parent_run_id: 'r-1' }]);
+  });
+});
+
+describe('fetching what never changes', () => {
+  it('asks for a call once, however often it is opened', async () => {
+    const fetched = vi.fn(async () => new Response(JSON.stringify({ call_id: 'c-1' }), { status: 200 }));
+    vi.stubGlobal('fetch', fetched);
+
+    await fetchCall('r-cache', 'c-1');
+    await fetchCall('r-cache', 'c-1');
+
+    expect(fetched).toHaveBeenCalledTimes(1);
+  });
+
+  it('asks again after a failure rather than remembering it', async () => {
+    const fetched = vi.fn(async () => new Response('{}', { status: 503 }));
+    vi.stubGlobal('fetch', fetched);
+
+    expect(await fetchProvision('GDPR Art. 99(9)')).toBeNull();
+    expect(await fetchProvision('GDPR Art. 99(9)')).toBeNull();
+
+    expect(fetched).toHaveBeenCalledTimes(2);
   });
 });

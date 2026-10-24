@@ -1,10 +1,12 @@
 'use client';
 
 import { useState } from 'react';
+import { Panel, PanelGroup, PanelResizeHandle } from 'react-resizable-panels';
 
 import { Answer } from './Answer';
 import { Findings } from './Findings';
 import { GraphCanvas } from './GraphCanvas';
+import { Inspector } from './Inspector';
 import { Metrics } from './Metrics';
 import { RunStatus } from './RunStatus';
 import { Timeline } from './Timeline';
@@ -34,19 +36,24 @@ function agentsLine(state: RunState): string {
  * so both are the same screen fed differently.
  */
 export function RunWorkspace({
+  runId,
   state,
   result,
   topology,
   now,
   connection,
   followUp = null,
+  onRevised,
 }: {
+  /** The run's id, or null for a replay: nothing behind it to fetch or revise. */
+  readonly runId: string | null;
   readonly state: RunState;
   readonly result: RunResult | null;
   readonly topology: Topology | null;
   readonly now: number;
   readonly connection: Connection;
   readonly followUp?: React.ReactNode;
+  readonly onRevised?: (runId: string) => void;
 }): React.JSX.Element {
   const [selected, setSelected] = useState<string | null>(null);
 
@@ -69,22 +76,19 @@ export function RunWorkspace({
       title: 'Agents',
       subtitle: agentsLine(state),
       content: (
-        <div className="flex h-full min-h-[320px] flex-col">
-          <div className="min-h-[240px] flex-1">
+        <PanelGroup direction="vertical" autoSaveId="atlas-agents" className="min-h-[480px]">
+          <Panel defaultSize={55} minSize={25}>
             {topology === null ? (
               <p className="p-4 text-xs text-ink-faint">loading the graph…</p>
             ) : (
-              <GraphCanvas topology={topology} state={state} now={now} />
+              <GraphCanvas topology={topology} state={state} now={now} selected={selected} onSelect={setSelected} />
             )}
-          </div>
-          <div className="h-28 shrink-0 border-t border-line bg-canvas p-3">
-            <p className="text-xs text-ink-faint">
-              {selected === null
-                ? 'Select an agent, here or in the timeline, to see its task, the exact prompt it was sent and what it produced.'
-                : `Selected: ${selected}`}
-            </p>
-          </div>
-        </div>
+          </Panel>
+          <PanelResizeHandle className="h-px bg-line transition-colors hover:bg-accent data-[resize-handle-state=drag]:bg-accent" />
+          <Panel defaultSize={45} minSize={15} className="bg-canvas">
+            <Inspector runId={runId} state={state} result={result} selected={selected} onRevised={onRevised} />
+          </Panel>
+        </PanelGroup>
       ),
     },
     {

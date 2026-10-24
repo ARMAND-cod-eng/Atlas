@@ -7,6 +7,11 @@ import { startRun } from '@/lib/api';
 interface Props {
   /** Continue this conversation. Omitted, the question starts a new one. */
   readonly threadId?: string;
+  /**
+   * The version a follow-up continues. After a revision the thread's latest
+   * state is the revision's, which may not be the answer on screen.
+   */
+  readonly parentRunId?: string;
   readonly placeholder: string;
   readonly hint: string;
   readonly submitLabel: string;
@@ -22,6 +27,7 @@ interface Props {
  */
 export function QuestionForm({
   threadId,
+  parentRunId,
   placeholder,
   hint,
   submitLabel,
@@ -37,7 +43,7 @@ export function QuestionForm({
 
     setSubmitting(true);
     setNotice(null);
-    const outcome = await startRun(query, threadId);
+    const outcome = await startRun(query, threadId, parentRunId);
     if (outcome.kind === 'started') {
       // Routing rather than holding the run in memory: the run belongs to the
       // worker, so its URL should outlive this tab.

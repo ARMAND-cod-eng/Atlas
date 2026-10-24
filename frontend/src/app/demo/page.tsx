@@ -44,6 +44,7 @@ export default function DemoPage(): React.JSX.Element {
         <ThemeToggle />
       </header>
       <RunWorkspace
+        runId={null}
         state={state}
         result={null}
         topology={TOPOLOGY}

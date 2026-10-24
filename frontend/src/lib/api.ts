@@ -26,13 +26,23 @@ export type StartOutcome =
  * Never throws: every outcome, including an unreachable API, comes back as a
  * value, so a caller cannot forget a branch and leave a button spinning.
  */
-export async function startRun(query: string, threadId?: string): Promise<StartOutcome> {
+export async function startRun(
+  query: string,
+  threadId?: string,
+  parentRunId?: string,
+): Promise<StartOutcome> {
   let response: Response;
   try {
     response = await fetch(`${API_BASE}/runs`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(threadId === undefined ? { query } : { query, thread_id: threadId }),
+      // A follow-up names the version it continues: after a revision, the
+      // thread's latest state is the revision's, not the one on screen.
+      body: JSON.stringify({
+        query,
+        ...(threadId === undefined ? {} : { thread_id: threadId }),
+        ...(parentRunId === undefined ? {} : { parent_run_id: parentRunId }),
+      }),
     });
   } catch {
     return { kind: 'error', message: `could not reach the API at ${API_BASE}. Is it running?` };
@@ -84,4 +94,131 @@ export async function runExists(runId: string): Promise<RunPresence> {
   } catch {
     return 'unreachable';
   }
+}
+
+/**
+ * `POST /runs/{runId}/revisions`: rewrite one branch's question and re-run it.
+ *
+ * A 409 means the thread is busy (the outcome a person can wait out); a 422 is
+ * the API refusing the edit (an unchanged question, an unknown branch), whose
+ * detail says why.
+ */
+export async function reviseRun(runId: string, subtaskId: string, question: string): Promise<StartOutcome> {
+  let response: Response;
+  try {
+    response = await fetch(`${API_BASE}/runs/${runId}/revisions`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ subtask_id: subtaskId, question }),
+    });
+  } catch {
+    return { kind: 'error', message: `could not reach the API at ${API_BASE}. Is it running?` };
+  }
+  if (response.status === 409) return { kind: 'busy' };
+  if (!response.ok) {
+    return { kind: 'error', message: `the API refused the edit (${response.status})${await detailOf(response)}` };
+  }
+  const body = (await response.json()) as { run_id: string };
+  return { kind: 'started', runId: body.run_id };
+}
+
+/** One run on a thread, as `GET /threads/{id}/versions` lists it. */
+export interface RunVersion {
+  readonly run_id: string;
+  readonly kind: 'question' | 'revision';
+  readonly query: string;
+  readonly parent_run_id: string | null;
+  readonly revision: {
+    readonly parent_run_id: string;
+    readonly subtask_id: string;
+    readonly before: string;
+    readonly after: string;
+  } | null;
+  readonly status: 'running' | 'completed' | 'failed';
+  readonly created_at: string;
+  readonly finished_at: string | null;
+}
+
+/** Every run on a thread, oldest first; null when the API cannot say. */
+export async function fetchVersions(threadId: string): Promise<readonly RunVersion[] | null> {
+  try {
+    const response = await fetch(`${API_BASE}/threads/${threadId}/versions`);
+    if (!response.ok) return null;
+    const body = (await response.json()) as { runs: readonly RunVersion[] };
+    return body.runs;
+  } catch {
+    return null;
+  }
+}
+
+/** One agent call in full: the exact messages sent and what came back. */
+export interface AgentCall {
+  readonly call_id: string;
+  readonly span_id: string | null;
+  readonly node: string;
+  readonly subtask_id: string | null;
+  readonly kind: 'model' | 'tool';
+  readonly name: string;
+  readonly started_at: string;
+  readonly duration_s: number;
+  /** A model's messages; a tool's `{query}`. */
+  readonly request: readonly { readonly role: string; readonly content: string }[] | { readonly query: string };
+  /** A model's text or parsed output; a tool's results. */
+  readonly response: unknown;
+  readonly input_tokens: number | null;
+  readonly output_tokens: number | null;
+  readonly error: string | null;
+}
+
+/** A provision of the law, as a citation chip shows it. */
+export interface Provision {
+  readonly label: string;
+  readonly act: string;
+  readonly title: string;
+  readonly text: string;
+  readonly url: string;
+}
+
+// Calls and provisions never change once written, so a page keeps what it has
+// fetched: reopening an agent, or hovering a citation twice, costs nothing.
+const calls = new Map<string, Promise<AgentCall | null>>();
+const provisions = new Map<string, Promise<Provision | null>>();
+
+async function getJson<T>(url: string): Promise<T | null> {
+  try {
+    const response = await fetch(url);
+    return response.ok ? ((await response.json()) as T) : null;
+  } catch {
+    return null;
+  }
+}
+
+/** `GET /runs/{runId}/calls/{callId}`, fetched once per page. */
+export function fetchCall(runId: string, callId: string): Promise<AgentCall | null> {
+  const key = `${runId}/${callId}`;
+  let pending = calls.get(key);
+  if (pending === undefined) {
+    pending = getJson<AgentCall>(`${API_BASE}/runs/${runId}/calls/${callId}`);
+    // A failure is not kept: the next attempt asks again.
+    void pending.then((call) => call === null && calls.delete(key));
+    calls.set(key, pending);
+  }
+  return pending;
+}
+
+/** `GET /library/provision?label=`, fetched once per page. */
+export function fetchProvision(label: string): Promise<Provision | null> {
+  let pending = provisions.get(label);
+  if (pending === undefined) {
+    pending = getJson<Provision>(`${API_BASE}/library/provision?label=${encodeURIComponent(label)}`);
+    void pending.then((found) => found === null && provisions.delete(label));
+    provisions.set(label, pending);
+  }
+  return pending;
+}
+
+/** A finished run's answer, for comparing versions. Null if not finished or unknown. */
+export async function fetchAnswer(runId: string): Promise<string | null> {
+  const body = await getJson<{ result: { answer: string } | null }>(`${API_BASE}/runs/${runId}`);
+  return body?.result?.answer ?? null;
 }

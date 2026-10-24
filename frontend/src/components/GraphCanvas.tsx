@@ -32,9 +32,12 @@ interface Props {
   readonly topology: Topology;
   readonly state: RunState;
   readonly now: number;
+  /** The node open in the inspector. */
+  readonly selected?: string | null;
+  readonly onSelect?: (nodeId: string) => void;
 }
 
-export function GraphCanvas({ topology, state, now }: Props): React.JSX.Element {
+export function GraphCanvas({ topology, state, now, selected = null, onSelect }: Props): React.JSX.Element {
   const shape = useMemo(() => shapeFor(topology, state), [topology, state]);
 
   // React Flow hides a node until it knows its size, and the nodes below are
@@ -81,6 +84,7 @@ export function GraphCanvas({ topology, state, now }: Props): React.JSX.Element 
               error: branch.error,
               runs: branch.runs,
               sourceCount: branch.sources.length,
+              origin: branch.origin,
               now,
             }
           : {
@@ -92,6 +96,7 @@ export function GraphCanvas({ topology, state, now }: Props): React.JSX.Element 
               error: state.nodes[id]?.error ?? null,
               runs: state.nodes[id]?.runs ?? 0,
               sourceCount: null,
+              origin: null,
               now,
             };
 
@@ -101,9 +106,10 @@ export function GraphCanvas({ topology, state, now }: Props): React.JSX.Element 
         position: { x: position.x, y: position.y },
         data,
         measured: measured.get(id),
+        selected: id === selected,
       };
     });
-  }, [shape, positions, state, now, measured]);
+  }, [shape, positions, state, now, measured, selected]);
 
   const edges: Edge[] = useMemo(
     () =>
@@ -137,8 +143,12 @@ export function GraphCanvas({ topology, state, now }: Props): React.JSX.Element 
       nodes={nodes}
       edges={edges}
       onNodesChange={onNodesChange}
+      onNodeClick={(_, node) => onSelect?.(node.id)}
       nodeTypes={NODE_TYPES}
       fitView
+      // React Flow's default floor (0.5) cannot fit four columns of nodes into a
+      // pane a third of a laptop screen wide: the graph stayed cropped.
+      minZoom={0.2}
       proOptions={{ hideAttribution: true }}
       nodesDraggable={false}
       nodesConnectable={false}

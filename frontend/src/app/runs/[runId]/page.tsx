@@ -62,6 +62,7 @@ export default function RunPage({
         <h2 className="mb-2 text-2xs uppercase tracking-wide text-ink-faint">follow up</h2>
         <QuestionForm
           threadId={state.threadId}
+          parentRunId={runId}
           placeholder="Ask a follow-up. It is planned against this answer."
           hint="continues this conversation"
           submitLabel="Ask"
@@ -86,12 +87,14 @@ export default function RunPage({
         <ThemeToggle />
       </header>
       <RunWorkspace
+        runId={runId}
         state={state}
         result={result}
         topology={topology}
         now={now}
         connection={connection}
         followUp={followUp}
+        onRevised={(next) => router.push(`/runs/${next}`)}
       />
     </main>
   );

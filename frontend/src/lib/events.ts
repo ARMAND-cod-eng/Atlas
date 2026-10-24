@@ -222,7 +222,19 @@ export interface RunResult {
   readonly thread_id: string;
   readonly iterations: number;
   readonly subtasks: readonly { readonly id: string; readonly question: string }[];
-  readonly sources: readonly { readonly url: string; readonly title: string; readonly snippet: string }[];
+  readonly sources: readonly {
+    readonly url: string;
+    readonly title: string;
+    readonly snippet: string;
+    readonly label?: string | null;
+    readonly authority?: Authority;
+  }[];
+  /** Each branch's research, whole. Absent from results stored before it was added. */
+  readonly research_results?: readonly {
+    readonly subtask_id: string;
+    readonly findings: string;
+    readonly error: string | null;
+  }[];
   readonly metrics: {
     readonly degraded: readonly string[];
     readonly node_timings: readonly { readonly node: string; readonly duration_s: number }[];
