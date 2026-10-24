@@ -21,6 +21,7 @@ from langgraph.types import Overwrite, Send
 
 from atlas.budget import is_exceeded
 from atlas.config import get_settings
+from atlas.domains import current_domain
 from atlas.events import (
     CRITIC_VERDICT,
     FAN_OUT,
@@ -37,6 +38,7 @@ from atlas.graph.state import (
     Source,
     Subtask,
 )
+from atlas.library.sources import law_sources, with_authority
 from atlas.metrics import (
     DEGRADED_BUDGET_CHECK_UNAVAILABLE,
     DEGRADED_BUDGET_EXCEEDED,
@@ -48,6 +50,7 @@ from atlas.metrics import (
     DEGRADED_RESEARCHER_FAILED,
     DEGRADED_SYNTHESIS_TRUNCATED,
     DEGRADED_UNGROUNDED_CITATION,
+    DEGRADED_WEB_SEARCH_FAILED,
     CriticRound,
     RunMetrics,
 )
@@ -70,80 +73,6 @@ CRITIC = "critic"
 # Never executed: the entry point a revision writes through (see atlas.revision).
 HUMAN_EDIT = "human_edit"
 
-PLANNER_SYSTEM = """You are the planning stage of a research system.
-
-Break the user's question into INDEPENDENT subtasks that can be researched in \
-parallel. This is the hard constraint: no subtask may depend on the answer to \
-another. If you find yourself writing "based on the previous subtask", merge them \
-into one instead.
-
-Rules:
-- Produce between 1 and {max_subtasks} subtasks.
-- Return FEWER subtasks for simple questions. Do not pad to reach a number; a \
-straightforward factual question needs exactly one subtask.
-- Each subtask must be a self-contained question that makes sense on its own, \
-without reference to the others or to the original phrasing.
-- Give each a short rationale explaining what it contributes to the whole answer.
-"""
-
-RESEARCHER_SYSTEM = """You are a researcher answering ONE specific question from \
-web search results.
-
-Rules:
-- Use ONLY the provided sources. If they do not answer the question, say so \
-plainly rather than filling the gap from memory.
-- Cite the URL inline after each claim it supports.
-- Be concise and factual. You are producing input for a synthesis step, not a \
-finished answer for a reader.
-"""
-
-SYNTHESIZER_SYSTEM = """You are the synthesis stage of a research system. Merge \
-the research findings into one coherent answer to the user's original question.
-
-Rules:
-- Cite sources inline as URLs. You may ONLY cite URLs that appear in the findings \
-given to you. Never write a URL that is not in that list — an invented citation \
-is worse than no citation, because it looks checkable and is not.
-- If any subtask is reported as FAILED, state clearly in the answer which aspects \
-could not be researched. Do not present partial findings as if they were complete.
-- Answer the question directly. Do not describe your process or the subtasks \
-unless a failure makes that necessary.
-- Be economical. Cover the substance and stop. Do not restate the question, \
-recap what you are about to say, or add a summary of your own summary. Length is \
-the single biggest driver of how long the user waits, so every sentence that does \
-not add information costs them time for nothing.
-"""
-
-CRITIC_SYSTEM = """You are reviewing the research behind a drafted answer, before \
-it reaches the user.
-
-You are given each subtask's question, the findings written for it, and THE \
-SOURCES THAT WERE ACTUALLY RETRIEVED. Judge the findings against those sources — \
-not against your own knowledge of the topic. If a claim is correct but not \
-supported by any listed source, that is a grounding failure and you should say so.
-
-For each subtask, check three things:
-1. Did the findings actually answer the subtask's question?
-2. Is every substantive claim traceable to one of the listed sources?
-3. Are there obvious gaps — an aspect of the question the sources cover but the \
-findings ignore?
-
-ACCEPTING SOUND WORK IS THE CORRECT OUTCOME. You are a quality gate, not a proof \
-of your own usefulness. Every rejection costs the user another search, another \
-model call, and roughly forty more seconds of waiting. Reject only when a \
-specific, nameable problem would leave the final answer wrong, unsupported, or \
-materially incomplete. Do not reject for style, for phrasing you would have \
-chosen differently, or to appear thorough. If the research is adequate, return \
-"accept" and stop.
-
-When you do reject a subtask, "guidance" must be a concrete instruction the \
-researcher can act on — say what to look for, not that the answer was weak.
-
-If the research is sound but the final write-up misrepresents it, omits a \
-finding, or cites something absent from the sources, set synthesis_feedback \
-instead of faulting subtasks. That fixes the answer without re-running searches.
-"""
-
 
 def _single_subtask(query: str) -> Subtask:
     """The degraded plan: research the original question as one unit."""
@@ -164,7 +93,7 @@ async def _plan(query: str, history: list[Any], metrics: RunMetrics) -> list[Sub
     """
     settings = get_settings()
     prompt = [
-        SystemMessage(PLANNER_SYSTEM.format(max_subtasks=settings.max_subtasks)),
+        SystemMessage(current_domain().planner.format(max_subtasks=settings.max_subtasks)),
         # Prior turns give the planner conversational context, so a follow-up like
         # "and what about the second one?" decomposes against what came before.
         *history,
@@ -304,6 +233,28 @@ async def _search_with_retries(subtask: Subtask, max_attempts: int) -> list[Sour
     return []
 
 
+async def _law_then_guidance(subtask: Subtask, metrics: RunMetrics) -> list[Source]:
+    """The compliance researcher's reading: provisions of the law, then the web.
+
+    A web search that fails costs the branch its guidance, not its law: with
+    provisions already in hand the branch goes on, marked degraded. Without any,
+    the failure is the branch's, as in the general domain.
+    """
+    settings = get_settings()
+    law = law_sources(subtask.question, settings.library_results)
+    if settings.compliance_web_results <= 0:
+        return law
+    try:
+        web = await search(subtask.question, max_results=settings.compliance_web_results)
+    except Exception:
+        if not law:
+            raise
+        logger.warning("web search failed; continuing on the law", extra={"subtask_id": subtask.id})
+        metrics.degraded.append(f"{DEGRADED_WEB_SEARCH_FAILED}:{subtask.id}")
+        return law
+    return law + [with_authority(source) for source in web]
+
+
 def render_sources(sources: list[Source]) -> str:
     """Numbered sources as a model reads them: title, URL, snippet.
 
@@ -315,6 +266,28 @@ def render_sources(sources: list[Source]) -> str:
     )
 
 
+def render_law_and_guidance(sources: list[Source]) -> str:
+    """The compliance researcher's sources: the law first, by label, then the rest.
+
+    Kept apart because they are not equals. A provision says what the law
+    requires and is cited by its label; a web page, even the regulator's own,
+    can only explain it, and is cited by URL.
+    """
+    law = [s for s in sources if s.authority == "primary_law"]
+    other = [s for s in sources if s.authority != "primary_law"]
+    blocks: list[str] = []
+    if law:
+        provisions = "\n\n".join(f"[{s.label}] {s.title}\n{s.snippet}" for s in law)
+        blocks.append(f"PRIMARY LAW (cite by the bracketed label):\n\n{provisions}")
+    if other:
+        pages = "\n\n".join(
+            f"[{i + 1}] {s.title} ({s.authority.replace('_', ' ')})\nURL: {s.url}\n{s.snippet}"
+            for i, s in enumerate(other)
+        )
+        blocks.append(f"SECONDARY SOURCES (guidance only; cite by URL):\n\n{pages}")
+    return "\n\n".join(blocks)
+
+
 async def _summarize(
     subtask: Subtask,
     sources: list[Source],
@@ -322,7 +295,9 @@ async def _summarize(
     guidance: str | None = None,
 ) -> str:
     """Turn raw sources into findings with citations."""
-    prompt = f"Question: {subtask.question}\n\nSources:\n{render_sources(sources)}"
+    domain = current_domain()
+    rendered = render_law_and_guidance(sources) if domain.library else render_sources(sources)
+    prompt = f"Question: {subtask.question}\n\nSources:\n{rendered}"
     if guidance is not None:
         # A retry. Telling the researcher what was wrong last time is the entire
         # value of the loop — without it the second attempt repeats the first.
@@ -332,7 +307,7 @@ async def _summarize(
         )
     response = await call_model(
         RESEARCHER,
-        [SystemMessage(RESEARCHER_SYSTEM), HumanMessage(prompt)],
+        [SystemMessage(domain.researcher), HumanMessage(prompt)],
         metrics,
     )
     return response.text
@@ -350,7 +325,10 @@ async def _research(
     """
     settings = get_settings()
     try:
-        sources = await _search_with_retries(subtask, settings.max_tool_calls_per_researcher)
+        if current_domain().library:
+            sources = await _law_then_guidance(subtask, metrics)
+        else:
+            sources = await _search_with_retries(subtask, settings.max_tool_calls_per_researcher)
         if not sources:
             # Not an error: "nothing found" is a real, reportable outcome.
             return ResearchResult(
@@ -409,8 +387,8 @@ def _render_findings(results: list[ResearchResult], subtasks: list[Subtask]) -> 
         if result.error is not None:
             blocks.append(f"{header}\nFAILED — {result.error}")
             continue
-        urls = "\n".join(f"- {s.url}" for s in result.sources) or "- (none)"
-        blocks.append(f"{header}\n\n{result.findings}\n\nSources:\n{urls}")
+        cited = "\n".join(f"- [{s.label}]" if s.label else f"- {s.url}" for s in result.sources)
+        blocks.append(f"{header}\n\n{result.findings}\n\nSources:\n{cited or '- (none)'}")
     return "\n\n---\n\n".join(blocks)
 
 
@@ -519,7 +497,7 @@ async def _synthesize(state: AtlasState, metrics: RunMetrics) -> str:
     response = await call_model(
         SYNTHESIZER,
         [
-            SystemMessage(SYNTHESIZER_SYSTEM),
+            SystemMessage(current_domain().synthesizer),
             *state["messages"],
             HumanMessage(prompt),
         ],
@@ -592,7 +570,12 @@ def _render_for_critic(state: AtlasState) -> str:
             )
             continue
         sources = (
-            "\n".join(f"- {s.url} — {s.title}\n  {s.snippet}" for s in result.sources)
+            "\n".join(
+                f"- [{s.label}] {s.title}\n  {s.snippet}"
+                if s.label
+                else f"- {s.url} — {s.title}\n  {s.snippet}"
+                for s in result.sources
+            )
             or "- (no sources retrieved)"
         )
         blocks.append(
@@ -613,7 +596,7 @@ async def _review(state: AtlasState, metrics: RunMetrics) -> CriticVerdict:
         return await call_structured(
             CRITIC,
             [
-                SystemMessage(CRITIC_SYSTEM),
+                SystemMessage(current_domain().critic),
                 HumanMessage(
                     f"Original question: {state['query']}\n\n"
                     f"Drafted answer:\n{state['answer']}\n\n"

@@ -169,3 +169,54 @@ async def test_recording_keeps_its_budget_in_process(
 
     # One researcher and one synthesis at 50 tokens each, counted in memory.
     assert sum(eval_runner._BUDGET.spent.values()) - before == 100
+
+
+# --- the domain -------------------------------------------------------------------------
+#
+# Production defaults to the compliance domain. The general dataset was baselined
+# on the general domain, and a run that took its domain from the environment
+# would score the compliance prompts against that baseline: a "regression" made
+# entirely of a missing ATLAS_DOMAIN.
+
+
+@pytest.fixture
+def compliance_environment(monkeypatch: pytest.MonkeyPatch) -> list[str]:
+    """ATLAS_DOMAIN=compliance, as a production .env sets it; returns system prompts."""
+    monkeypatch.setenv("ATLAS_DOMAIN", "compliance")
+    get_settings.cache_clear()
+    systems: list[str] = []
+
+    async def recording(
+        node: str,
+        messages: list[Any],
+        metrics: RunMetrics,
+        temperature: float | None = None,
+        max_tokens: int | None = None,
+    ) -> AIMessage:
+        systems.append(str(messages[0].content))
+        return AIMessage(content="answer")
+
+    monkeypatch.setattr(nodes, "call_model", recording)
+    monkeypatch.setattr(nodes, "call_structured", make_call_structured(make_plan(1)))
+    return systems
+
+
+async def test_a_general_eval_run_is_the_general_domain_whatever_the_environment(
+    offline: Path, compliance_environment: list[str]
+) -> None:
+    from atlas.domains import GENERAL
+
+    await run_item(load_dataset().items[0], corpus_root=offline)
+
+    assert compliance_environment == [GENERAL.researcher, GENERAL.synthesizer]
+
+
+async def test_so_is_a_general_single_call_run(
+    offline: Path, compliance_environment: list[str]
+) -> None:
+    from atlas.domains import GENERAL
+    from atlas_eval.baselines import run_single_call
+
+    await run_single_call(load_dataset().items[0], corpus_root=offline)
+
+    assert compliance_environment == [GENERAL.synthesizer]

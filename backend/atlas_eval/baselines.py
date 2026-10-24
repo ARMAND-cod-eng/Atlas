@@ -16,6 +16,7 @@ import logging
 import time
 from pathlib import Path
 
+from atlas.domains import DomainName, using_domain
 from atlas.graph import nodes
 from atlas.graph.state import ResearchResult, Subtask
 from atlas.metrics import RunMetrics
@@ -34,7 +35,9 @@ logger = logging.getLogger(__name__)
 SINGLE_CALL_SOURCES = 10
 
 
-async def run_single_call(item: EvalItem, corpus_root: Path | None = None) -> RunRecord:
+async def run_single_call(
+    item: EvalItem, corpus_root: Path | None = None, domain: DomainName = "general"
+) -> RunRecord:
     """Answer one item with one search and one synthesis.
 
     A missing corpus raises, exactly as :func:`atlas_eval.runner.run_item` does:
@@ -58,7 +61,8 @@ async def run_single_call(item: EvalItem, corpus_root: Path | None = None) -> Ru
         # takes, so the comparison measures the pipeline and not the prompt.
         state["subtasks"] = [Subtask(id="s0", question=item.query, rationale="single call")]
         state["research_results"] = [evidence]
-        answer = await nodes._synthesize(state, metrics)
+        with using_domain(domain):
+            answer = await nodes._synthesize(state, metrics)
         nodes._check_citations(answer, [evidence], metrics)
     except Exception as exc:
         logger.exception("single-call run failed", extra={"item_id": item.id})

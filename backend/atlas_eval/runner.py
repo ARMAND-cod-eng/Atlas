@@ -28,6 +28,7 @@ from pydantic import BaseModel, Field
 
 from atlas import budget
 from atlas.budget import CounterStore
+from atlas.domains import DomainName
 from atlas.graph import nodes
 from atlas.graph.builder import build_state_graph, checkpoint_serde, recursion_limit
 from atlas.graph.state import ResearchResult, Source, Subtask
@@ -157,9 +158,16 @@ class RunRecord(BaseModel):
 
 
 async def run_item(
-    item: EvalItem, corpus_root: Path | None = None, critic_enabled: bool = True
+    item: EvalItem,
+    corpus_root: Path | None = None,
+    critic_enabled: bool = True,
+    domain: DomainName = "general",
 ) -> RunRecord:
-    """Execute one dataset item and capture what it produced."""
+    """Execute one dataset item and capture what it produced.
+
+    The domain is the dataset's, never the environment's: production defaults to
+    compliance, and the general dataset was baselined on the general domain.
+    """
     variant: Variant = "atlas" if critic_enabled else "no-critic"
     install_offline_runtime()
     corpus = load_corpus(item.id) if corpus_root is None else load_corpus(item.id, corpus_root)
@@ -172,7 +180,11 @@ async def run_item(
     config: RunnableConfig = {
         # A fresh run id per execution, so re-running the suite within the budget
         # key's TTL does not start an item at the previous run's spend.
-        "configurable": {"thread_id": f"eval-{item.id}", "run_id": str(uuid4())},
+        "configurable": {
+            "thread_id": f"eval-{item.id}",
+            "run_id": str(uuid4()),
+            "domain": domain,
+        },
         "recursion_limit": recursion_limit(),
     }
 

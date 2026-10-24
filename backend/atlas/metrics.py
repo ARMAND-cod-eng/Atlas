@@ -59,6 +59,10 @@ DEGRADED_STRUCTURED_OUTPUT_FALLBACK = "structured_output_fallback"
 # answer is unaffected; what is missing is the trail that says it was produced —
 # and a missing audit record looks, from the answer, like nothing at all.
 DEGRADED_AUDIT_INCOMPLETE = "audit_incomplete"
+# A compliance researcher's web search failed, and the branch went ahead on the
+# provisions it had read from the library. The law is all an answer needs to
+# cite; the guidance that would have sat beside it is missing.
+DEGRADED_WEB_SEARCH_FAILED = "web_search_failed"
 
 
 class LLMCall(BaseModel):

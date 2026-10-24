@@ -21,10 +21,12 @@ from atlas.metrics import RunMetrics, merge_run_metrics
 
 
 class Source(BaseModel):
-    """One citable web result.
+    """One citable source: a web result, or a provision of the law.
 
     Tavily's raw shape never escapes ``atlas.tools.search`` — nodes only ever see
-    this, so swapping search providers touches one module.
+    this, so swapping search providers touches one module. A provision from the
+    regulation library arrives in the same shape (atlas.library.sources), with
+    its citation label and ``primary_law`` authority.
     """
 
     url: str
@@ -34,6 +36,12 @@ class Source(BaseModel):
     # graph asks today; the eval corpus records it so a reader that uses more
     # than the snippet can be measured later without recording again.
     content: str | None = None
+    # How much weight the source carries. Only primary law establishes what the
+    # law requires; official guidance interprets it; anything else is secondary.
+    # Defaulted, so every corpus recorded before this field still validates.
+    authority: Literal["primary_law", "official_guidance", "secondary"] = "secondary"
+    # A provision's citation label, "AI Act Art. 6(2)". None for a web source.
+    label: str | None = None
 
 
 class Subtask(BaseModel):

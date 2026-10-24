@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import functools
 from pathlib import Path
+from typing import Literal
 
 from pydantic import ValidationError
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -62,6 +63,15 @@ class Settings(BaseSettings):
 
     # Research graph.
     max_subtasks: int = 5
+
+    # What Atlas researches from by default (atlas.domains): the compliance
+    # copilot, or the general web researcher the first baseline measured. A run
+    # can override it in its config.
+    atlas_domain: Literal["general", "compliance"] = "compliance"
+    # Compliance researchers: provisions read from the regulation library, and web
+    # results kept beside them as secondary sources (0 turns the web off).
+    library_results: int = 6
+    compliance_web_results: int = 3
     max_tool_calls_per_researcher: int = 3
     search_results_per_query: int = 5
 

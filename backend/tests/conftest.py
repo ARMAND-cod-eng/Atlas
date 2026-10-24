@@ -41,6 +41,9 @@ FAKE_ENV: dict[str, str] = {
     "TAVILY_API_KEY": "tvly-test-not-a-real-key",
     "DATABASE_URL": "postgresql://atlas:atlas@localhost:5432/atlas",
     "REDIS_URL": "redis://localhost:6379/0",
+    # The general domain, as every test written before the compliance domain
+    # assumes; tests of the compliance domain set it per run, in the config.
+    "ATLAS_DOMAIN": "general",
 }
 
 
