@@ -11,6 +11,7 @@ import { Metrics } from './Metrics';
 import { RunStatus } from './RunStatus';
 import { Timeline } from './Timeline';
 import { Compare, Versions } from './Versions';
+import { Disclaimer } from './Disclaimer';
 import { type PaneSpec, Workspace } from './Workspace';
 import type { RunResult, Topology } from '@/lib/events';
 import type { RunState } from '@/lib/reducer';
@@ -109,6 +110,7 @@ export function RunWorkspace({
           <Findings state={state} />
           {followUp}
           <Metrics result={result} />
+          <Disclaimer className="border-t border-line pt-3" />
         </div>
       ),
     },

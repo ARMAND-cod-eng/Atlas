@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 
 import { startRun } from '@/lib/api';
 
@@ -13,6 +13,8 @@ interface Props {
    */
   readonly parentRunId?: string;
   readonly placeholder: string;
+  /** Questions a click puts in the box, to edit or send as they are. */
+  readonly examples?: readonly string[];
   readonly hint: string;
   readonly submitLabel: string;
   readonly onStarted: (runId: string) => void;
@@ -29,11 +31,13 @@ export function QuestionForm({
   threadId,
   parentRunId,
   placeholder,
+  examples = [],
   hint,
   submitLabel,
   onStarted,
 }: Props): React.JSX.Element {
   const [query, setQuery] = useState('');
+  const box = useRef<HTMLTextAreaElement>(null);
   const [submitting, setSubmitting] = useState(false);
   const [notice, setNotice] = useState<{ tone: 'busy' | 'error'; text: string } | null>(null);
 
@@ -64,6 +68,8 @@ export function QuestionForm({
   return (
     <form onSubmit={submit}>
       <textarea
+        ref={box}
+        aria-label="Your question"
         value={query}
         onChange={(event) => setQuery(event.target.value)}
         onKeyDown={(event) => {
@@ -84,6 +90,24 @@ export function QuestionForm({
           {submitting ? 'starting…' : submitLabel}
         </button>
       </div>
+      {examples.length > 0 && (
+        <ul aria-label="Example questions" className="mt-4 space-y-1.5">
+          {examples.map((example) => (
+            <li key={example}>
+              <button
+                type="button"
+                onClick={() => {
+                  setQuery(example);
+                  box.current?.focus();
+                }}
+                className="text-left text-xs text-ink-muted hover:text-accent"
+              >
+                {example}
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
       {notice !== null && (
         <p
           role="status"
