@@ -126,7 +126,8 @@ class FakeRedis:
         self._guard()
         removed = 0
         for key in keys:
-            if self.values.pop(key, None) is not None:
+            # DEL removes a key of any type, streams included, as Redis does.
+            if self.values.pop(key, None) is not None or self.streams.pop(key, None) is not None:
                 removed += 1
             self.expiries.pop(key, None)
         return removed

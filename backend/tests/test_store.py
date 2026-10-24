@@ -207,3 +207,39 @@ async def test_a_runs_events_are_archived_and_read_back_in_order(store: RunStore
 
     assert await store.events(run_id) == events
     assert await store.events(f"run-{uuid4()}") == []
+
+
+# --- forgetting -------------------------------------------------------------------------
+
+
+async def test_deleting_a_thread_removes_its_runs_calls_and_events_only(store: RunStore) -> None:
+    doomed, kept = f"t-{uuid4()}", f"t-{uuid4()}"
+    first, second, other = _record(doomed), _record(doomed, offset_s=60), _record(kept)
+    for record in (first, second, other):
+        await store.started(record)
+        await store.add_call(record.run_id, _call(0))
+        await store.archive_events(
+            record.run_id,
+            [AgentEvent(run_id=record.run_id, seq=1, ts=T0, type="run_started", payload={})],
+        )
+
+    deleted = await store.delete_thread(doomed)
+
+    assert deleted == [first.run_id, second.run_id]
+    assert await store.thread(doomed) == []
+    assert [await store.calls(r) for r in deleted] == [[], []]
+    assert [await store.events(r) for r in deleted] == [[], []]
+    assert await store.get(other.run_id) == other
+    assert len(await store.calls(other.run_id)) == 1
+
+
+async def test_a_thread_expires_by_its_most_recent_run(store: RunStore) -> None:
+    stale, active = f"t-{uuid4()}", f"t-{uuid4()}"
+    await store.started(_record(stale, offset_s=0))
+    await store.started(_record(active, offset_s=0))
+    await store.started(_record(active, offset_s=7200))
+
+    expired = await store.expired_threads(T0 + timedelta(hours=1))
+
+    assert stale in expired
+    assert active not in expired

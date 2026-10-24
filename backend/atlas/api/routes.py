@@ -29,7 +29,7 @@ from atlas.graph.state import Revision
 from atlas.result import QueryResponse
 from atlas.store import RunKind, RunRecord, RunStatusName, RunStore
 from atlas.trace import AgentCall
-from atlas.worker import QUERY_WAIT_SECONDS, RUN_RESEARCH, RUN_REVISION
+from atlas.worker import FORGET_THREAD, QUERY_WAIT_SECONDS, RUN_RESEARCH, RUN_REVISION
 
 logger = logging.getLogger(__name__)
 
@@ -99,6 +99,13 @@ class CallSummary(BaseModel):
 class RunCalls(BaseModel):
     run_id: str
     calls: list[CallSummary]
+
+
+class ThreadForgetting(BaseModel):
+    """A thread queued to be forgotten, and the runs that go with it."""
+
+    thread_id: str
+    runs: list[str]
 
 
 class ThreadVersions(BaseModel):
@@ -357,6 +364,28 @@ async def thread_versions(request: Request, thread_id: str) -> ThreadVersions:
         thread_id=thread_id,
         runs=[RunSummary.model_validate(run.model_dump()) for run in runs],
     )
+
+
+@router.delete("/threads/{thread_id}", response_model=ThreadForgetting, status_code=202)
+async def forget(request: Request, thread_id: str) -> ThreadForgetting:
+    """Delete a thread everywhere it lives: records, calls, events, checkpoints.
+
+    Queued, because the checkpoints belong to the worker's checkpointer. A
+    thread with a run in progress is refused: deleting under a running run
+    would leave it writing to a conversation that no longer exists.
+    """
+    runs = await _store(request).thread(thread_id)
+    if not runs:
+        raise HTTPException(status_code=404, detail=f"unknown thread: {thread_id}")
+    holder = await eventlog.thread_holder(thread_id)
+    if holder is not None:
+        raise HTTPException(
+            status_code=409, detail=f"thread {thread_id} has a run in progress: {holder}"
+        )
+    arq: ArqRedis = request.app.state.arq
+    await arq.enqueue_job(FORGET_THREAD, thread_id, _job_id=f"forget:{thread_id}")
+    logger.info("thread queued to be forgotten", extra={"thread_id": thread_id})
+    return ThreadForgetting(thread_id=thread_id, runs=[run.run_id for run in runs])
 
 
 @router.get("/runs/{run_id}", response_model=RunStatus)

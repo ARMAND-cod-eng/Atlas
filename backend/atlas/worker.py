@@ -19,16 +19,19 @@ per job would open a Postgres pool per run.
 from __future__ import annotations
 
 import logging
+from datetime import UTC, datetime
 from typing import Any
 
 from arq.connections import RedisSettings
+from arq.cron import cron
 from arq.typing import WorkerSettingsBase
-from arq.worker import Worker, create_worker
+from arq.worker import Worker, create_worker, func
 
 from atlas import eventlog
 from atlas.config import get_settings
 from atlas.db.session import dispose_engine, get_engine
 from atlas.graph.builder import build_graph
+from atlas.retention import forget_thread, purge_expired
 from atlas.runner import execute_revision, execute_run
 from atlas.runtime import configure_logging
 from atlas.store import PostgresRunStore
@@ -39,6 +42,7 @@ logger = logging.getLogger(__name__)
 # disconnect the producer from the consumer.
 RUN_RESEARCH = "run_research"
 RUN_REVISION = "run_revision"
+FORGET_THREAD = "forget_thread"
 
 # Ceiling on a single run. A run is bounded by MAX_CRITIC_ITERATIONS and the token
 # budget, but a hung provider connection is not. Generous against the 67s
@@ -94,6 +98,23 @@ async def run_revision(
     )
 
 
+async def forget_thread_job(ctx: dict[str, Any], thread_id: str) -> list[str]:
+    """Delete a thread everywhere it lives. See atlas.retention."""
+    return await forget_thread(thread_id, ctx["store"], ctx["graph"].checkpointer)
+
+
+async def purge_expired_job(ctx: dict[str, Any]) -> list[str]:
+    """Nightly: forget threads idle past RETENTION_DAYS."""
+    purged = await purge_expired(
+        ctx["store"],
+        ctx["graph"].checkpointer,
+        get_settings().retention_days,
+        datetime.now(UTC),
+    )
+    logger.info("retention purge", extra={"threads": len(purged)})
+    return purged
+
+
 async def startup(ctx: dict[str, Any]) -> None:
     """Build the shared graph and its Postgres pool, once per worker process."""
     settings = get_settings()
@@ -143,7 +164,9 @@ class WorkerSettings(WorkerSettingsBase):
 
     # A tuple, not a list: arq only reads it, and a mutable class attribute is a
     # shared-state footgun the linter is right to flag.
-    functions = (run_research, run_revision)
+    functions = (run_research, run_revision, func(forget_thread_job, name=FORGET_THREAD))
+    # 03:00 every night, when a deployment is least likely to be busy.
+    cron_jobs = (cron(purge_expired_job, hour={3}, minute={0}),)
     on_startup = staticmethod(startup)
     on_shutdown = staticmethod(shutdown)
 

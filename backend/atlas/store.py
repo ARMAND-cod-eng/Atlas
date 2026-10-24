@@ -86,6 +86,14 @@ class RunStore(Protocol):
         """An archived run's events, in seq order; empty if none were archived."""
         ...
 
+    async def delete_thread(self, thread_id: str) -> list[str]:
+        """Delete the thread's runs, calls and events. Returns the run ids, oldest first."""
+        ...
+
+    async def expired_threads(self, before: datetime) -> list[str]:
+        """Threads whose most recent run started before ``before``, sorted."""
+        ...
+
 
 class InMemoryRunStore:
     """The store for tests and the eval: a dict, gone with the process."""
@@ -138,6 +146,21 @@ class InMemoryRunStore:
 
     async def events(self, run_id: str) -> list[AgentEvent]:
         return sorted(self._events.get(run_id, []), key=lambda e: e.seq)
+
+    async def delete_thread(self, thread_id: str) -> list[str]:
+        run_ids = [run.run_id for run in await self.thread(thread_id)]
+        for run_id in run_ids:
+            del self.records[run_id]
+            self._calls.pop(run_id, None)
+            self._events.pop(run_id, None)
+        return run_ids
+
+    async def expired_threads(self, before: datetime) -> list[str]:
+        latest: dict[str, datetime] = {}
+        for run in self.records.values():
+            if run.thread_id not in latest or run.created_at > latest[run.thread_id]:
+                latest[run.thread_id] = run.created_at
+        return sorted(thread for thread, at in latest.items() if at < before)
 
 
 # Prefixed so it can never collide with the checkpointer's own tables, which
@@ -392,3 +415,37 @@ class PostgresRunStore:
                 .all()
             )
         return [AgentEvent.model_validate(dict(row)) for row in rows]
+
+    async def delete_thread(self, thread_id: str) -> list[str]:
+        async with self._engine.begin() as connection:
+            run_ids = [
+                str(row[0])
+                for row in await connection.execute(
+                    text(
+                        "SELECT run_id FROM atlas_runs WHERE thread_id = :thread_id "
+                        "ORDER BY created_at, run_id"
+                    ),
+                    {"thread_id": thread_id},
+                )
+            ]
+            for table in ("atlas_calls", "atlas_events"):
+                await connection.execute(
+                    text(f"DELETE FROM {table} WHERE run_id = ANY(:run_ids)"),
+                    {"run_ids": run_ids},
+                )
+            await connection.execute(
+                text("DELETE FROM atlas_runs WHERE thread_id = :thread_id"),
+                {"thread_id": thread_id},
+            )
+        return run_ids
+
+    async def expired_threads(self, before: datetime) -> list[str]:
+        async with self._engine.connect() as connection:
+            rows = await connection.execute(
+                text(
+                    "SELECT thread_id FROM atlas_runs GROUP BY thread_id "
+                    "HAVING max(created_at) < :before ORDER BY thread_id"
+                ),
+                {"before": before},
+            )
+            return [str(row[0]) for row in rows]

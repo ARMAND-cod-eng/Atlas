@@ -72,6 +72,10 @@ class Settings(BaseSettings):
     # results kept beside them as secondary sources (0 turns the web off).
     library_results: int = 6
     compliance_web_results: int = 3
+
+    # Days a conversation is kept after its last question; then the nightly purge
+    # deletes it everywhere (atlas.retention). 0 keeps everything.
+    retention_days: int = 30
     max_tool_calls_per_researcher: int = 3
     search_results_per_query: int = 5
 

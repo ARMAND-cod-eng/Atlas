@@ -21,9 +21,10 @@ from atlas.api.main import create_app
 from atlas.graph import nodes
 from atlas.graph.builder import build_state_graph, checkpoint_serde
 from atlas.graph.state import Source
+from atlas.retention import forget_thread
 from atlas.runner import execute_revision, execute_run
 from atlas.store import InMemoryRunStore
-from atlas.worker import RUN_RESEARCH, RUN_REVISION
+from atlas.worker import FORGET_THREAD, RUN_RESEARCH, RUN_REVISION
 from tests.conftest import FakeArq, FakeRedis, make_call_model, make_call_structured, make_plan
 
 
@@ -39,7 +40,8 @@ def fast_graph(monkeypatch: pytest.MonkeyPatch) -> None:
 
 class Harness:
     def __init__(self) -> None:
-        graph = build_state_graph().compile(checkpointer=MemorySaver(serde=checkpoint_serde()))
+        saver = MemorySaver(serde=checkpoint_serde())
+        graph = build_state_graph().compile(checkpointer=saver)
         self.store = InMemoryRunStore()
 
         async def research(
@@ -62,7 +64,10 @@ class Harness:
                 store=self.store,
             )
 
-        self.arq = FakeArq(research, {RUN_REVISION: revise})
+        async def forget(thread_id: str) -> list[str]:
+            return await forget_thread(thread_id, self.store, saver)
+
+        self.arq = FakeArq(research, {RUN_REVISION: revise, FORGET_THREAD: forget})
         app = create_app()
         app.state.arq = self.arq
         app.state.store = self.store
@@ -250,3 +255,39 @@ def test_a_finished_run_is_served_from_the_record_once_redis_has_forgotten_it(
 
     assert response.status_code == 200
     assert response.json() == expected
+
+
+# --- forgetting a thread -----------------------------------------------------------------
+
+
+def test_deleting_a_thread_queues_its_forgetting(harness: Harness) -> None:
+    first = harness.ask(thread_id="t1")
+    second = harness.ask("more", thread_id="t1")
+
+    response = harness.client.delete("/threads/t1")
+
+    assert response.status_code == 202
+    assert response.json() == {"thread_id": "t1", "runs": [first, second]}
+    assert harness.arq.calls[-1] == (FORGET_THREAD, "t1")
+    assert harness.client.get("/threads/t1/versions").status_code == 404
+
+
+def test_deleting_an_unknown_thread_is_404(harness: Harness) -> None:
+    response = harness.client.delete("/threads/nope")
+
+    assert response.status_code == 404
+    assert response.json() == {"detail": "unknown thread: nope"}
+
+
+def test_a_thread_with_a_run_in_progress_is_not_deleted(
+    harness: Harness, fake_redis: FakeRedis
+) -> None:
+    harness.ask(thread_id="t1")
+    fake_redis.values["atlas:thread:t1"] = "run-in-flight"
+    queued = len(harness.arq.calls)
+
+    response = harness.client.delete("/threads/t1")
+
+    assert response.status_code == 409
+    assert response.json() == {"detail": "thread t1 has a run in progress: run-in-flight"}
+    assert len(harness.arq.calls) == queued

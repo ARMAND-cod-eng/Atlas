@@ -102,6 +102,8 @@ class AtlasGraph:
 
     graph: CompiledStateGraph[AtlasState, Any, AtlasState, AtlasState]
     pool: AsyncConnectionPool[AsyncConnection[DictRow]]
+    # The graph's own, for what is done to a thread outside a run: forgetting it.
+    checkpointer: AsyncPostgresSaver
 
     async def aclose(self) -> None:
         """Close the checkpointer's connection pool."""
@@ -193,4 +195,4 @@ async def build_graph() -> AtlasGraph:
     await checkpointer.setup()
 
     compiled = build_state_graph().compile(checkpointer=checkpointer)
-    return AtlasGraph(graph=compiled, pool=pool)
+    return AtlasGraph(graph=compiled, pool=pool, checkpointer=checkpointer)

@@ -295,3 +295,27 @@ async def load_result(run_id: str) -> dict[str, Any] | None:
         return None
     decoded: dict[str, Any] = json.loads(raw)
     return decoded
+
+
+async def forget_runs(run_ids: list[str]) -> None:
+    """Delete everything Redis holds for these runs: stream, result, marker."""
+    keys = [
+        key
+        for run_id in run_ids
+        for key in (events_key(run_id), result_key(run_id), run_key(run_id))
+    ]
+    if keys:
+        await get_client().delete(*keys)
+
+
+async def thread_holder(thread_id: str) -> str | None:
+    """The run holding ``thread_id``'s claim, if any. Fails open, like the claim."""
+    try:
+        holder = await get_client().get(thread_key(thread_id))
+    except Exception as exc:
+        logger.warning(
+            "could not read thread claim",
+            extra={"thread_id": thread_id, "error_type": type(exc).__name__},
+        )
+        return None
+    return str(holder) if holder is not None else None
