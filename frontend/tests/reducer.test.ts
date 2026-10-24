@@ -13,9 +13,11 @@
 import { describe, expect, it } from 'vitest';
 
 import accepted from './fixtures/accepted.json';
+import compliance from './fixtures/compliance.json';
 import exhaustion from './fixtures/exhaustion.json';
 import partialFailure from './fixtures/partial-failure.json';
 import retry from './fixtures/retry.json';
+import revision from './fixtures/revision.json';
 import runFailed from './fixtures/run-failed.json';
 
 import type { AgentEvent } from '../src/lib/events';
@@ -41,6 +43,8 @@ const PARTIAL_FAILURE = partialFailure as readonly AgentEvent[];
 const RETRY = retry as readonly AgentEvent[];
 const EXHAUSTION = exhaustion as readonly AgentEvent[];
 const RUN_FAILED_EVENTS = runFailed as readonly AgentEvent[];
+const REVISION = revision as readonly AgentEvent[];
+const COMPLIANCE = compliance as readonly AgentEvent[];
 
 function run(events: readonly AgentEvent[]): RunState {
   return acceptAll(initialState(SKELETON), events);
@@ -120,6 +124,8 @@ describe('a run the critic accepts', () => {
     expect(state.branches[0]?.sources[0]).toEqual({
       url: 'https://example.com/how-0',
       title: 'how result 0',
+      label: null,
+      authority: 'secondary',
     });
   });
 });
@@ -183,8 +189,21 @@ describe('a targeted retry', () => {
       s4: 'done',
     });
     expect(state.criticRounds).toEqual([
-      { iteration: 1, overall: 'revise', faultedSubtaskIds: ['s2'] },
-      { iteration: 2, overall: 'accept', faultedSubtaskIds: [] },
+      {
+        iteration: 1,
+        overall: 'revise',
+        faultedSubtaskIds: ['s2'],
+        perSubtask: [
+          {
+            subtask_id: 's2',
+            verdict: 'revise',
+            reason: 'the claims are not supported by the listed sources',
+            guidance: 'Search for primary benchmark data rather than vendor posts.',
+          },
+        ],
+        synthesisFeedback: null,
+      },
+      { iteration: 2, overall: 'accept', faultedSubtaskIds: [], perSubtask: [], synthesisFeedback: null },
     ]);
     expect(state.iteration).toBe(2);
   });
@@ -339,3 +358,105 @@ describe('branch identity', () => {
     expect(state.branches.every((b) => b.id === `${RESEARCHER}:${b.subtaskId}`)).toBe(true);
   });
 });
+
+describe('a revision of one branch', () => {
+  // The revision's own stream: the four carried branches did their work in the
+  // run being revised and send no events here. Only revision_started knows
+  // they exist; without it the run would be drawn one branch wide.
+  it('draws every branch, carried or edited, and re-runs only the edited one', () => {
+    const state = run(REVISION);
+
+    expect(state.branches.map((b) => [b.subtaskId, b.origin, b.status, b.runs])).toEqual([
+      ['s0', 'carried', 'done', 0],
+      ['s1', 'carried', 'done', 0],
+      ['s2', 'edited', 'done', 1],
+      ['s3', 'carried', 'done', 0],
+      ['s4', 'carried', 'done', 0],
+    ]);
+    expect(state.phase).toBe('completed');
+  });
+
+  it('remembers what was edited, and what it was before', () => {
+    const state = run(REVISION);
+
+    expect(state.revision).toEqual({
+      parentRunId: 'revision',
+      subtaskId: 's2',
+      before: 'What are the cost characteristics of each?',
+      after: 'What are the per-token costs of long-context models?',
+    });
+    expect(state.branches[2]?.question).toBe('What are the per-token costs of long-context models?');
+  });
+
+  it("keeps a carried branch's sources from the run it came from", () => {
+    const state = run(REVISION);
+
+    expect(state.branches[0]?.sources.map((s) => s.url)).toEqual([
+      'https://example.com/how-0',
+      'https://example.com/how-1',
+    ]);
+  });
+});
+
+describe('a compliance run', () => {
+  it('checks every draft and keeps each result in order', () => {
+    const state = run(COMPLIANCE);
+
+    expect(state.citationChecks.map((c) => [c.ok, c.unresolved])).toEqual([
+      [false, ['AI Act Art. 114']],
+      [true, []],
+    ]);
+  });
+
+  it('keeps the law apart from the web in each branch', () => {
+    const state = run(COMPLIANCE);
+    const first = state.branches[0]?.sources[0];
+
+    expect(first?.label).toBe('AI Act Annex III(4)(a)');
+    expect(first?.authority).toBe('primary_law');
+  });
+});
+
+describe('what the inspector reads', () => {
+  it("records every agent call with the node and span that made it", () => {
+    const state = run(ACCEPTED);
+    const researcherSpans = state.branches.map((b) => b.spans);
+
+    expect(state.calls.map((c) => [c.node, c.kind, c.name, c.subtask_id])).toEqual(
+      state.branches.map((b) => ['researcher', 'tool', 'web', b.subtaskId]),
+    );
+    expect(state.calls.map((c) => [c.span_id])).toEqual(researcherSpans);
+  });
+
+  it('gives a retried branch one span per attempt', () => {
+    const state = run(RETRY);
+
+    expect(state.branches.map((b) => b.spans.length)).toEqual([1, 1, 2, 1, 1]);
+  });
+
+  it('keeps every applied event on the timeline, in order', () => {
+    const state = run(ACCEPTED);
+
+    expect(state.timeline.map((e) => e.seq)).toEqual(ACCEPTED.map((e) => e.seq));
+  });
+
+  it('builds the same timeline from a replay that overlaps what it already has', () => {
+    const live = run(ACCEPTED);
+    const replayed = acceptAll(run(ACCEPTED.slice(0, 10)), ACCEPTED.slice(5));
+
+    expect(replayed.timeline).toEqual(live.timeline);
+  });
+});
+
+describe('an event type this client does not know', () => {
+  it('is ignored, not fatal: the next event still applies', () => {
+    const unknown = { ...ACCEPTED[1], type: 'from_a_newer_backend', payload: {} } as unknown as AgentEvent;
+    const events = [ACCEPTED[0], unknown, ...ACCEPTED.slice(1).map((e) => ({ ...e, seq: e.seq + 1 }))];
+
+    const state = run(events as readonly AgentEvent[]);
+
+    expect(state.phase).toBe('completed');
+    expect(state.branches.length).toBe(5);
+  });
+});
+

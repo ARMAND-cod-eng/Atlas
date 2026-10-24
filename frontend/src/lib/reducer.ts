@@ -32,8 +32,13 @@ import {
   RUN_COMPLETED,
   RUN_FAILED,
   RUN_STARTED,
+  AGENT_CALL,
+  CITATION_CHECK,
+  REVISION_STARTED,
   type AgentEvent,
+  type CallSummary,
   type SourceRef,
+  type SubtaskVerdict,
   isTerminal,
 } from './events';
 
@@ -54,12 +59,47 @@ export interface BranchState extends NodeState {
   readonly subtaskId: string;
   readonly question: string;
   readonly sources: readonly SourceRef[];
+  /**
+   * Where the branch's research came from in this run: planned and researched
+   * here, rewritten by a person and researched again, or carried over from the
+   * run being revised (its work was done there, so it sends no events here).
+   */
+  readonly origin: 'planned' | 'edited' | 'carried';
+  readonly findingsPreview: string | null;
+  /** One span per attempt, in order: what the inspector lists attempts by. */
+  readonly spans: readonly string[];
 }
 
 export interface CriticRound {
   readonly iteration: number;
   readonly overall: 'accept' | 'revise';
   readonly faultedSubtaskIds: readonly string[];
+  readonly perSubtask: readonly SubtaskVerdict[];
+  readonly synthesisFeedback: string | null;
+}
+
+/** An agent call as the run state keeps it: the stream's summary, placed. */
+export interface CallEntry extends CallSummary {
+  readonly node: string | null;
+  readonly ts: string;
+}
+
+/** What a revision changed, from `revision_started`. */
+export interface RevisionInfo {
+  readonly parentRunId: string;
+  readonly subtaskId: string;
+  readonly before: string;
+  readonly after: string;
+}
+
+/** One draft's citations, checked against the law. */
+export interface CitationCheck {
+  readonly ok: boolean;
+  readonly cited: readonly string[];
+  readonly unresolved: readonly string[];
+  readonly unretrieved: readonly string[];
+  readonly misquoted: readonly (readonly [string, string])[];
+  readonly ungroundedUrls: readonly string[];
 }
 
 export type RunPhase = 'connecting' | 'running' | 'completed' | 'failed';
@@ -85,6 +125,14 @@ export interface RunState {
   readonly degraded: readonly string[];
   readonly totalTokens: number | null;
   readonly sourceCount: number | null;
+  readonly calls: readonly CallEntry[];
+  readonly revision: RevisionInfo | null;
+  readonly citationChecks: readonly CitationCheck[];
+  /**
+   * Every applied event, in order. Appended by `accept` as each is applied, so
+   * a replayed run and a live one produce the same timeline.
+   */
+  readonly timeline: readonly AgentEvent[];
 
   // --- stream bookkeeping ---
   /** The next `seq` we can apply. Events at or below this are duplicates. */
@@ -128,6 +176,10 @@ export function initialState(nodeIds: readonly string[]): RunState {
     degraded: [],
     totalTokens: null,
     sourceCount: null,
+    calls: [],
+    revision: null,
+    citationChecks: [],
+    timeline: [],
     nextSeq: 1,
     buffered: {},
     gapAt: null,
@@ -182,6 +234,9 @@ function apply(state: RunState, event: AgentEvent): RunState {
           subtaskId,
           question: questions[subtaskId] ?? subtaskId,
           sources: [],
+          origin: 'planned' as const,
+          findingsPreview: null,
+          spans: [],
         })),
       };
     }
@@ -198,6 +253,7 @@ function apply(state: RunState, event: AgentEvent): RunState {
             finishedAt: null,
             error: null,
             runs: branch.runs + 1,
+            spans: event.payload.span_id ? [...branch.spans, event.payload.span_id] : branch.spans,
           })),
         };
       }
@@ -226,6 +282,7 @@ function apply(state: RunState, event: AgentEvent): RunState {
             finishedAt: event.ts,
             question: event.payload.question ?? branch.question,
             sources: event.payload.sources ?? branch.sources,
+            findingsPreview: event.payload.findings_preview ?? branch.findingsPreview,
           })),
         };
       }
@@ -284,6 +341,8 @@ function apply(state: RunState, event: AgentEvent): RunState {
             iteration: event.payload.iteration,
             overall: event.payload.overall,
             faultedSubtaskIds: faulted,
+            perSubtask: event.payload.per_subtask ?? [],
+            synthesisFeedback: event.payload.synthesis_feedback ?? null,
           },
         ],
         retryTargets: faulted,
@@ -316,6 +375,59 @@ function apply(state: RunState, event: AgentEvent): RunState {
         error: event.payload.error,
         nodes: settle(state.nodes),
       };
+
+    case AGENT_CALL:
+      return { ...state, calls: [...state.calls, { ...event.payload, node: event.node, ts: event.ts }] };
+
+    case REVISION_STARTED: {
+      // The branches arrive whole: the carried ones did their work in the run
+      // being revised and send no events here, so without this the revision
+      // would be drawn one branch wide.
+      const { payload } = event;
+      return {
+        ...state,
+        fannedOut: true,
+        revision: {
+          parentRunId: payload.parent_run_id,
+          subtaskId: payload.subtask_id,
+          before: payload.before,
+          after: payload.after,
+        },
+        branches: payload.branches.map((branch) => ({
+          ...idleNode(`${RESEARCHER}:${branch.subtask_id}`),
+          status: branch.origin === 'carried' ? ('done' as const) : ('idle' as const),
+          error: branch.error,
+          subtaskId: branch.subtask_id,
+          question: branch.question,
+          sources: branch.sources,
+          origin: branch.origin,
+          findingsPreview: null,
+          spans: [],
+        })),
+      };
+    }
+
+    case CITATION_CHECK:
+      return {
+        ...state,
+        citationChecks: [
+          ...state.citationChecks,
+          {
+            ok: event.payload.ok,
+            cited: event.payload.cited,
+            unresolved: event.payload.unresolved,
+            unretrieved: event.payload.unretrieved,
+            misquoted: event.payload.misquoted,
+            ungroundedUrls: event.payload.ungrounded_urls,
+          },
+        ],
+      };
+
+    default:
+      // An event type this client does not know, from a newer backend. Ignored,
+      // never fatal: returning nothing here once replaced the whole run state
+      // with undefined, and the next event crashed on it.
+      return state;
   }
 }
 
@@ -346,7 +458,7 @@ export function accept(state: RunState, event: AgentEvent): RunState {
     };
   }
 
-  let next = { ...apply(state, event), nextSeq: state.nextSeq + 1 };
+  let next = step(state, event);
 
   // Drain anything that was waiting on this one.
   const buffered = { ...state.buffered };
@@ -354,13 +466,22 @@ export function accept(state: RunState, event: AgentEvent): RunState {
     const pending = buffered[next.nextSeq];
     if (pending === undefined) break;
     delete buffered[next.nextSeq];
-    next = { ...apply(next, pending), nextSeq: next.nextSeq + 1 };
+    next = step(next, pending);
   }
 
   return {
     ...next,
     buffered,
     gapAt: Object.keys(buffered).length > 0 ? next.nextSeq : null,
+  };
+}
+
+/** Apply the next event in sequence, and record it on the timeline. */
+function step(state: RunState, event: AgentEvent): RunState {
+  return {
+    ...apply(state, event),
+    nextSeq: state.nextSeq + 1,
+    timeline: [...state.timeline, event],
   };
 }
 

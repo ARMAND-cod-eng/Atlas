@@ -2,7 +2,7 @@
   {
     "run_id": "exhaustion",
     "seq": 1,
-    "ts": "2026-08-10T09:10:40.304383Z",
+    "ts": "2026-10-24T04:34:16.356193Z",
     "type": "run_started",
     "node": null,
     "payload": {
@@ -13,27 +13,29 @@
   {
     "run_id": "exhaustion",
     "seq": 2,
-    "ts": "2026-08-10T09:10:40.305515Z",
+    "ts": "2026-10-24T04:34:16.356193Z",
     "type": "node_started",
     "node": "planner",
     "payload": {
-      "subtask_id": null
+      "subtask_id": null,
+      "span_id": "a88e3aee6ad7"
     }
   },
   {
     "run_id": "exhaustion",
     "seq": 3,
-    "ts": "2026-08-10T09:10:40.305515Z",
+    "ts": "2026-10-24T04:34:16.356193Z",
     "type": "node_completed",
     "node": "planner",
     "payload": {
-      "subtask_id": null
+      "subtask_id": null,
+      "span_id": "a88e3aee6ad7"
     }
   },
   {
     "run_id": "exhaustion",
     "seq": 4,
-    "ts": "2026-08-10T09:10:40.305515Z",
+    "ts": "2026-10-24T04:34:16.356193Z",
     "type": "fan_out",
     "node": "planner",
     "payload": {
@@ -53,120 +55,200 @@
   {
     "run_id": "exhaustion",
     "seq": 5,
-    "ts": "2026-08-10T09:10:40.305515Z",
+    "ts": "2026-10-24T04:34:16.372019Z",
     "type": "node_started",
     "node": "researcher",
     "payload": {
-      "subtask_id": "s0"
+      "subtask_id": "s0",
+      "span_id": "183f0ea7dd04"
     }
   },
   {
     "run_id": "exhaustion",
     "seq": 6,
-    "ts": "2026-08-10T09:10:40.305515Z",
-    "type": "node_completed",
+    "ts": "2026-10-24T04:34:16.372019Z",
+    "type": "agent_call",
     "node": "researcher",
     "payload": {
+      "call_id": "fb747bcbcfb04f4482e138122f09ee5b",
+      "span_id": "183f0ea7dd04",
       "subtask_id": "s0",
-      "sources": [
-        {
-          "url": "https://example.com/how-0",
-          "title": "how result 0"
-        },
-        {
-          "url": "https://example.com/how-1",
-          "title": "how result 1"
-        }
-      ],
-      "question": "How accurate is RAG for enterprise document QA?"
+      "kind": "tool",
+      "name": "web",
+      "duration_s": 4.759989678859711e-05,
+      "input_tokens": null,
+      "output_tokens": null,
+      "error": null,
+      "preview": "[{'url': 'https://example.com/how-0', 'title': 'how result 0'}, {'url': 'https://example.com/how-1', 'title': 'how result 1'}]"
     }
   },
   {
     "run_id": "exhaustion",
     "seq": 7,
-    "ts": "2026-08-10T09:10:40.305515Z",
-    "type": "node_started",
+    "ts": "2026-10-24T04:34:16.372019Z",
+    "type": "node_completed",
     "node": "researcher",
     "payload": {
-      "subtask_id": "s1"
+      "subtask_id": "s0",
+      "span_id": "183f0ea7dd04",
+      "sources": [
+        {
+          "url": "https://example.com/how-0",
+          "title": "how result 0",
+          "label": null,
+          "authority": "secondary"
+        },
+        {
+          "url": "https://example.com/how-1",
+          "title": "how result 1",
+          "label": null,
+          "authority": "secondary"
+        }
+      ],
+      "question": "How accurate is RAG for enterprise document QA?",
+      "findings_preview": "findings"
     }
   },
   {
     "run_id": "exhaustion",
     "seq": 8,
-    "ts": "2026-08-10T09:10:40.305515Z",
-    "type": "node_completed",
+    "ts": "2026-10-24T04:34:16.372019Z",
+    "type": "node_started",
     "node": "researcher",
     "payload": {
       "subtask_id": "s1",
-      "sources": [
-        {
-          "url": "https://example.com/how-0",
-          "title": "how result 0"
-        },
-        {
-          "url": "https://example.com/how-1",
-          "title": "how result 1"
-        }
-      ],
-      "question": "How accurate are long-context LLMs on the same task?"
+      "span_id": "c3099d4ef6b9"
     }
   },
   {
     "run_id": "exhaustion",
     "seq": 9,
-    "ts": "2026-08-10T09:10:40.305515Z",
-    "type": "node_started",
+    "ts": "2026-10-24T04:34:16.372019Z",
+    "type": "agent_call",
     "node": "researcher",
     "payload": {
-      "subtask_id": "s2"
+      "call_id": "32ba6338b5f6412ea17aa18411383475",
+      "span_id": "c3099d4ef6b9",
+      "subtask_id": "s1",
+      "kind": "tool",
+      "name": "web",
+      "duration_s": 3.550015389919281e-05,
+      "input_tokens": null,
+      "output_tokens": null,
+      "error": null,
+      "preview": "[{'url': 'https://example.com/how-0', 'title': 'how result 0'}, {'url': 'https://example.com/how-1', 'title': 'how result 1'}]"
     }
   },
   {
     "run_id": "exhaustion",
     "seq": 10,
-    "ts": "2026-08-10T09:10:40.305515Z",
+    "ts": "2026-10-24T04:34:16.372019Z",
     "type": "node_completed",
     "node": "researcher",
     "payload": {
-      "subtask_id": "s2",
+      "subtask_id": "s1",
+      "span_id": "c3099d4ef6b9",
       "sources": [
         {
-          "url": "https://example.com/what-0",
-          "title": "what result 0"
+          "url": "https://example.com/how-0",
+          "title": "how result 0",
+          "label": null,
+          "authority": "secondary"
         },
         {
-          "url": "https://example.com/what-1",
-          "title": "what result 1"
+          "url": "https://example.com/how-1",
+          "title": "how result 1",
+          "label": null,
+          "authority": "secondary"
         }
       ],
-      "question": "What are the cost characteristics of each?"
+      "question": "How accurate are long-context LLMs on the same task?",
+      "findings_preview": "findings"
     }
   },
   {
     "run_id": "exhaustion",
     "seq": 11,
-    "ts": "2026-08-10T09:10:40.305515Z",
+    "ts": "2026-10-24T04:34:16.372019Z",
     "type": "node_started",
-    "node": "synthesizer",
+    "node": "researcher",
     "payload": {
-      "subtask_id": null
+      "subtask_id": "s2",
+      "span_id": "799460d02a39"
     }
   },
   {
     "run_id": "exhaustion",
     "seq": 12,
-    "ts": "2026-08-10T09:10:40.305515Z",
-    "type": "node_completed",
-    "node": "synthesizer",
+    "ts": "2026-10-24T04:34:16.372019Z",
+    "type": "agent_call",
+    "node": "researcher",
     "payload": {
-      "subtask_id": null
+      "call_id": "8fcaeffb35a34482aa4fcf6fffbb36b4",
+      "span_id": "799460d02a39",
+      "subtask_id": "s2",
+      "kind": "tool",
+      "name": "web",
+      "duration_s": 3.310013562440872e-05,
+      "input_tokens": null,
+      "output_tokens": null,
+      "error": null,
+      "preview": "[{'url': 'https://example.com/what-0', 'title': 'what result 0'}, {'url': 'https://example.com/what-1', 'title': 'what result 1'}]"
     }
   },
   {
     "run_id": "exhaustion",
     "seq": 13,
-    "ts": "2026-08-10T09:10:40.305515Z",
+    "ts": "2026-10-24T04:34:16.372019Z",
+    "type": "node_completed",
+    "node": "researcher",
+    "payload": {
+      "subtask_id": "s2",
+      "span_id": "799460d02a39",
+      "sources": [
+        {
+          "url": "https://example.com/what-0",
+          "title": "what result 0",
+          "label": null,
+          "authority": "secondary"
+        },
+        {
+          "url": "https://example.com/what-1",
+          "title": "what result 1",
+          "label": null,
+          "authority": "secondary"
+        }
+      ],
+      "question": "What are the cost characteristics of each?",
+      "findings_preview": "findings"
+    }
+  },
+  {
+    "run_id": "exhaustion",
+    "seq": 14,
+    "ts": "2026-10-24T04:34:16.372019Z",
+    "type": "node_started",
+    "node": "synthesizer",
+    "payload": {
+      "subtask_id": null,
+      "span_id": "b7de14ea040b"
+    }
+  },
+  {
+    "run_id": "exhaustion",
+    "seq": 15,
+    "ts": "2026-10-24T04:34:16.372019Z",
+    "type": "node_completed",
+    "node": "synthesizer",
+    "payload": {
+      "subtask_id": null,
+      "span_id": "b7de14ea040b"
+    }
+  },
+  {
+    "run_id": "exhaustion",
+    "seq": 16,
+    "ts": "2026-10-24T04:34:16.372019Z",
     "type": "iteration_started",
     "node": "critic",
     "payload": {
@@ -175,28 +257,30 @@
   },
   {
     "run_id": "exhaustion",
-    "seq": 14,
-    "ts": "2026-08-10T09:10:40.305515Z",
+    "seq": 17,
+    "ts": "2026-10-24T04:34:16.372019Z",
     "type": "node_started",
     "node": "critic",
     "payload": {
-      "subtask_id": null
+      "subtask_id": null,
+      "span_id": "a15ed854bbfa"
     }
   },
   {
     "run_id": "exhaustion",
-    "seq": 15,
-    "ts": "2026-08-10T09:10:40.305515Z",
+    "seq": 18,
+    "ts": "2026-10-24T04:34:16.372019Z",
     "type": "node_completed",
     "node": "critic",
     "payload": {
-      "subtask_id": null
+      "subtask_id": null,
+      "span_id": "a15ed854bbfa"
     }
   },
   {
     "run_id": "exhaustion",
-    "seq": 16,
-    "ts": "2026-08-10T09:10:40.305515Z",
+    "seq": 19,
+    "ts": "2026-10-24T04:34:16.372019Z",
     "type": "critic_verdict",
     "node": "critic",
     "payload": {
@@ -205,64 +289,101 @@
       "faulted_subtask_ids": [
         "s1"
       ],
-      "has_synthesis_feedback": false
-    }
-  },
-  {
-    "run_id": "exhaustion",
-    "seq": 17,
-    "ts": "2026-08-10T09:10:40.305515Z",
-    "type": "node_started",
-    "node": "researcher",
-    "payload": {
-      "subtask_id": "s1"
-    }
-  },
-  {
-    "run_id": "exhaustion",
-    "seq": 18,
-    "ts": "2026-08-10T09:10:40.305515Z",
-    "type": "node_completed",
-    "node": "researcher",
-    "payload": {
-      "subtask_id": "s1",
-      "sources": [
+      "has_synthesis_feedback": false,
+      "per_subtask": [
         {
-          "url": "https://example.com/how-0",
-          "title": "how result 0"
-        },
-        {
-          "url": "https://example.com/how-1",
-          "title": "how result 1"
+          "subtask_id": "s1",
+          "verdict": "revise",
+          "reason": "the claims are not supported by the listed sources",
+          "guidance": "Search for primary benchmark data rather than vendor posts."
         }
       ],
-      "question": "How accurate are long-context LLMs on the same task?"
-    }
-  },
-  {
-    "run_id": "exhaustion",
-    "seq": 19,
-    "ts": "2026-08-10T09:10:40.322145Z",
-    "type": "node_started",
-    "node": "synthesizer",
-    "payload": {
-      "subtask_id": null
+      "synthesis_feedback": null
     }
   },
   {
     "run_id": "exhaustion",
     "seq": 20,
-    "ts": "2026-08-10T09:10:40.322145Z",
-    "type": "node_completed",
-    "node": "synthesizer",
+    "ts": "2026-10-24T04:34:16.372019Z",
+    "type": "node_started",
+    "node": "researcher",
     "payload": {
-      "subtask_id": null
+      "subtask_id": "s1",
+      "span_id": "d42f820bcb82"
     }
   },
   {
     "run_id": "exhaustion",
     "seq": 21,
-    "ts": "2026-08-10T09:10:40.322145Z",
+    "ts": "2026-10-24T04:34:16.372019Z",
+    "type": "agent_call",
+    "node": "researcher",
+    "payload": {
+      "call_id": "e3df68ce3ff74624a01338e2cd6d796b",
+      "span_id": "d42f820bcb82",
+      "subtask_id": "s1",
+      "kind": "tool",
+      "name": "web",
+      "duration_s": 2.4099834263324738e-05,
+      "input_tokens": null,
+      "output_tokens": null,
+      "error": null,
+      "preview": "[{'url': 'https://example.com/how-0', 'title': 'how result 0'}, {'url': 'https://example.com/how-1', 'title': 'how result 1'}]"
+    }
+  },
+  {
+    "run_id": "exhaustion",
+    "seq": 22,
+    "ts": "2026-10-24T04:34:16.372019Z",
+    "type": "node_completed",
+    "node": "researcher",
+    "payload": {
+      "subtask_id": "s1",
+      "span_id": "d42f820bcb82",
+      "sources": [
+        {
+          "url": "https://example.com/how-0",
+          "title": "how result 0",
+          "label": null,
+          "authority": "secondary"
+        },
+        {
+          "url": "https://example.com/how-1",
+          "title": "how result 1",
+          "label": null,
+          "authority": "secondary"
+        }
+      ],
+      "question": "How accurate are long-context LLMs on the same task?",
+      "findings_preview": "findings"
+    }
+  },
+  {
+    "run_id": "exhaustion",
+    "seq": 23,
+    "ts": "2026-10-24T04:34:16.372019Z",
+    "type": "node_started",
+    "node": "synthesizer",
+    "payload": {
+      "subtask_id": null,
+      "span_id": "bbb3898fde0f"
+    }
+  },
+  {
+    "run_id": "exhaustion",
+    "seq": 24,
+    "ts": "2026-10-24T04:34:16.372019Z",
+    "type": "node_completed",
+    "node": "synthesizer",
+    "payload": {
+      "subtask_id": null,
+      "span_id": "bbb3898fde0f"
+    }
+  },
+  {
+    "run_id": "exhaustion",
+    "seq": 25,
+    "ts": "2026-10-24T04:34:16.387664Z",
     "type": "iteration_started",
     "node": "critic",
     "payload": {
@@ -271,28 +392,30 @@
   },
   {
     "run_id": "exhaustion",
-    "seq": 22,
-    "ts": "2026-08-10T09:10:40.322145Z",
+    "seq": 26,
+    "ts": "2026-10-24T04:34:16.387664Z",
     "type": "node_started",
     "node": "critic",
     "payload": {
-      "subtask_id": null
+      "subtask_id": null,
+      "span_id": "5de3eeaf88e6"
     }
   },
   {
     "run_id": "exhaustion",
-    "seq": 23,
-    "ts": "2026-08-10T09:10:40.322145Z",
+    "seq": 27,
+    "ts": "2026-10-24T04:34:16.387664Z",
     "type": "node_completed",
     "node": "critic",
     "payload": {
-      "subtask_id": null
+      "subtask_id": null,
+      "span_id": "5de3eeaf88e6"
     }
   },
   {
     "run_id": "exhaustion",
-    "seq": 24,
-    "ts": "2026-08-10T09:10:40.322145Z",
+    "seq": 28,
+    "ts": "2026-10-24T04:34:16.387664Z",
     "type": "critic_verdict",
     "node": "critic",
     "payload": {
@@ -301,13 +424,22 @@
       "faulted_subtask_ids": [
         "s1"
       ],
-      "has_synthesis_feedback": false
+      "has_synthesis_feedback": false,
+      "per_subtask": [
+        {
+          "subtask_id": "s1",
+          "verdict": "revise",
+          "reason": "the claims are not supported by the listed sources",
+          "guidance": "Search for primary benchmark data rather than vendor posts."
+        }
+      ],
+      "synthesis_feedback": null
     }
   },
   {
     "run_id": "exhaustion",
-    "seq": 25,
-    "ts": "2026-08-10T09:10:40.322145Z",
+    "seq": 29,
+    "ts": "2026-10-24T04:34:16.387664Z",
     "type": "run_completed",
     "node": null,
     "payload": {

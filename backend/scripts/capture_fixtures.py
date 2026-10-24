@@ -26,6 +26,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import re
 import sys
 from collections.abc import Awaitable, Callable
 from pathlib import Path
@@ -36,13 +37,15 @@ from langgraph.checkpoint.memory import MemorySaver
 from pydantic import BaseModel
 
 from atlas import eventlog
+from atlas.domains import DomainName, using_domain
 from atlas.errors import ProviderError, SearchError
 from atlas.events import AgentEvent
 from atlas.graph import nodes
 from atlas.graph.builder import build_state_graph
 from atlas.graph.state import CriticVerdict, PlannerOutput, Source, Subtask, SubtaskVerdict
 from atlas.metrics import RunMetrics
-from atlas.runner import execute_run
+from atlas.runner import execute_revision, execute_run
+from atlas_eval.runner import install_offline_budget
 
 # Spelled out so the fakes match the real signatures they stand in for, rather
 # than being annotated Any and silently drifting when a signature changes.
@@ -52,19 +55,60 @@ StructuredFn = Callable[..., Awaitable[BaseModel]]
 
 FIXTURES = Path(__file__).resolve().parents[2] / "frontend" / "tests" / "fixtures"
 
-QUESTIONS = [
-    "How accurate is RAG for enterprise document QA?",
-    "How accurate are long-context LLMs on the same task?",
-    "What are the cost characteristics of each?",
-    "What are the latency characteristics of each?",
-    "When is each the better choice?",
-]
+ANSWER = "## Answer\n\nSynthesised from the findings."
+
+QUESTION: dict[str, str] = {
+    "general": "Compare RAG with long-context LLMs.",
+    "compliance": (
+        "Is a CV-screening tool high-risk under the AI Act, and what must its provider do?"
+    ),
+}
+
+QUESTIONS: dict[str, list[str]] = {
+    "general": [
+        "How accurate is RAG for enterprise document QA?",
+        "How accurate are long-context LLMs on the same task?",
+        "What are the cost characteristics of each?",
+        "What are the latency characteristics of each?",
+        "When is each the better choice?",
+    ],
+    "compliance": [
+        "Is an AI system that filters job applications high-risk under the AI Act?",
+        "What must a provider of a high-risk AI system do under the AI Act?",
+    ],
+}
 
 
-def plan(count: int) -> PlannerOutput:
+def plan(count: int, domain: DomainName = "general") -> PlannerOutput:
     return PlannerOutput(
-        subtasks=[Subtask(id=f"s{i}", question=QUESTIONS[i], rationale="r") for i in range(count)]
+        subtasks=[
+            Subtask(id=f"s{i}", question=QUESTIONS[domain][i], rationale="r") for i in range(count)
+        ]
     )
+
+
+def citing_model() -> ModelFn:
+    """A synthesizer that cites the provisions it was given: first with an invented
+    article added, which the citation check sends back, then without it."""
+    drafts = 0
+
+    async def call(
+        node: str,
+        messages: list[Any],
+        metrics: RunMetrics,
+        temperature: float | None = None,
+        max_tokens: int | None = None,
+    ) -> AIMessage:
+        nonlocal drafts
+        if node != nodes.SYNTHESIZER:
+            return AIMessage(content="findings")
+        labels = re.findall(r"- \[((?:AI Act|GDPR)[^\]]+)\]", str(messages[-1].content))
+        cited = " ".join(f"[{label}]" for label in labels[:3])
+        drafts += 1
+        invented = " It must also register it [AI Act Art. 114]." if drafts == 1 else ""
+        return AIMessage(content=f"## Answer\n\nYes: it is high-risk {cited}.{invented}")
+
+    return call
 
 
 def fake_model(answer: str, fail_in: str | None = None) -> ModelFn:
@@ -82,7 +126,9 @@ def fake_model(answer: str, fail_in: str | None = None) -> ModelFn:
     return call
 
 
-def fake_structured(count: int, verdicts: list[CriticVerdict]) -> StructuredFn:
+def fake_structured(
+    count: int, verdicts: list[CriticVerdict], domain: DomainName = "general"
+) -> StructuredFn:
     remaining = list(verdicts)
 
     async def call(
@@ -94,7 +140,7 @@ def fake_structured(count: int, verdicts: list[CriticVerdict]) -> StructuredFn:
     ) -> BaseModel:
         if schema is CriticVerdict:
             return remaining.pop(0) if len(remaining) > 1 else remaining[0]
-        return plan(count)
+        return plan(count, domain)
 
     return call
 
@@ -136,8 +182,15 @@ async def capture(
     verdicts: list[CriticVerdict],
     broken: str | None = None,
     fail_in: str | None = None,
+    domain: DomainName = "general",
+    model: ModelFn | None = None,
+    revise_branch: tuple[str, str] | None = None,
 ) -> None:
-    """Run the real graph with controlled inputs and record every event."""
+    """Run the real graph with controlled inputs and record every event.
+
+    ``revise_branch`` (a subtask id, its new question) then revises the run, and
+    the fixture is the revision's stream: what a client sees after an edit.
+    """
     collected: list[AgentEvent] = []
 
     async def record(event: AgentEvent) -> None:
@@ -158,15 +211,27 @@ async def capture(
     eventlog.append = record
     eventlog.store_result = no_store
     nodes.search = fake_search(broken)
-    nodes.call_model = fake_model("## Answer\n\nSynthesised from the findings.", fail_in)
-    nodes.call_structured = fake_structured(count, verdicts)
+    nodes.call_model = model or fake_model(ANSWER, fail_in)
+    nodes.call_structured = fake_structured(count, verdicts, domain)
 
     try:
         graph = build_state_graph().compile(checkpointer=MemorySaver())
-        try:
-            await execute_run(name, "Compare RAG with long-context LLMs.", "thread", graph)
-        except Exception as exc:
-            print(f"  ({name} ended with {type(exc).__name__}, as intended)")
+        with using_domain(domain):
+            try:
+                await execute_run(name, QUESTION[domain], "thread", graph)
+                if revise_branch is not None:
+                    collected.clear()
+                    subtask_id, question = revise_branch
+                    await execute_revision(
+                        f"{name}-v2",
+                        "thread",
+                        graph,
+                        parent_run_id=name,
+                        subtask_id=subtask_id,
+                        question=question,
+                    )
+            except Exception as exc:
+                print(f"  ({name} ended with {type(exc).__name__}, as intended)")
     finally:
         eventlog.append = saved["append"]
         eventlog.store_result = saved["store_result"]
@@ -200,6 +265,11 @@ async def main() -> None:
         await dump_live(sys.argv[1])
         return
 
+    # The budget in this process's memory, as the eval keeps it. Without Redis the
+    # budget check fails open and stamps budget_check_unavailable on every run:
+    # an artefact of where the fixtures were captured, not of any scenario.
+    install_offline_budget()
+
     # The happy path, deterministic. The live capture is the ground truth; this
     # one keeps the reducer tests runnable without Redis or a provider.
     await capture("accepted", count=5, verdicts=[ACCEPT])
@@ -210,7 +280,7 @@ async def main() -> None:
     # four done, and a run that still completes with an answer. A green run that
     # quietly answered from four fifths of the research is the failure this
     # fixture exists to make impossible.
-    await capture("partial-failure", count=5, verdicts=[ACCEPT], broken=QUESTIONS[1])
+    await capture("partial-failure", count=5, verdicts=[ACCEPT], broken=QUESTIONS["general"][1])
 
     # A targeted retry: the critic faults one subtask, then accepts.
     await capture("retry", count=5, verdicts=[revise("s2"), ACCEPT])
@@ -221,6 +291,25 @@ async def main() -> None:
 
     # The run dies outright. The stream must still terminate.
     await capture("run-failed", count=3, verdicts=[ACCEPT], fail_in=nodes.SYNTHESIZER)
+
+    # A person rewrites branch s2 of an accepted run. The fixture is the
+    # revision's stream: revision_started names the branches carried over, and
+    # only the edited one researches again.
+    await capture(
+        "revision",
+        count=5,
+        verdicts=[ACCEPT],
+        revise_branch=("s2", "What are the per-token costs of long-context models?"),
+    )
+
+    # The compliance domain: researchers read the regulation library, sources
+    # carry citation labels and authority, and every draft's citations are
+    # checked against the law. The first draft cites an article that does not
+    # exist; the check sends it back whatever the critic said, and the second
+    # draft is clean.
+    await capture(
+        "compliance", count=2, verdicts=[ACCEPT], domain="compliance", model=citing_model()
+    )
 
 
 if __name__ == "__main__":

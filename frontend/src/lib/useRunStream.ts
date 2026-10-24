@@ -2,22 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 
-import {
-  CRITIC_VERDICT,
-  FAN_OUT,
-  ITERATION_STARTED,
-  NODE_COMPLETED,
-  NODE_FAILED,
-  NODE_STARTED,
-  RUN_COMPLETED,
-  RUN_FAILED,
-  RUN_STARTED,
-  type AgentEvent,
-  type EventType,
-  type RunResult,
-  type Topology,
-  isTerminal,
-} from './events';
+import { EVENT_TYPES, type AgentEvent, type RunResult, type Topology, isTerminal } from './events';
 import { API_BASE, runExists } from './api';
 import { CRITIC, PLANNER, RESEARCHER, SYNTHESIZER, accept, initialState, isFinished, resumeFrom, type RunState } from './reducer';
 
@@ -25,26 +10,6 @@ import { CRITIC, PLANNER, RESEARCHER, SYNTHESIZER, accept, initialState, isFinis
 export { API_BASE };
 
 const SKELETON = [PLANNER, RESEARCHER, SYNTHESIZER, CRITIC];
-
-/**
- * Every named event we subscribe to.
- *
- * `EventSource.onmessage` only fires for frames with no `event:` field, and ours
- * all have one — so each type needs an explicit listener. Listed rather than
- * inferred so a new backend event type shows up as a missing listener during
- * review, not as an event that silently never arrives.
- */
-const EVENT_TYPES: readonly EventType[] = [
-  RUN_STARTED,
-  NODE_STARTED,
-  NODE_COMPLETED,
-  NODE_FAILED,
-  FAN_OUT,
-  ITERATION_STARTED,
-  CRITIC_VERDICT,
-  RUN_COMPLETED,
-  RUN_FAILED,
-];
 
 export type Connection = 'connecting' | 'open' | 'reconnecting' | 'closed';
 

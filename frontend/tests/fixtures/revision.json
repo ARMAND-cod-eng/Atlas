@@ -1,0 +1,241 @@
+[
+  {
+    "run_id": "revision-v2",
+    "seq": 1,
+    "ts": "2026-10-24T04:34:40.938902Z",
+    "type": "run_started",
+    "node": null,
+    "payload": {
+      "query": "Compare RAG with long-context LLMs.",
+      "thread_id": "thread"
+    }
+  },
+  {
+    "run_id": "revision-v2",
+    "seq": 2,
+    "ts": "2026-10-24T04:34:40.938902Z",
+    "type": "revision_started",
+    "node": null,
+    "payload": {
+      "parent_run_id": "revision",
+      "subtask_id": "s2",
+      "before": "What are the cost characteristics of each?",
+      "after": "What are the per-token costs of long-context models?",
+      "branches": [
+        {
+          "subtask_id": "s0",
+          "question": "How accurate is RAG for enterprise document QA?",
+          "origin": "carried",
+          "sources": [
+            {
+              "url": "https://example.com/how-0",
+              "title": "how result 0"
+            },
+            {
+              "url": "https://example.com/how-1",
+              "title": "how result 1"
+            }
+          ],
+          "error": null
+        },
+        {
+          "subtask_id": "s1",
+          "question": "How accurate are long-context LLMs on the same task?",
+          "origin": "carried",
+          "sources": [
+            {
+              "url": "https://example.com/how-0",
+              "title": "how result 0"
+            },
+            {
+              "url": "https://example.com/how-1",
+              "title": "how result 1"
+            }
+          ],
+          "error": null
+        },
+        {
+          "subtask_id": "s2",
+          "question": "What are the per-token costs of long-context models?",
+          "origin": "edited",
+          "sources": [],
+          "error": null
+        },
+        {
+          "subtask_id": "s3",
+          "question": "What are the latency characteristics of each?",
+          "origin": "carried",
+          "sources": [
+            {
+              "url": "https://example.com/what-0",
+              "title": "what result 0"
+            },
+            {
+              "url": "https://example.com/what-1",
+              "title": "what result 1"
+            }
+          ],
+          "error": null
+        },
+        {
+          "subtask_id": "s4",
+          "question": "When is each the better choice?",
+          "origin": "carried",
+          "sources": [
+            {
+              "url": "https://example.com/when-0",
+              "title": "when result 0"
+            },
+            {
+              "url": "https://example.com/when-1",
+              "title": "when result 1"
+            }
+          ],
+          "error": null
+        }
+      ]
+    }
+  },
+  {
+    "run_id": "revision-v2",
+    "seq": 3,
+    "ts": "2026-10-24T04:34:40.938902Z",
+    "type": "node_started",
+    "node": "researcher",
+    "payload": {
+      "subtask_id": "s2",
+      "span_id": "111e41ffa0e3"
+    }
+  },
+  {
+    "run_id": "revision-v2",
+    "seq": 4,
+    "ts": "2026-10-24T04:34:40.938902Z",
+    "type": "agent_call",
+    "node": "researcher",
+    "payload": {
+      "call_id": "d37da6cbe26a4d4b9590af9e4caa8a20",
+      "span_id": "111e41ffa0e3",
+      "subtask_id": "s2",
+      "kind": "tool",
+      "name": "web",
+      "duration_s": 1.5999889001250267e-05,
+      "input_tokens": null,
+      "output_tokens": null,
+      "error": null,
+      "preview": "[{'url': 'https://example.com/what-0', 'title': 'what result 0'}, {'url': 'https://example.com/what-1', 'title': 'what result 1'}]"
+    }
+  },
+  {
+    "run_id": "revision-v2",
+    "seq": 5,
+    "ts": "2026-10-24T04:34:40.938902Z",
+    "type": "node_completed",
+    "node": "researcher",
+    "payload": {
+      "subtask_id": "s2",
+      "span_id": "111e41ffa0e3",
+      "sources": [
+        {
+          "url": "https://example.com/what-0",
+          "title": "what result 0",
+          "label": null,
+          "authority": "secondary"
+        },
+        {
+          "url": "https://example.com/what-1",
+          "title": "what result 1",
+          "label": null,
+          "authority": "secondary"
+        }
+      ],
+      "question": "What are the per-token costs of long-context models?",
+      "findings_preview": "findings"
+    }
+  },
+  {
+    "run_id": "revision-v2",
+    "seq": 6,
+    "ts": "2026-10-24T04:34:40.938902Z",
+    "type": "node_started",
+    "node": "synthesizer",
+    "payload": {
+      "subtask_id": null,
+      "span_id": "d10971c73f4c"
+    }
+  },
+  {
+    "run_id": "revision-v2",
+    "seq": 7,
+    "ts": "2026-10-24T04:34:40.938902Z",
+    "type": "node_completed",
+    "node": "synthesizer",
+    "payload": {
+      "subtask_id": null,
+      "span_id": "d10971c73f4c"
+    }
+  },
+  {
+    "run_id": "revision-v2",
+    "seq": 8,
+    "ts": "2026-10-24T04:34:40.938902Z",
+    "type": "iteration_started",
+    "node": "critic",
+    "payload": {
+      "iteration": 1
+    }
+  },
+  {
+    "run_id": "revision-v2",
+    "seq": 9,
+    "ts": "2026-10-24T04:34:40.938902Z",
+    "type": "node_started",
+    "node": "critic",
+    "payload": {
+      "subtask_id": null,
+      "span_id": "0adf73d1171c"
+    }
+  },
+  {
+    "run_id": "revision-v2",
+    "seq": 10,
+    "ts": "2026-10-24T04:34:40.938902Z",
+    "type": "node_completed",
+    "node": "critic",
+    "payload": {
+      "subtask_id": null,
+      "span_id": "0adf73d1171c"
+    }
+  },
+  {
+    "run_id": "revision-v2",
+    "seq": 11,
+    "ts": "2026-10-24T04:34:40.938902Z",
+    "type": "critic_verdict",
+    "node": "critic",
+    "payload": {
+      "iteration": 1,
+      "overall": "accept",
+      "faulted_subtask_ids": [],
+      "has_synthesis_feedback": false,
+      "per_subtask": [],
+      "synthesis_feedback": null
+    }
+  },
+  {
+    "run_id": "revision-v2",
+    "seq": 12,
+    "ts": "2026-10-24T04:34:40.938902Z",
+    "type": "run_completed",
+    "node": null,
+    "payload": {
+      "answer": "## Answer\n\nSynthesised from the findings.",
+      "thread_id": "thread",
+      "iterations": 1,
+      "subtask_count": 5,
+      "source_count": 6,
+      "degraded": [],
+      "total_tokens": 0
+    }
+  }
+]

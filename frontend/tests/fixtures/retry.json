@@ -2,7 +2,7 @@
   {
     "run_id": "retry",
     "seq": 1,
-    "ts": "2026-08-10T09:10:40.238637Z",
+    "ts": "2026-10-24T04:34:08.128632Z",
     "type": "run_started",
     "node": null,
     "payload": {
@@ -13,27 +13,29 @@
   {
     "run_id": "retry",
     "seq": 2,
-    "ts": "2026-08-10T09:10:40.255287Z",
+    "ts": "2026-10-24T04:34:08.139706Z",
     "type": "node_started",
     "node": "planner",
     "payload": {
-      "subtask_id": null
+      "subtask_id": null,
+      "span_id": "e0f4fabe3888"
     }
   },
   {
     "run_id": "retry",
     "seq": 3,
-    "ts": "2026-08-10T09:10:40.255287Z",
+    "ts": "2026-10-24T04:34:08.139706Z",
     "type": "node_completed",
     "node": "planner",
     "payload": {
-      "subtask_id": null
+      "subtask_id": null,
+      "span_id": "e0f4fabe3888"
     }
   },
   {
     "run_id": "retry",
     "seq": 4,
-    "ts": "2026-08-10T09:10:40.255425Z",
+    "ts": "2026-10-24T04:34:08.139706Z",
     "type": "fan_out",
     "node": "planner",
     "payload": {
@@ -57,182 +59,314 @@
   {
     "run_id": "retry",
     "seq": 5,
-    "ts": "2026-08-10T09:10:40.261940Z",
+    "ts": "2026-10-24T04:34:08.144735Z",
     "type": "node_started",
     "node": "researcher",
     "payload": {
-      "subtask_id": "s0"
+      "subtask_id": "s0",
+      "span_id": "0b936c15640b"
     }
   },
   {
     "run_id": "retry",
     "seq": 6,
-    "ts": "2026-08-10T09:10:40.261940Z",
-    "type": "node_completed",
+    "ts": "2026-10-24T04:34:08.144735Z",
+    "type": "agent_call",
     "node": "researcher",
     "payload": {
+      "call_id": "3524fdb92db849c0908e78b0972c6f6f",
+      "span_id": "0b936c15640b",
       "subtask_id": "s0",
-      "sources": [
-        {
-          "url": "https://example.com/how-0",
-          "title": "how result 0"
-        },
-        {
-          "url": "https://example.com/how-1",
-          "title": "how result 1"
-        }
-      ],
-      "question": "How accurate is RAG for enterprise document QA?"
+      "kind": "tool",
+      "name": "web",
+      "duration_s": 4.350021481513977e-05,
+      "input_tokens": null,
+      "output_tokens": null,
+      "error": null,
+      "preview": "[{'url': 'https://example.com/how-0', 'title': 'how result 0'}, {'url': 'https://example.com/how-1', 'title': 'how result 1'}]"
     }
   },
   {
     "run_id": "retry",
     "seq": 7,
-    "ts": "2026-08-10T09:10:40.261940Z",
-    "type": "node_started",
+    "ts": "2026-10-24T04:34:08.144735Z",
+    "type": "node_completed",
     "node": "researcher",
     "payload": {
-      "subtask_id": "s1"
+      "subtask_id": "s0",
+      "span_id": "0b936c15640b",
+      "sources": [
+        {
+          "url": "https://example.com/how-0",
+          "title": "how result 0",
+          "label": null,
+          "authority": "secondary"
+        },
+        {
+          "url": "https://example.com/how-1",
+          "title": "how result 1",
+          "label": null,
+          "authority": "secondary"
+        }
+      ],
+      "question": "How accurate is RAG for enterprise document QA?",
+      "findings_preview": "findings"
     }
   },
   {
     "run_id": "retry",
     "seq": 8,
-    "ts": "2026-08-10T09:10:40.261940Z",
-    "type": "node_completed",
+    "ts": "2026-10-24T04:34:08.144735Z",
+    "type": "node_started",
     "node": "researcher",
     "payload": {
       "subtask_id": "s1",
-      "sources": [
-        {
-          "url": "https://example.com/how-0",
-          "title": "how result 0"
-        },
-        {
-          "url": "https://example.com/how-1",
-          "title": "how result 1"
-        }
-      ],
-      "question": "How accurate are long-context LLMs on the same task?"
+      "span_id": "733b13e1a500"
     }
   },
   {
     "run_id": "retry",
     "seq": 9,
-    "ts": "2026-08-10T09:10:40.261940Z",
-    "type": "node_started",
+    "ts": "2026-10-24T04:34:08.144735Z",
+    "type": "agent_call",
     "node": "researcher",
     "payload": {
-      "subtask_id": "s2"
+      "call_id": "552c9ef1770347c1ac912c1b4393b98a",
+      "span_id": "733b13e1a500",
+      "subtask_id": "s1",
+      "kind": "tool",
+      "name": "web",
+      "duration_s": 3.6499928683042526e-05,
+      "input_tokens": null,
+      "output_tokens": null,
+      "error": null,
+      "preview": "[{'url': 'https://example.com/how-0', 'title': 'how result 0'}, {'url': 'https://example.com/how-1', 'title': 'how result 1'}]"
     }
   },
   {
     "run_id": "retry",
     "seq": 10,
-    "ts": "2026-08-10T09:10:40.261940Z",
+    "ts": "2026-10-24T04:34:08.144735Z",
     "type": "node_completed",
     "node": "researcher",
     "payload": {
-      "subtask_id": "s2",
+      "subtask_id": "s1",
+      "span_id": "733b13e1a500",
       "sources": [
         {
-          "url": "https://example.com/what-0",
-          "title": "what result 0"
+          "url": "https://example.com/how-0",
+          "title": "how result 0",
+          "label": null,
+          "authority": "secondary"
         },
         {
-          "url": "https://example.com/what-1",
-          "title": "what result 1"
+          "url": "https://example.com/how-1",
+          "title": "how result 1",
+          "label": null,
+          "authority": "secondary"
         }
       ],
-      "question": "What are the cost characteristics of each?"
+      "question": "How accurate are long-context LLMs on the same task?",
+      "findings_preview": "findings"
     }
   },
   {
     "run_id": "retry",
     "seq": 11,
-    "ts": "2026-08-10T09:10:40.261940Z",
+    "ts": "2026-10-24T04:34:08.144735Z",
     "type": "node_started",
     "node": "researcher",
     "payload": {
-      "subtask_id": "s3"
+      "subtask_id": "s2",
+      "span_id": "c3818b382f40"
     }
   },
   {
     "run_id": "retry",
     "seq": 12,
-    "ts": "2026-08-10T09:10:40.261940Z",
-    "type": "node_completed",
+    "ts": "2026-10-24T04:34:08.144735Z",
+    "type": "agent_call",
     "node": "researcher",
     "payload": {
-      "subtask_id": "s3",
-      "sources": [
-        {
-          "url": "https://example.com/what-0",
-          "title": "what result 0"
-        },
-        {
-          "url": "https://example.com/what-1",
-          "title": "what result 1"
-        }
-      ],
-      "question": "What are the latency characteristics of each?"
+      "call_id": "799133bd3e8549b8b4b94debf028c74f",
+      "span_id": "c3818b382f40",
+      "subtask_id": "s2",
+      "kind": "tool",
+      "name": "web",
+      "duration_s": 3.229989670217037e-05,
+      "input_tokens": null,
+      "output_tokens": null,
+      "error": null,
+      "preview": "[{'url': 'https://example.com/what-0', 'title': 'what result 0'}, {'url': 'https://example.com/what-1', 'title': 'what result 1'}]"
     }
   },
   {
     "run_id": "retry",
     "seq": 13,
-    "ts": "2026-08-10T09:10:40.261940Z",
-    "type": "node_started",
+    "ts": "2026-10-24T04:34:08.144735Z",
+    "type": "node_completed",
     "node": "researcher",
     "payload": {
-      "subtask_id": "s4"
+      "subtask_id": "s2",
+      "span_id": "c3818b382f40",
+      "sources": [
+        {
+          "url": "https://example.com/what-0",
+          "title": "what result 0",
+          "label": null,
+          "authority": "secondary"
+        },
+        {
+          "url": "https://example.com/what-1",
+          "title": "what result 1",
+          "label": null,
+          "authority": "secondary"
+        }
+      ],
+      "question": "What are the cost characteristics of each?",
+      "findings_preview": "findings"
     }
   },
   {
     "run_id": "retry",
     "seq": 14,
-    "ts": "2026-08-10T09:10:40.261940Z",
-    "type": "node_completed",
+    "ts": "2026-10-24T04:34:08.144735Z",
+    "type": "node_started",
     "node": "researcher",
     "payload": {
-      "subtask_id": "s4",
-      "sources": [
-        {
-          "url": "https://example.com/when-0",
-          "title": "when result 0"
-        },
-        {
-          "url": "https://example.com/when-1",
-          "title": "when result 1"
-        }
-      ],
-      "question": "When is each the better choice?"
+      "subtask_id": "s3",
+      "span_id": "818e7f93bc2a"
     }
   },
   {
     "run_id": "retry",
     "seq": 15,
-    "ts": "2026-08-10T09:10:40.261940Z",
-    "type": "node_started",
-    "node": "synthesizer",
+    "ts": "2026-10-24T04:34:08.144735Z",
+    "type": "agent_call",
+    "node": "researcher",
     "payload": {
-      "subtask_id": null
+      "call_id": "3b9e254e8a094a52ac9810c9085ac996",
+      "span_id": "818e7f93bc2a",
+      "subtask_id": "s3",
+      "kind": "tool",
+      "name": "web",
+      "duration_s": 3.0499882996082306e-05,
+      "input_tokens": null,
+      "output_tokens": null,
+      "error": null,
+      "preview": "[{'url': 'https://example.com/what-0', 'title': 'what result 0'}, {'url': 'https://example.com/what-1', 'title': 'what result 1'}]"
     }
   },
   {
     "run_id": "retry",
     "seq": 16,
-    "ts": "2026-08-10T09:10:40.261940Z",
+    "ts": "2026-10-24T04:34:08.144735Z",
     "type": "node_completed",
-    "node": "synthesizer",
+    "node": "researcher",
     "payload": {
-      "subtask_id": null
+      "subtask_id": "s3",
+      "span_id": "818e7f93bc2a",
+      "sources": [
+        {
+          "url": "https://example.com/what-0",
+          "title": "what result 0",
+          "label": null,
+          "authority": "secondary"
+        },
+        {
+          "url": "https://example.com/what-1",
+          "title": "what result 1",
+          "label": null,
+          "authority": "secondary"
+        }
+      ],
+      "question": "What are the latency characteristics of each?",
+      "findings_preview": "findings"
     }
   },
   {
     "run_id": "retry",
     "seq": 17,
-    "ts": "2026-08-10T09:10:40.261940Z",
+    "ts": "2026-10-24T04:34:08.144735Z",
+    "type": "node_started",
+    "node": "researcher",
+    "payload": {
+      "subtask_id": "s4",
+      "span_id": "a46e2886dd59"
+    }
+  },
+  {
+    "run_id": "retry",
+    "seq": 18,
+    "ts": "2026-10-24T04:34:08.144735Z",
+    "type": "agent_call",
+    "node": "researcher",
+    "payload": {
+      "call_id": "016e5994d8f54627bbc7b8c951f8f3fe",
+      "span_id": "a46e2886dd59",
+      "subtask_id": "s4",
+      "kind": "tool",
+      "name": "web",
+      "duration_s": 4.100007936358452e-05,
+      "input_tokens": null,
+      "output_tokens": null,
+      "error": null,
+      "preview": "[{'url': 'https://example.com/when-0', 'title': 'when result 0'}, {'url': 'https://example.com/when-1', 'title': 'when result 1'}]"
+    }
+  },
+  {
+    "run_id": "retry",
+    "seq": 19,
+    "ts": "2026-10-24T04:34:08.144735Z",
+    "type": "node_completed",
+    "node": "researcher",
+    "payload": {
+      "subtask_id": "s4",
+      "span_id": "a46e2886dd59",
+      "sources": [
+        {
+          "url": "https://example.com/when-0",
+          "title": "when result 0",
+          "label": null,
+          "authority": "secondary"
+        },
+        {
+          "url": "https://example.com/when-1",
+          "title": "when result 1",
+          "label": null,
+          "authority": "secondary"
+        }
+      ],
+      "question": "When is each the better choice?",
+      "findings_preview": "findings"
+    }
+  },
+  {
+    "run_id": "retry",
+    "seq": 20,
+    "ts": "2026-10-24T04:34:08.144735Z",
+    "type": "node_started",
+    "node": "synthesizer",
+    "payload": {
+      "subtask_id": null,
+      "span_id": "827daaef2153"
+    }
+  },
+  {
+    "run_id": "retry",
+    "seq": 21,
+    "ts": "2026-10-24T04:34:08.144735Z",
+    "type": "node_completed",
+    "node": "synthesizer",
+    "payload": {
+      "subtask_id": null,
+      "span_id": "827daaef2153"
+    }
+  },
+  {
+    "run_id": "retry",
+    "seq": 22,
+    "ts": "2026-10-24T04:34:08.144735Z",
     "type": "iteration_started",
     "node": "critic",
     "payload": {
@@ -241,28 +375,30 @@
   },
   {
     "run_id": "retry",
-    "seq": 18,
-    "ts": "2026-08-10T09:10:40.261940Z",
+    "seq": 23,
+    "ts": "2026-10-24T04:34:08.144735Z",
     "type": "node_started",
     "node": "critic",
     "payload": {
-      "subtask_id": null
+      "subtask_id": null,
+      "span_id": "258ab30f9fdd"
     }
   },
   {
     "run_id": "retry",
-    "seq": 19,
-    "ts": "2026-08-10T09:10:40.261940Z",
+    "seq": 24,
+    "ts": "2026-10-24T04:34:08.144735Z",
     "type": "node_completed",
     "node": "critic",
     "payload": {
-      "subtask_id": null
+      "subtask_id": null,
+      "span_id": "258ab30f9fdd"
     }
   },
   {
     "run_id": "retry",
-    "seq": 20,
-    "ts": "2026-08-10T09:10:40.261940Z",
+    "seq": 25,
+    "ts": "2026-10-24T04:34:08.144735Z",
     "type": "critic_verdict",
     "node": "critic",
     "payload": {
@@ -271,64 +407,101 @@
       "faulted_subtask_ids": [
         "s2"
       ],
-      "has_synthesis_feedback": false
+      "has_synthesis_feedback": false,
+      "per_subtask": [
+        {
+          "subtask_id": "s2",
+          "verdict": "revise",
+          "reason": "the claims are not supported by the listed sources",
+          "guidance": "Search for primary benchmark data rather than vendor posts."
+        }
+      ],
+      "synthesis_feedback": null
     }
   },
   {
     "run_id": "retry",
-    "seq": 21,
-    "ts": "2026-08-10T09:10:40.271509Z",
+    "seq": 26,
+    "ts": "2026-10-24T04:34:08.160384Z",
     "type": "node_started",
     "node": "researcher",
     "payload": {
-      "subtask_id": "s2"
+      "subtask_id": "s2",
+      "span_id": "48d85d93c27a"
     }
   },
   {
     "run_id": "retry",
-    "seq": 22,
-    "ts": "2026-08-10T09:10:40.271509Z",
+    "seq": 27,
+    "ts": "2026-10-24T04:34:08.160384Z",
+    "type": "agent_call",
+    "node": "researcher",
+    "payload": {
+      "call_id": "2a9bf313bbff49f29e69b3c2479defd3",
+      "span_id": "48d85d93c27a",
+      "subtask_id": "s2",
+      "kind": "tool",
+      "name": "web",
+      "duration_s": 2.319994382560253e-05,
+      "input_tokens": null,
+      "output_tokens": null,
+      "error": null,
+      "preview": "[{'url': 'https://example.com/what-0', 'title': 'what result 0'}, {'url': 'https://example.com/what-1', 'title': 'what result 1'}]"
+    }
+  },
+  {
+    "run_id": "retry",
+    "seq": 28,
+    "ts": "2026-10-24T04:34:08.160384Z",
     "type": "node_completed",
     "node": "researcher",
     "payload": {
       "subtask_id": "s2",
+      "span_id": "48d85d93c27a",
       "sources": [
         {
           "url": "https://example.com/what-0",
-          "title": "what result 0"
+          "title": "what result 0",
+          "label": null,
+          "authority": "secondary"
         },
         {
           "url": "https://example.com/what-1",
-          "title": "what result 1"
+          "title": "what result 1",
+          "label": null,
+          "authority": "secondary"
         }
       ],
-      "question": "What are the cost characteristics of each?"
+      "question": "What are the cost characteristics of each?",
+      "findings_preview": "findings"
     }
   },
   {
     "run_id": "retry",
-    "seq": 23,
-    "ts": "2026-08-10T09:10:40.272224Z",
+    "seq": 29,
+    "ts": "2026-10-24T04:34:08.160384Z",
     "type": "node_started",
     "node": "synthesizer",
     "payload": {
-      "subtask_id": null
+      "subtask_id": null,
+      "span_id": "015afb4c512f"
     }
   },
   {
     "run_id": "retry",
-    "seq": 24,
-    "ts": "2026-08-10T09:10:40.272224Z",
+    "seq": 30,
+    "ts": "2026-10-24T04:34:08.160384Z",
     "type": "node_completed",
     "node": "synthesizer",
     "payload": {
-      "subtask_id": null
+      "subtask_id": null,
+      "span_id": "015afb4c512f"
     }
   },
   {
     "run_id": "retry",
-    "seq": 25,
-    "ts": "2026-08-10T09:10:40.278252Z",
+    "seq": 31,
+    "ts": "2026-10-24T04:34:08.160384Z",
     "type": "iteration_started",
     "node": "critic",
     "payload": {
@@ -337,41 +510,45 @@
   },
   {
     "run_id": "retry",
-    "seq": 26,
-    "ts": "2026-08-10T09:10:40.278252Z",
+    "seq": 32,
+    "ts": "2026-10-24T04:34:08.160384Z",
     "type": "node_started",
     "node": "critic",
     "payload": {
-      "subtask_id": null
+      "subtask_id": null,
+      "span_id": "bd7253321fd8"
     }
   },
   {
     "run_id": "retry",
-    "seq": 27,
-    "ts": "2026-08-10T09:10:40.278252Z",
+    "seq": 33,
+    "ts": "2026-10-24T04:34:08.160384Z",
     "type": "node_completed",
     "node": "critic",
     "payload": {
-      "subtask_id": null
+      "subtask_id": null,
+      "span_id": "bd7253321fd8"
     }
   },
   {
     "run_id": "retry",
-    "seq": 28,
-    "ts": "2026-08-10T09:10:40.278252Z",
+    "seq": 34,
+    "ts": "2026-10-24T04:34:08.160384Z",
     "type": "critic_verdict",
     "node": "critic",
     "payload": {
       "iteration": 2,
       "overall": "accept",
       "faulted_subtask_ids": [],
-      "has_synthesis_feedback": false
+      "has_synthesis_feedback": false,
+      "per_subtask": [],
+      "synthesis_feedback": null
     }
   },
   {
     "run_id": "retry",
-    "seq": 29,
-    "ts": "2026-08-10T09:10:40.278252Z",
+    "seq": 35,
+    "ts": "2026-10-24T04:34:08.160384Z",
     "type": "run_completed",
     "node": null,
     "payload": {
