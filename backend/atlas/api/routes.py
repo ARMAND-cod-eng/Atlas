@@ -28,6 +28,7 @@ from atlas.events import RUN_FAILED
 from atlas.graph.state import Revision
 from atlas.result import QueryResponse
 from atlas.store import RunKind, RunRecord, RunStatusName, RunStore
+from atlas.trace import AgentCall
 from atlas.worker import QUERY_WAIT_SECONDS, RUN_RESEARCH, RUN_REVISION
 
 logger = logging.getLogger(__name__)
@@ -76,6 +77,28 @@ class RunSummary(BaseModel):
     status: RunStatusName
     created_at: datetime
     finished_at: datetime | None
+
+
+class CallSummary(BaseModel):
+    """One agent call, as a list of them shows it: who, when, cost, a preview."""
+
+    call_id: str
+    span_id: str | None
+    node: str
+    subtask_id: str | None
+    kind: str
+    name: str
+    started_at: datetime
+    duration_s: float
+    input_tokens: int | None
+    output_tokens: int | None
+    error: str | None
+    preview: str
+
+
+class RunCalls(BaseModel):
+    run_id: str
+    calls: list[CallSummary]
 
 
 class ThreadVersions(BaseModel):
@@ -294,6 +317,34 @@ async def revise_run(request: Request, run_id: str, payload: RevisionRequest) ->
     return RunAccepted(
         run_id=revision_id, thread_id=parent.thread_id, events_url=f"/runs/{revision_id}/events"
     )
+
+
+@router.get("/runs/{run_id}/calls", response_model=RunCalls)
+async def run_calls(request: Request, run_id: str) -> RunCalls:
+    """Every call the run's agents made, without the prompts and outputs.
+
+    Those run to tens of kilobytes each and most are never opened, so they
+    are fetched one call at a time from ``/runs/{run_id}/calls/{call_id}``.
+    """
+    store = _store(request)
+    if await store.get(run_id) is None:
+        raise HTTPException(status_code=404, detail=f"unknown run: {run_id}")
+    return RunCalls(
+        run_id=run_id,
+        calls=[
+            CallSummary(**call.summary(), node=call.node, started_at=call.started_at)
+            for call in await store.calls(run_id)
+        ],
+    )
+
+
+@router.get("/runs/{run_id}/calls/{call_id}", response_model=AgentCall)
+async def run_call(request: Request, run_id: str, call_id: str) -> AgentCall:
+    """One call in full: the exact messages sent, and what came back."""
+    call = await _store(request).call(run_id, call_id)
+    if call is None:
+        raise HTTPException(status_code=404, detail=f"unknown call: {call_id}")
+    return call
 
 
 @router.get("/threads/{thread_id}/versions", response_model=ThreadVersions)

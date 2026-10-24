@@ -13,12 +13,16 @@ from __future__ import annotations
 
 import logging
 import re
+import time
+from collections.abc import Awaitable, Callable
+from functools import partial
 from typing import Any
 
 from langchain_core.messages import AIMessage, BaseMessage, HumanMessage, SystemMessage
 from langgraph.graph import END
 from langgraph.types import Overwrite, Send
 
+from atlas import trace
 from atlas.budget import is_exceeded
 from atlas.config import get_settings
 from atlas.domains import current_domain
@@ -231,10 +235,45 @@ async def _search_with_retries(subtask: Subtask, max_attempts: int) -> list[Sour
         attempts.append(" ".join(subtask.question.split()[:6]))
 
     for attempt in attempts[:max_attempts]:
-        sources = await search(attempt)
+        sources = await _searched("web", attempt, partial(search, attempt))
         if sources:
             return sources
     return []
+
+
+async def _searched(
+    tool: str, query: str, fetch: Callable[[], Awaitable[list[Source]]]
+) -> list[Source]:
+    """Await a search and record it: the query, and what came back or what failed.
+
+    The record is the evidence behind a citation: a provision the answer cites
+    has to be among what the run's searches returned.
+    """
+    started = time.perf_counter()
+    started_at = trace.now()
+    try:
+        sources = await fetch()
+    except Exception as exc:
+        trace.record(
+            kind="tool",
+            name=tool,
+            node=RESEARCHER,
+            started_at=started_at,
+            duration_s=time.perf_counter() - started,
+            request={"query": query},
+            error=f"{type(exc).__name__}: {exc}",
+        )
+        raise
+    trace.record(
+        kind="tool",
+        name=tool,
+        node=RESEARCHER,
+        started_at=started_at,
+        duration_s=time.perf_counter() - started,
+        request={"query": query},
+        response=trace.result_refs(sources),
+    )
+    return sources
 
 
 async def _law_then_guidance(subtask: Subtask, metrics: RunMetrics) -> list[Source]:
@@ -245,11 +284,19 @@ async def _law_then_guidance(subtask: Subtask, metrics: RunMetrics) -> list[Sour
     the failure is the branch's, as in the general domain.
     """
     settings = get_settings()
-    law = law_sources(subtask.question, settings.library_results)
+    law = await _searched(
+        "library",
+        subtask.question,
+        lambda: _now(law_sources(subtask.question, settings.library_results)),
+    )
     if settings.compliance_web_results <= 0:
         return law
     try:
-        web = await search(subtask.question, max_results=settings.compliance_web_results)
+        web = await _searched(
+            "web",
+            subtask.question,
+            lambda: search(subtask.question, max_results=settings.compliance_web_results),
+        )
     except Exception:
         if not law:
             raise
@@ -257,6 +304,11 @@ async def _law_then_guidance(subtask: Subtask, metrics: RunMetrics) -> list[Sour
         metrics.degraded.append(f"{DEGRADED_WEB_SEARCH_FAILED}:{subtask.id}")
         return law
     return law + [with_authority(source) for source in web]
+
+
+async def _now(sources: list[Source]) -> list[Source]:
+    """A synchronous search's result as an awaitable, so every search is recorded alike."""
+    return sources
 
 
 def render_sources(sources: list[Source]) -> str:

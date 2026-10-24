@@ -28,6 +28,7 @@ from langgraph.config import get_stream_writer
 from pydantic import BaseModel, Field
 
 from atlas.metrics import RunMetrics, track_node
+from atlas.trace import span as trace_span
 
 logger = logging.getLogger(__name__)
 
@@ -48,6 +49,9 @@ REVISION_STARTED = "revision_started"
 # which provisions it cites, and any that do not exist, were never retrieved, or
 # are misquoted. What a client draws its citation chips from.
 CITATION_CHECK = "citation_check"
+# One call an agent made, to a model or a search (atlas.trace). Nodes emit the
+# full record; the runner stores it and streams a summary under the same type.
+AGENT_CALL = "agent_call"
 RUN_COMPLETED = "run_completed"
 RUN_FAILED = "run_failed"
 
@@ -131,22 +135,33 @@ async def node_span(node: str, subtask_id: str | None = None) -> AsyncIterator[N
     ``node_started``/``node_completed`` pairs, and the id is the only thing that
     says which branch each belongs to.
     """
-    emit(NODE_STARTED, node, subtask_id=subtask_id)
-    span = NodeSpan()
-    try:
-        async with track_node(node, subtask_id) as metrics:
-            span.metrics = metrics
-            yield span
-    except Exception as exc:
-        emit(
-            NODE_FAILED,
-            node,
-            subtask_id=subtask_id,
-            error=f"{type(exc).__name__}: {exc}",
-            **span.detail,
-        )
-        raise
-    if span.error is None:
-        emit(NODE_COMPLETED, node, subtask_id=subtask_id, **span.detail)
-    else:
-        emit(NODE_FAILED, node, subtask_id=subtask_id, error=span.error, **span.detail)
+    # The span is what the calls made inside it name (atlas.trace), and what a
+    # client groups a branch's attempts by: a researcher retried is two spans.
+    with trace_span(node, subtask_id) as current:
+        emit(NODE_STARTED, node, subtask_id=subtask_id, span_id=current.id)
+        span = NodeSpan()
+        try:
+            async with track_node(node, subtask_id) as metrics:
+                span.metrics = metrics
+                yield span
+        except Exception as exc:
+            emit(
+                NODE_FAILED,
+                node,
+                subtask_id=subtask_id,
+                span_id=current.id,
+                error=f"{type(exc).__name__}: {exc}",
+                **span.detail,
+            )
+            raise
+        if span.error is None:
+            emit(NODE_COMPLETED, node, subtask_id=subtask_id, span_id=current.id, **span.detail)
+        else:
+            emit(
+                NODE_FAILED,
+                node,
+                subtask_id=subtask_id,
+                span_id=current.id,
+                error=span.error,
+                **span.detail,
+            )

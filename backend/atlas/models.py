@@ -17,6 +17,7 @@ from __future__ import annotations
 import logging
 import time
 from collections.abc import Mapping
+from datetime import datetime
 from typing import Any
 
 from langchain_anthropic import ChatAnthropic
@@ -27,6 +28,7 @@ from langchain_core.runnables import Runnable
 from langchain_openai import ChatOpenAI
 from pydantic import BaseModel, SecretStr
 
+from atlas import trace
 from atlas.budget import record_spend
 from atlas.config import get_settings
 from atlas.errors import ProviderError
@@ -241,6 +243,30 @@ def _record(
     )
 
 
+def _trace(
+    node: str,
+    started_at: datetime,
+    metrics: RunMetrics,
+    request: list[dict[str, str]],
+    response: object,
+    error: str | None = None,
+) -> None:
+    """Record the call ``_record`` just measured, with what was sent and returned."""
+    last = metrics.llm_calls[-1]
+    trace.record(
+        kind="model",
+        name=last.model,
+        node=node,
+        started_at=started_at,
+        duration_s=last.duration_s,
+        request=request,
+        response=response,
+        input_tokens=last.input_tokens,
+        output_tokens=last.output_tokens,
+        error=error,
+    )
+
+
 async def _charge_budget(metrics: RunMetrics) -> None:
     """Add the most recent call's tokens to the run's shared counter.
 
@@ -267,9 +293,19 @@ async def call_model(
     provider attribution, and error translation happen in exactly one place.
     """
     started = time.perf_counter()
+    started_at = trace.now()
     try:
         response = await get_llm(temperature, max_tokens).ainvoke(messages)
     except Exception as exc:
+        trace.record(
+            kind="model",
+            name=get_settings().primary_model,
+            node=node,
+            started_at=started_at,
+            duration_s=time.perf_counter() - started,
+            request=trace.as_messages(messages),
+            error=f"{type(exc).__name__}: {exc}",
+        )
         # Reaching here means the whole chain failed — the fallback's exception is
         # the one that surfaces. The primary's was already logged by FallbackWatcher.
         raise ProviderError(
@@ -278,6 +314,7 @@ async def call_model(
             node=node,
         ) from exc
     _record(metrics, node, response, time.perf_counter() - started)
+    _trace(node, started_at, metrics, trace.as_messages(messages), response.text)
     await _charge_budget(metrics)
     return response
 
@@ -336,9 +373,19 @@ async def _invoke_structured(
 ) -> Mapping[str, Any]:
     """One structured call: invoke, verify the envelope, record, charge."""
     started = time.perf_counter()
+    started_at = trace.now()
     try:
         envelope = await runnable.ainvoke(messages)
     except Exception as exc:
+        trace.record(
+            kind="model",
+            name=get_settings().primary_model,
+            node=node,
+            started_at=started_at,
+            duration_s=time.perf_counter() - started,
+            request=trace.as_messages(messages),
+            error=f"{type(exc).__name__}: {exc}",
+        )
         raise ProviderError(
             provider=_provider_for(get_settings().fallback_model),
             message=f"all providers failed: {type(exc).__name__}: {exc}",
@@ -358,6 +405,18 @@ async def _invoke_structured(
     # The raw message carries model name and token usage; metrics read it so a
     # structured call served by the fallback is still attributed correctly.
     _record(metrics, node, envelope.get("raw"), time.perf_counter() - started)
+    parsed = envelope.get("parsed")
+    output = parsed.model_dump() if isinstance(parsed, BaseModel) else parsed
+    parsing_error = envelope.get("parsing_error")
+    _trace(
+        node,
+        started_at,
+        metrics,
+        trace.as_messages(messages),
+        # A reply that failed to parse is recorded as the text the model sent.
+        output if output is not None else getattr(envelope.get("raw"), "text", None),
+        error=None if parsing_error is None else str(parsing_error),
+    )
     await _charge_budget(metrics)
     return envelope
 

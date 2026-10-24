@@ -23,6 +23,7 @@ from sqlalchemy.engine import RowMapping
 from sqlalchemy.ext.asyncio import AsyncEngine
 
 from atlas.graph.state import Revision
+from atlas.trace import AgentCall
 
 RunKind = Literal["question", "revision"]
 RunStatusName = Literal["running", "completed", "failed"]
@@ -68,12 +69,21 @@ class RunStore(Protocol):
         """Every run on the thread, oldest first."""
         ...
 
+    async def add_call(self, run_id: str, call: AgentCall) -> None: ...
+
+    async def calls(self, run_id: str) -> list[AgentCall]:
+        """Every call the run's agents made, in the order they started."""
+        ...
+
+    async def call(self, run_id: str, call_id: str) -> AgentCall | None: ...
+
 
 class InMemoryRunStore:
     """The store for tests and the eval: a dict, gone with the process."""
 
     def __init__(self) -> None:
         self.records: dict[str, RunRecord] = {}
+        self._calls: dict[str, list[AgentCall]] = {}
 
     async def started(self, record: RunRecord) -> None:
         self.records[record.run_id] = record
@@ -104,6 +114,15 @@ class InMemoryRunStore:
         runs = [r for r in self.records.values() if r.thread_id == thread_id]
         return sorted(runs, key=lambda r: r.created_at)
 
+    async def add_call(self, run_id: str, call: AgentCall) -> None:
+        self._calls.setdefault(run_id, []).append(call)
+
+    async def calls(self, run_id: str) -> list[AgentCall]:
+        return sorted(self._calls.get(run_id, []), key=lambda c: (c.started_at, c.call_id))
+
+    async def call(self, run_id: str, call_id: str) -> AgentCall | None:
+        return next((c for c in self._calls.get(run_id, []) if c.call_id == call_id), None)
+
 
 # Prefixed so it can never collide with the checkpointer's own tables, which
 # share the database.
@@ -124,6 +143,30 @@ _SCHEMA = (
     )
     """,
     "CREATE INDEX IF NOT EXISTS atlas_runs_thread ON atlas_runs (thread_id, created_at)",
+    """
+    CREATE TABLE IF NOT EXISTS atlas_calls (
+        call_id       TEXT PRIMARY KEY,
+        run_id        TEXT NOT NULL,
+        span_id       TEXT,
+        node          TEXT NOT NULL,
+        subtask_id    TEXT,
+        kind          TEXT NOT NULL,
+        name          TEXT NOT NULL,
+        started_at    TIMESTAMPTZ NOT NULL,
+        duration_s    DOUBLE PRECISION NOT NULL,
+        input_tokens  INTEGER,
+        output_tokens INTEGER,
+        error         TEXT,
+        request       JSONB,
+        response      JSONB
+    )
+    """,
+    "CREATE INDEX IF NOT EXISTS atlas_calls_run ON atlas_calls (run_id, started_at)",
+)
+
+_CALL_COLUMNS = (
+    "call_id, span_id, node, subtask_id, kind, name, started_at, duration_s, "
+    "input_tokens, output_tokens, error, request, response"
 )
 
 # Taken around the DDL. Two processes running CREATE TABLE IF NOT EXISTS at once
@@ -231,3 +274,54 @@ class PostgresRunStore:
                 .all()
             )
         return [_record_from(row) for row in rows]
+
+    async def add_call(self, run_id: str, call: AgentCall) -> None:
+        async with self._engine.begin() as connection:
+            await connection.execute(
+                text(
+                    f"INSERT INTO atlas_calls (run_id, {_CALL_COLUMNS}) VALUES (:run_id, "
+                    ":call_id, :span_id, :node, :subtask_id, :kind, :name, :started_at, "
+                    ":duration_s, :input_tokens, :output_tokens, :error, "
+                    "CAST(:request AS JSONB), CAST(:response AS JSONB))"
+                ),
+                {
+                    **call.model_dump(exclude={"request", "response"}),
+                    "run_id": run_id,
+                    "request": json.dumps(call.request),
+                    "response": json.dumps(call.response),
+                },
+            )
+
+    async def calls(self, run_id: str) -> list[AgentCall]:
+        async with self._engine.connect() as connection:
+            rows = (
+                (
+                    await connection.execute(
+                        text(
+                            f"SELECT {_CALL_COLUMNS} FROM atlas_calls WHERE run_id = :run_id "
+                            "ORDER BY started_at, call_id"
+                        ),
+                        {"run_id": run_id},
+                    )
+                )
+                .mappings()
+                .all()
+            )
+        return [AgentCall.model_validate(dict(row)) for row in rows]
+
+    async def call(self, run_id: str, call_id: str) -> AgentCall | None:
+        async with self._engine.connect() as connection:
+            row = (
+                (
+                    await connection.execute(
+                        text(
+                            f"SELECT {_CALL_COLUMNS} FROM atlas_calls "
+                            "WHERE run_id = :run_id AND call_id = :call_id"
+                        ),
+                        {"run_id": run_id, "call_id": call_id},
+                    )
+                )
+                .mappings()
+                .first()
+            )
+        return AgentCall.model_validate(dict(row)) if row is not None else None

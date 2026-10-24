@@ -22,6 +22,7 @@ import pytest
 
 from atlas.graph.state import Revision
 from atlas.store import InMemoryRunStore, PostgresRunStore, RunRecord, RunStore
+from atlas.trace import AgentCall
 
 T0 = datetime(2026, 10, 23, 12, 0, tzinfo=UTC)
 
@@ -131,3 +132,51 @@ async def test_postgres_setup_is_idempotent() -> None:
         await PostgresRunStore(engine).setup()
     finally:
         await engine.dispose()
+
+
+# --- agent calls ------------------------------------------------------------------------
+
+
+def _call(offset_s: int, **fields: object) -> AgentCall:
+    defaults: dict[str, object] = {
+        "span_id": "span-1",
+        "node": "researcher",
+        "subtask_id": "s0",
+        "kind": "model",
+        "name": "claude-sonnet-5",
+        "started_at": T0 + timedelta(seconds=offset_s),
+        "duration_s": 1.5,
+        "request": [{"role": "system", "content": "You are a researcher."}],
+        "response": "findings [GDPR Art. 33(1)]",
+        "input_tokens": 120,
+        "output_tokens": 40,
+    }
+    return AgentCall.model_validate({**defaults, **fields})
+
+
+async def test_a_runs_calls_read_back_whole_in_the_order_they_started(store: RunStore) -> None:
+    run_id = f"run-{uuid4()}"
+    later = _call(5, kind="tool", name="library", request={"query": "breach"}, response=[])
+    first = _call(0)
+    await store.add_call(run_id, later)
+    await store.add_call(run_id, first)
+    await store.add_call(f"run-{uuid4()}", _call(1))
+
+    assert await store.calls(run_id) == [first, later]
+    assert await store.call(run_id, later.call_id) == later
+
+
+async def test_a_failed_call_keeps_its_error(store: RunStore) -> None:
+    run_id = f"run-{uuid4()}"
+    failed = _call(0, response=None, error="ProviderError: all providers failed")
+    await store.add_call(run_id, failed)
+
+    assert await store.call(run_id, failed.call_id) == failed
+
+
+async def test_a_call_of_another_run_is_not_found(store: RunStore) -> None:
+    run_id = f"run-{uuid4()}"
+    call = _call(0)
+    await store.add_call(run_id, call)
+
+    assert await store.call(f"run-{uuid4()}", call.call_id) is None

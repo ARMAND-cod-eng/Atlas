@@ -30,6 +30,7 @@ from langgraph.graph.state import CompiledStateGraph
 
 from atlas import eventlog
 from atlas.events import (
+    AGENT_CALL,
     REVISION_STARTED,
     RUN_COMPLETED,
     RUN_FAILED,
@@ -42,6 +43,7 @@ from atlas.metrics import DEGRADED_AUDIT_INCOMPLETE, RunMetrics
 from atlas.result import build_response, response_payload
 from atlas.revision import final_checkpoint, fork_for_revision, revision_started_payload
 from atlas.store import RunKind, RunRecord, RunStore
+from atlas.trace import AgentCall
 
 logger = logging.getLogger(__name__)
 
@@ -254,6 +256,15 @@ async def _execute(
                 payload = dict(chunk)
                 event_type = str(payload.pop("type"))
                 node = payload.pop("node", None)
+                if event_type == AGENT_CALL:
+                    # The whole call to the store, a summary to the stream: replay
+                    # re-sends the stream to every reconnecting client, and a
+                    # synthesizer's prompt holds every branch's findings.
+                    call = AgentCall.model_validate({**payload, "node": node})
+                    if store is not None:
+                        written = await _audited(store.add_call(run_id, call), run_id)
+                        audit_complete = audit_complete and written
+                    payload = call.summary()
                 await events.write(event_type, node, **payload)
             elif mode == "values":
                 final_state = chunk
