@@ -25,6 +25,7 @@ import functools
 import gzip
 import re
 import xml.etree.ElementTree as ET
+from collections.abc import Iterator
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Literal
@@ -124,9 +125,36 @@ def _classes(element: ET.Element) -> set[str]:
     return set((element.get("class") or "").split())
 
 
+def _is_footnote(element: ET.Element) -> bool:
+    """A footnote reference ("(9)" linking down the page) or a footnote's own text."""
+    href = element.get("href") or ""
+    return (_tag(element) == "a" and href.startswith(("#ntr", "#ntc"))) or (
+        "oj-note" in _classes(element)
+    )
+
+
+def _pieces(element: ET.Element) -> Iterator[str]:
+    """The element's text, in order, as the act means it to be read.
+
+    ``itertext`` reads the markup's characters, and two kinds of superscript
+    change what those mean. An exponent flattens into a different number —
+    "10<sup>25</sup>" read as "1025" — so it is written "10^25". A footnote
+    reference flattens into "(9)" in the middle of a sentence, which a verbatim
+    quote of that sentence would then fail to match, so it is dropped.
+    """
+    if "oj-super" in _classes(element):
+        yield "^" + "".join(element.itertext())
+        return
+    yield element.text or ""
+    for child in element:
+        if not _is_footnote(child):
+            yield from _pieces(child)
+        yield child.tail or ""
+
+
 def _text(element: ET.Element) -> str:
     """The element's words, with the OJ's non-breaking spaces and layout flattened."""
-    return " ".join("".join(element.itertext()).replace("\xa0", " ").split())
+    return " ".join("".join(_pieces(element)).replace("\xa0", " ").split())
 
 
 def _join(elements: list[ET.Element]) -> str:

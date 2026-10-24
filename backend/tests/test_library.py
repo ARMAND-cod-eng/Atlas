@@ -118,6 +118,28 @@ def test_a_label_resolves_to_the_provision_it_names(
     assert unit.text.startswith(starts_with), unit.text[:120]
 
 
+def test_an_exponent_keeps_its_meaning(library: Library) -> None:
+    """The Official Journal sets the systemic-risk threshold as 10 with a
+    superscript 25. Flattened, the text read "greater than 1025" — a threshold
+    off by twenty-two orders of magnitude, in the library a citation check trusts."""
+    unit = library.resolve("AI Act Art. 51(2)")
+
+    assert unit is not None
+    assert unit.text.endswith("measured in floating point operations is greater than 10^25.")
+
+
+def test_a_footnote_marker_is_not_part_of_the_words(library: Library) -> None:
+    """Footnote references are links set in superscript, "Council (9) (New ...". Kept
+    in the text, they break a verbatim match on the act's own words."""
+    recital = library.resolve("AI Act Recital 9")
+
+    assert recital is not None
+    assert (
+        "Regulation (EU) 2019/1020 of the European Parliament and of the Council "
+        "(New Legislative Framework)"
+    ) in recital.text
+
+
 def test_an_article_carries_its_heading(library: Library) -> None:
     unit = library.resolve("AI Act Art. 6")
 
