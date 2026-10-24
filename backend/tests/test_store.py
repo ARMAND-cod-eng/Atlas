@@ -20,6 +20,7 @@ from uuid import uuid4
 
 import pytest
 
+from atlas.events import AgentEvent
 from atlas.graph.state import Revision
 from atlas.store import InMemoryRunStore, PostgresRunStore, RunRecord, RunStore
 from atlas.trace import AgentCall
@@ -180,3 +181,29 @@ async def test_a_call_of_another_run_is_not_found(store: RunStore) -> None:
     await store.add_call(run_id, call)
 
     assert await store.call(f"run-{uuid4()}", call.call_id) is None
+
+
+# --- the event archive ------------------------------------------------------------------
+
+
+async def test_a_runs_events_are_archived_and_read_back_in_order(store: RunStore) -> None:
+    run_id = f"run-{uuid4()}"
+    events = [
+        AgentEvent(run_id=run_id, seq=1, ts=T0, type="run_started", payload={"query": "q"}),
+        AgentEvent(
+            run_id=run_id,
+            seq=2,
+            ts=T0 + timedelta(seconds=1),
+            type="node_started",
+            node="planner",
+            payload={"subtask_id": None, "span_id": "abc"},
+        ),
+        AgentEvent(
+            run_id=run_id, seq=3, ts=T0 + timedelta(seconds=9), type="run_completed", payload={}
+        ),
+    ]
+
+    await store.archive_events(run_id, list(reversed(events)))
+
+    assert await store.events(run_id) == events
+    assert await store.events(f"run-{uuid4()}") == []

@@ -23,7 +23,8 @@ from sse_starlette.sse import EventSourceResponse
 
 from atlas import eventlog
 from atlas.config import get_settings
-from atlas.events import TERMINAL_TYPES
+from atlas.events import TERMINAL_TYPES, AgentEvent
+from atlas.store import RunStore
 
 logger = logging.getLogger(__name__)
 
@@ -95,6 +96,19 @@ async def event_stream(
             yield ServerSentEvent(comment="heartbeat")
 
 
+async def archived_stream(
+    events: list[AgentEvent], after_seq: int = 0
+) -> AsyncIterator[ServerSentEvent]:
+    """A finished run's archived events, from where the client left off.
+
+    The archive is written after the terminal event, so it is the whole run and
+    the stream ends with it: there is nothing left to follow.
+    """
+    for event in events:
+        if event.seq > after_seq:
+            yield _frame(event.seq, event.type, event.model_dump(mode="json"))
+
+
 def _frame(seq: int, event_type: str, body: dict[str, object]) -> ServerSentEvent:
     return ServerSentEvent(id=str(seq), event=event_type, data=json.dumps(body, default=str))
 
@@ -108,16 +122,22 @@ async def stream_run_events(run_id: str, request: Request) -> EventSourceRespons
     curl, httpx, the terminal client used in verification — none of which can set
     that header on an automatic retry because they have no automatic retry.
     """
-    if not await eventlog.exists(run_id):
-        raise HTTPException(status_code=404, detail=f"unknown run: {run_id}")
-
     after_seq = parse_last_event_id(
         request.headers.get("last-event-id") or request.query_params.get("last_event_id")
     )
+    if await eventlog.exists(run_id):
+        stream = event_stream(run_id, after_seq)
+    else:
+        # Redis keeps a run for an hour. Past that, the archive (atlas.store).
+        store: RunStore | None = getattr(request.app.state, "store", None)
+        archived = await store.events(run_id) if store is not None else []
+        if not archived:
+            raise HTTPException(status_code=404, detail=f"unknown run: {run_id}")
+        stream = archived_stream(archived, after_seq)
     logger.info("sse subscriber attached", extra={"run_id": run_id, "after_seq": after_seq})
 
     return EventSourceResponse(
-        event_stream(run_id, after_seq),
+        stream,
         headers={
             # Without this nginx buffers the response and delivers every event at
             # once when the run ends, which is indistinguishable from not having

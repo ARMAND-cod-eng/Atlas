@@ -22,6 +22,7 @@ from sqlalchemy import text
 from sqlalchemy.engine import RowMapping
 from sqlalchemy.ext.asyncio import AsyncEngine
 
+from atlas.events import AgentEvent
 from atlas.graph.state import Revision
 from atlas.trace import AgentCall
 
@@ -77,6 +78,14 @@ class RunStore(Protocol):
 
     async def call(self, run_id: str, call_id: str) -> AgentCall | None: ...
 
+    async def archive_events(self, run_id: str, events: list[AgentEvent]) -> None:
+        """Keep a finished run's event stream past Redis's hour."""
+        ...
+
+    async def events(self, run_id: str) -> list[AgentEvent]:
+        """An archived run's events, in seq order; empty if none were archived."""
+        ...
+
 
 class InMemoryRunStore:
     """The store for tests and the eval: a dict, gone with the process."""
@@ -84,6 +93,7 @@ class InMemoryRunStore:
     def __init__(self) -> None:
         self.records: dict[str, RunRecord] = {}
         self._calls: dict[str, list[AgentCall]] = {}
+        self._events: dict[str, list[AgentEvent]] = {}
 
     async def started(self, record: RunRecord) -> None:
         self.records[record.run_id] = record
@@ -122,6 +132,12 @@ class InMemoryRunStore:
 
     async def call(self, run_id: str, call_id: str) -> AgentCall | None:
         return next((c for c in self._calls.get(run_id, []) if c.call_id == call_id), None)
+
+    async def archive_events(self, run_id: str, events: list[AgentEvent]) -> None:
+        self._events[run_id] = list(events)
+
+    async def events(self, run_id: str) -> list[AgentEvent]:
+        return sorted(self._events.get(run_id, []), key=lambda e: e.seq)
 
 
 # Prefixed so it can never collide with the checkpointer's own tables, which
@@ -162,6 +178,17 @@ _SCHEMA = (
     )
     """,
     "CREATE INDEX IF NOT EXISTS atlas_calls_run ON atlas_calls (run_id, started_at)",
+    """
+    CREATE TABLE IF NOT EXISTS atlas_events (
+        run_id  TEXT NOT NULL,
+        seq     INTEGER NOT NULL,
+        ts      TIMESTAMPTZ NOT NULL,
+        type    TEXT NOT NULL,
+        node    TEXT,
+        payload JSONB NOT NULL,
+        PRIMARY KEY (run_id, seq)
+    )
+    """,
 )
 
 _CALL_COLUMNS = (
@@ -325,3 +352,43 @@ class PostgresRunStore:
                 .first()
             )
         return AgentCall.model_validate(dict(row)) if row is not None else None
+
+    async def archive_events(self, run_id: str, events: list[AgentEvent]) -> None:
+        if not events:
+            return
+        async with self._engine.begin() as connection:
+            await connection.execute(
+                text(
+                    "INSERT INTO atlas_events (run_id, seq, ts, type, node, payload) "
+                    "VALUES (:run_id, :seq, :ts, :type, :node, CAST(:payload AS JSONB)) "
+                    "ON CONFLICT (run_id, seq) DO NOTHING"
+                ),
+                [
+                    {
+                        "run_id": run_id,
+                        "seq": event.seq,
+                        "ts": event.ts,
+                        "type": event.type,
+                        "node": event.node,
+                        "payload": json.dumps(event.payload, default=str),
+                    }
+                    for event in events
+                ],
+            )
+
+    async def events(self, run_id: str) -> list[AgentEvent]:
+        async with self._engine.connect() as connection:
+            rows = (
+                (
+                    await connection.execute(
+                        text(
+                            "SELECT run_id, seq, ts, type, node, payload FROM atlas_events "
+                            "WHERE run_id = :run_id ORDER BY seq"
+                        ),
+                        {"run_id": run_id},
+                    )
+                )
+                .mappings()
+                .all()
+            )
+        return [AgentEvent.model_validate(dict(row)) for row in rows]

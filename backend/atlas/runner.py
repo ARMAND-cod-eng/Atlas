@@ -73,19 +73,21 @@ class _Sequencer:
     def __init__(self, run_id: str) -> None:
         self.run_id = run_id
         self._seq = 0
+        # Every event written, for the archive once the run ends.
+        self.written: list[AgentEvent] = []
 
     async def write(self, event_type: str, node: str | None = None, **payload: object) -> None:
         self._seq += 1
-        await eventlog.append(
-            AgentEvent(
-                run_id=self.run_id,
-                seq=self._seq,
-                ts=datetime.now(UTC),
-                type=event_type,
-                node=node,
-                payload=payload,
-            )
+        event = AgentEvent(
+            run_id=self.run_id,
+            seq=self._seq,
+            ts=datetime.now(UTC),
+            type=event_type,
+            node=node,
+            payload=payload,
         )
+        self.written.append(event)
+        await eventlog.append(event)
 
 
 Graph = CompiledStateGraph[AtlasState, Any, AtlasState, AtlasState]
@@ -320,6 +322,10 @@ async def _execute(
             # impossible" is not a guarantee, and a client hanging forever is a
             # bad way to discover that.
             await events.write(RUN_FAILED, error="run ended without a terminal event")
-        # Last, after the terminal event: the thread is free once the run is over,
-        # whichever way it ended.
+        # Redis keeps the stream for an hour; a version opened tomorrow from the
+        # versions list still has a timeline. After the terminal event, so the
+        # archive is the whole run.
+        if store is not None:
+            await _audited(store.archive_events(run_id, events.written), run_id)
+        # Last: the thread is free once the run is over, whichever way it ended.
         await eventlog.release_thread(thread_id, run_id)
