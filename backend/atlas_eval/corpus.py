@@ -25,9 +25,6 @@ from __future__ import annotations
 import gzip
 import json
 import logging
-import math
-import re
-from collections import Counter
 from collections.abc import Iterable
 from datetime import UTC, datetime
 from pathlib import Path
@@ -35,6 +32,7 @@ from pathlib import Path
 from pydantic import BaseModel, Field
 
 from atlas.graph.state import Source
+from atlas.tools.rank import BM25, tokenize
 from atlas_eval.dataset import DATA_DIR
 
 logger = logging.getLogger(__name__)
@@ -45,8 +43,6 @@ CORPUS_DIR = DATA_DIR / "corpus"
 # of a typical article; a hard cap because the corpus is committed, and fifty
 # items of uncapped pages would be tens of megabytes of mostly navigation chrome.
 CONTENT_CHARS = 12_000
-
-_TOKEN = re.compile(r"[a-z0-9]+")
 
 
 class CorpusDocument(BaseModel):
@@ -84,10 +80,6 @@ class MissingCorpusError(RuntimeError):
     """
 
 
-def tokenize(text: str) -> list[str]:
-    return _TOKEN.findall(text.lower())
-
-
 class FrozenSearch:
     """A deterministic stand-in for :func:`atlas.tools.search.search`.
 
@@ -104,37 +96,12 @@ class FrozenSearch:
     live search behaves: today's agent sees the snippets production gives it.
     """
 
-    K1 = 1.5
-    B = 0.75
-
     def __init__(self, corpus: QueryCorpus) -> None:
         self.corpus = corpus
         self._docs = corpus.documents
-        self._tokens = [tokenize(f"{d.title} {d.snippet}") for d in self._docs]
-        self._lengths = [len(t) for t in self._tokens]
-        self._avg_length = (sum(self._lengths) / len(self._lengths)) if self._lengths else 0.0
-        self._counts = [Counter(t) for t in self._tokens]
-        self._doc_freq: Counter[str] = Counter()
-        for tokens in self._tokens:
-            self._doc_freq.update(set(tokens))
+        self._index = BM25([tokenize(f"{d.title} {d.snippet}") for d in self._docs])
+        self._urls = [d.url for d in self._docs]
         self.calls: list[str] = []
-
-    def _score(self, index: int, terms: Iterable[str]) -> float:
-        total = len(self._docs)
-        counts = self._counts[index]
-        length = self._lengths[index] or 1
-        score = 0.0
-        for term in terms:
-            frequency = counts.get(term, 0)
-            if frequency == 0:
-                continue
-            df = self._doc_freq.get(term, 0)
-            idf = math.log(1 + (total - df + 0.5) / (df + 0.5))
-            denominator = frequency + self.K1 * (
-                1 - self.B + self.B * length / (self._avg_length or 1)
-            )
-            score += idf * (frequency * (self.K1 + 1)) / denominator
-        return score
 
     async def search(
         self, query: str, max_results: int | None = None, include_content: bool = False
@@ -142,13 +109,8 @@ class FrozenSearch:
         """Rank the frozen pool. Signature matches ``atlas.tools.search.search``."""
         self.calls.append(query)
         limit = max_results if max_results is not None else 5
-        terms = tokenize(query)
-
-        # Sort by (-score, url): the URL is the tiebreak that makes the order total.
-        ranked = sorted(
-            range(len(self._docs)),
-            key=lambda i: (-self._score(i, terms), self._docs[i].url),
-        )
+        # The URL is the tiebreak that makes the order total.
+        ranked = self._index.rank(tokenize(query), keys=self._urls)
         chosen = [self._docs[i] for i in ranked[:limit]]
         return [
             Source(
