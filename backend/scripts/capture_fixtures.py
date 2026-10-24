@@ -246,7 +246,9 @@ def write(name: str, events: list[AgentEvent]) -> None:
     FIXTURES.mkdir(parents=True, exist_ok=True)
     path = FIXTURES / f"{name}.json"
     payload = [json.loads(event.model_dump_json()) for event in events]
-    path.write_text(json.dumps(payload, indent=2) + "\n", encoding="utf-8")
+    # LF on every platform: the fixtures are committed, and a diff should show
+    # events, not line endings.
+    path.write_text(json.dumps(payload, indent=2) + "\n", encoding="utf-8", newline="\n")
     kinds = ", ".join(sorted({event.type for event in events}))
     print(f"{path.name:<24} {len(events):>3} events  [{kinds}]")
 
