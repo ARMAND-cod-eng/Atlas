@@ -31,13 +31,13 @@ export function Answer({ state, result }: Props): React.JSX.Element | null {
       {failedBranches.length > 0 && (
         // Said before the answer, not after it. An answer built on four fifths of
         // the research reads as complete unless something says otherwise.
-        <p className="rounded border border-amber-700/40 bg-amber-500/10 px-3 py-2 text-[12px] text-amber-300">
+        <p className="rounded border border-retry/40 bg-retry/10 px-3 py-2 text-xs text-retry">
           {failedBranches.length} of {state.branches.length} research branches failed. This answer is
           based on the {state.branches.length - failedBranches.length} that succeeded.
         </p>
       )}
 
-      <article className="prose-atlas max-w-none text-[13px] leading-relaxed text-neutral-200">
+      <article className="prose-atlas max-w-none text-sm leading-relaxed text-ink">
         <ReactMarkdown
           components={{
             a: ({ href, children }) => (
@@ -45,7 +45,7 @@ export function Answer({ state, result }: Props): React.JSX.Element | null {
                 href={href}
                 target="_blank"
                 rel="noreferrer"
-                className="text-sky-400 underline decoration-sky-800 underline-offset-2 hover:decoration-sky-500"
+                className="text-running underline decoration-sky-800 underline-offset-2 hover:decoration-sky-500"
               >
                 {children}
               </a>
@@ -58,22 +58,22 @@ export function Answer({ state, result }: Props): React.JSX.Element | null {
 
       {sources.length > 0 && (
         <div>
-          <h2 className="text-[11px] uppercase tracking-wide text-neutral-500">
+          <h2 className="text-2xs uppercase tracking-wide text-ink-faint">
             sources · {sources.length}
           </h2>
           <ol className="mt-2 space-y-1">
             {sources.map((source, index) => (
-              <li key={source.url} className="flex gap-2 text-[12px]">
-                <span className="shrink-0 tabular-nums text-neutral-600">{index + 1}.</span>
+              <li key={source.url} className="flex gap-2 text-xs">
+                <span className="shrink-0 tabular-nums text-ink-faint">{index + 1}.</span>
                 <a
                   href={source.url}
                   target="_blank"
                   rel="noreferrer"
-                  className="truncate text-neutral-300 hover:text-sky-300"
+                  className="truncate text-ink hover:text-accent"
                   title={source.url}
                 >
                   {source.title}
-                  <span className="ml-1.5 text-neutral-600">{hostOf(source.url)}</span>
+                  <span className="ml-1.5 text-ink-faint">{hostOf(source.url)}</span>
                 </a>
               </li>
             ))}

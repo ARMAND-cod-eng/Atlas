@@ -50,38 +50,38 @@ export function RunStatus({ state, connection, now }: Props): React.JSX.Element 
                 : 'starting';
 
   return (
-    <section className="rounded-md border border-neutral-800 bg-neutral-950 p-3">
+    <section className="rounded-md border border-line bg-canvas p-3">
       <div className="flex items-baseline justify-between gap-3">
-        <h2 className="text-[13px] font-medium text-neutral-200">{label}</h2>
-        <span className="text-[13px] tabular-nums text-neutral-400">{formatSeconds(runElapsed)}</span>
+        <h2 className="text-sm font-medium text-ink">{label}</h2>
+        <span className="text-sm tabular-nums text-ink-muted">{formatSeconds(runElapsed)}</span>
       </div>
 
-      <dl className="mt-3 grid grid-cols-2 gap-y-1.5 text-[11px]">
-        <dt className="text-neutral-500">iteration</dt>
-        <dd className="text-right tabular-nums text-neutral-300">{state.iteration || '—'}</dd>
+      <dl className="mt-3 grid grid-cols-2 gap-y-1.5 text-2xs">
+        <dt className="text-ink-faint">iteration</dt>
+        <dd className="text-right tabular-nums text-ink">{state.iteration || '—'}</dd>
 
-        <dt className="text-neutral-500">tokens</dt>
-        <dd className="text-right tabular-nums text-neutral-300">{formatTokens(state.totalTokens)}</dd>
+        <dt className="text-ink-faint">tokens</dt>
+        <dd className="text-right tabular-nums text-ink">{formatTokens(state.totalTokens)}</dd>
 
-        <dt className="text-neutral-500">sources</dt>
-        <dd className="text-right tabular-nums text-neutral-300">{sourceCount}</dd>
+        <dt className="text-ink-faint">sources</dt>
+        <dd className="text-right tabular-nums text-ink">{sourceCount}</dd>
 
-        <dt className="text-neutral-500">stream</dt>
-        <dd className="text-right text-neutral-300">{connection}</dd>
+        <dt className="text-ink-faint">stream</dt>
+        <dd className="text-right text-ink">{connection}</dd>
       </dl>
 
       {state.criticRounds.length > 0 && (
-        <div className="mt-3 border-t border-neutral-800 pt-2">
-          <p className="text-[10px] uppercase tracking-wide text-neutral-500">critic</p>
+        <div className="mt-3 border-t border-line pt-2">
+          <p className="text-2xs uppercase tracking-wide text-ink-faint">critic</p>
           <ul className="mt-1 space-y-1">
             {state.criticRounds.map((round) => (
-              <li key={round.iteration} className="flex items-baseline gap-2 text-[11px]">
-                <span className="tabular-nums text-neutral-500">#{round.iteration}</span>
-                <span className={round.overall === 'accept' ? 'text-emerald-400' : 'text-amber-400'}>
+              <li key={round.iteration} className="flex items-baseline gap-2 text-2xs">
+                <span className="tabular-nums text-ink-faint">#{round.iteration}</span>
+                <span className={round.overall === 'accept' ? 'text-done' : 'text-retry'}>
                   {round.overall}
                 </span>
                 {round.faultedSubtaskIds.length > 0 && (
-                  <span className="text-neutral-400">
+                  <span className="text-ink-muted">
                     sent back {round.faultedSubtaskIds.join(', ')}
                   </span>
                 )}
@@ -98,7 +98,7 @@ export function RunStatus({ state, connection, now }: Props): React.JSX.Element 
           {state.degraded.map((flag) => (
             <li
               key={flag}
-              className="rounded border border-amber-700/40 bg-amber-500/10 px-2 py-1 text-[11px] text-amber-300"
+              className="rounded border border-retry/40 bg-retry/10 px-2 py-1 text-2xs text-retry"
             >
               {formatDegraded(flag)}
             </li>
@@ -107,14 +107,14 @@ export function RunStatus({ state, connection, now }: Props): React.JSX.Element 
       )}
 
       {state.degradedStream && (
-        <p className="mt-3 rounded border border-amber-700/40 bg-amber-500/10 px-2 py-1 text-[11px] text-amber-300">
+        <p className="mt-3 rounded border border-retry/40 bg-retry/10 px-2 py-1 text-2xs text-retry">
           stream incomplete — an event was lost and could not be recovered, so this view may be
           missing a step
         </p>
       )}
 
       {state.error !== null && (
-        <p className="mt-3 rounded border border-red-700/40 bg-red-500/10 px-2 py-1 text-[11px] text-red-300">
+        <p className="mt-3 rounded border border-failed/40 bg-failed/10 px-2 py-1 text-2xs text-failed">
           {state.error}
         </p>
       )}

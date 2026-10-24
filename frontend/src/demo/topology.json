@@ -1,0 +1,95 @@
+{
+  "nodes": [
+    {
+      "id": "__start__",
+      "fan_out": false,
+      "terminal": true
+    },
+    {
+      "id": "planner",
+      "fan_out": false,
+      "terminal": false
+    },
+    {
+      "id": "researcher",
+      "fan_out": true,
+      "terminal": false
+    },
+    {
+      "id": "synthesizer",
+      "fan_out": false,
+      "terminal": false
+    },
+    {
+      "id": "critic",
+      "fan_out": false,
+      "terminal": false
+    },
+    {
+      "id": "human_edit",
+      "fan_out": false,
+      "terminal": false
+    },
+    {
+      "id": "__end__",
+      "fan_out": false,
+      "terminal": true
+    }
+  ],
+  "edges": [
+    {
+      "id": "__start__->planner",
+      "source": "__start__",
+      "target": "planner",
+      "conditional": false
+    },
+    {
+      "id": "critic->__end__",
+      "source": "critic",
+      "target": "__end__",
+      "conditional": true
+    },
+    {
+      "id": "critic->researcher",
+      "source": "critic",
+      "target": "researcher",
+      "conditional": true
+    },
+    {
+      "id": "critic->synthesizer",
+      "source": "critic",
+      "target": "synthesizer",
+      "conditional": true
+    },
+    {
+      "id": "planner->researcher",
+      "source": "planner",
+      "target": "researcher",
+      "conditional": true
+    },
+    {
+      "id": "planner->synthesizer",
+      "source": "planner",
+      "target": "synthesizer",
+      "conditional": true
+    },
+    {
+      "id": "researcher->synthesizer",
+      "source": "researcher",
+      "target": "synthesizer",
+      "conditional": false
+    },
+    {
+      "id": "synthesizer->critic",
+      "source": "synthesizer",
+      "target": "critic",
+      "conditional": false
+    },
+    {
+      "id": "human_edit->researcher",
+      "source": "human_edit",
+      "target": "researcher",
+      "conditional": true
+    }
+  ]
+}

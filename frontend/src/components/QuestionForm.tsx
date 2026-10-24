@@ -66,14 +66,14 @@ export function QuestionForm({
         rows={3}
         maxLength={2000}
         placeholder={placeholder}
-        className="w-full resize-none rounded-md border border-neutral-800 bg-neutral-950 px-3 py-2 text-[13px] leading-relaxed text-neutral-200 placeholder:text-neutral-600 focus:border-neutral-600 focus:outline-none"
+        className="w-full resize-none rounded-md border border-line bg-canvas px-3 py-2 text-sm leading-relaxed text-ink placeholder:text-ink-faint focus:border-accent focus:outline-none"
       />
       <div className="mt-2 flex items-center justify-between gap-3">
-        <span className="text-[11px] text-neutral-600">{hint}</span>
+        <span className="text-2xs text-ink-faint">{hint}</span>
         <button
           type="submit"
           disabled={submitting || query.trim() === ''}
-          className="shrink-0 rounded border border-neutral-700 px-3 py-1.5 text-[12px] text-neutral-200 hover:border-neutral-500 disabled:opacity-40"
+          className="shrink-0 rounded border border-line-strong px-3 py-1.5 text-xs text-ink hover:border-ink-faint disabled:opacity-40"
         >
           {submitting ? 'starting…' : submitLabel}
         </button>
@@ -81,7 +81,7 @@ export function QuestionForm({
       {notice !== null && (
         <p
           role="status"
-          className={`mt-3 text-[12px] ${notice.tone === 'busy' ? 'text-amber-300' : 'text-red-400'}`}
+          className={`mt-3 text-xs ${notice.tone === 'busy' ? 'text-retry' : 'text-failed'}`}
         >
           {notice.text}
         </p>

@@ -1,13 +1,21 @@
 'use client';
 
-import { Background, ReactFlow, type Edge, type NodeTypes } from '@xyflow/react';
-import { useMemo } from 'react';
+import {
+  Background,
+  ReactFlow,
+  type Edge,
+  type NodeChange,
+  type NodeTypes,
+  useReactFlow,
+} from '@xyflow/react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 
 import '@xyflow/react/dist/style.css';
 
 import { AgentNode, type AgentNodeData, type AgentNodeType } from './AgentNode';
 import type { Topology } from '@/lib/events';
 import { layout, shapeFor } from '@/lib/layout';
+import { type Measurements, recordMeasurements } from '@/lib/measure';
 import { RESEARCHER, type RunState, type NodeStatus } from '@/lib/reducer';
 
 const NODE_TYPES: NodeTypes = { agent: AgentNode };
@@ -28,6 +36,18 @@ interface Props {
 
 export function GraphCanvas({ topology, state, now }: Props): React.JSX.Element {
   const shape = useMemo(() => shapeFor(topology, state), [topology, state]);
+
+  // React Flow hides a node until it knows its size, and the nodes below are
+  // rebuilt from the run state on every event. Their sizes are kept here and put
+  // back on each rebuild (see lib/measure.ts); without them, a run that stopped
+  // changing left the whole graph hidden.
+  const [measured, setMeasured] = useState<Measurements>(() => new Map());
+  const onNodesChange = useCallback((changes: NodeChange<AgentNodeType>[]) => {
+    const sized = changes.flatMap((change) =>
+      change.type === 'dimensions' ? [{ type: change.type, id: change.id, dimensions: change.dimensions }] : [],
+    );
+    if (sized.length > 0) setMeasured((current) => recordMeasurements(current, sized));
+  }, []);
 
   // No useMemo here on purpose. `layout` is memoised internally on the topology
   // signature — which contains no status, timing or verdict — so calling it every
@@ -75,9 +95,15 @@ export function GraphCanvas({ topology, state, now }: Props): React.JSX.Element 
               now,
             };
 
-      return { id, type: 'agent' as const, position: { x: position.x, y: position.y }, data };
+      return {
+        id,
+        type: 'agent' as const,
+        position: { x: position.x, y: position.y },
+        data,
+        measured: measured.get(id),
+      };
     });
-  }, [shape, positions, state, now]);
+  }, [shape, positions, state, now, measured]);
 
   const edges: Edge[] = useMemo(
     () =>
@@ -96,7 +122,7 @@ export function GraphCanvas({ topology, state, now }: Props): React.JSX.Element 
           target: edge.target,
           animated: firing || isCarryingFlow(edge.source, edge.target, state),
           style: {
-            stroke: firing ? '#f59e0b' : fired ? '#b45309' : edge.feedback ? '#3f3f46' : '#52525b',
+            stroke: firing ? 'var(--retry)' : fired ? 'var(--retry)' : edge.feedback ? 'var(--line-strong)' : 'var(--ink-faint)',
             strokeWidth: firing ? 2 : 1,
             strokeDasharray: edge.feedback && !firing ? '4 4' : undefined,
             opacity: edge.feedback && !fired ? 0.35 : 1,
@@ -110,17 +136,48 @@ export function GraphCanvas({ topology, state, now }: Props): React.JSX.Element 
     <ReactFlow
       nodes={nodes}
       edges={edges}
+      onNodesChange={onNodesChange}
       nodeTypes={NODE_TYPES}
       fitView
       proOptions={{ hideAttribution: true }}
       nodesDraggable={false}
       nodesConnectable={false}
       edgesFocusable={false}
-      className="bg-neutral-950"
+      className="bg-canvas"
     >
-      <Background color="#27272a" gap={18} />
+      <Background color="var(--line)" gap={18} />
+      <FitWhenTheGraphChanges
+        signature={shape.nodeIds.join(',')}
+        ready={shape.nodeIds.every((id) => measured.has(id))}
+      />
     </ReactFlow>
   );
+}
+
+/**
+ * Fit the graph to its pane whenever its nodes change (fan-out, a revision),
+ * once every node has a size. ReactFlow's own `fitView` fits at mount, before
+ * the nodes have sizes, and its "initialised" signal never fires for nodes
+ * supplied with their measurements as these are: on a narrow screen the graph
+ * stayed cropped at both edges. `ready` comes from the measurements GraphCanvas
+ * keeps itself.
+ */
+function FitWhenTheGraphChanges({
+  signature,
+  ready,
+}: {
+  readonly signature: string;
+  readonly ready: boolean;
+}): null {
+  const { fitView } = useReactFlow();
+  useEffect(() => {
+    if (!ready) return;
+    // After this render commits the sizes; a timer, not a frame, so a tab in the
+    // background (where frames are paused) still fits.
+    const timer = window.setTimeout(() => void fitView({ padding: 0.12 }), 0);
+    return () => window.clearTimeout(timer);
+  }, [signature, ready, fitView]);
+  return null;
 }
 
 /** An edge is carrying flow when its source is done and its target is running. */

@@ -37,6 +37,7 @@ from langgraph.checkpoint.memory import MemorySaver
 from pydantic import BaseModel
 
 from atlas import eventlog
+from atlas.api.topology import build_topology
 from atlas.domains import DomainName, using_domain
 from atlas.errors import ProviderError, SearchError
 from atlas.events import AgentEvent
@@ -54,6 +55,7 @@ ModelFn = Callable[..., Awaitable[AIMessage]]
 StructuredFn = Callable[..., Awaitable[BaseModel]]
 
 FIXTURES = Path(__file__).resolve().parents[2] / "frontend" / "tests" / "fixtures"
+DEMO = Path(__file__).resolve().parents[2] / "frontend" / "src" / "demo"
 
 ANSWER = "## Answer\n\nSynthesised from the findings."
 
@@ -312,6 +314,22 @@ async def main() -> None:
     await capture(
         "compliance", count=2, verdicts=[ACCEPT], domain="compliance", model=citing_model()
     )
+
+    write_demo()
+
+
+def write_demo() -> None:
+    """What the frontend's /demo page replays, offline: a recorded stream and the
+    graph's real topology, both from the backend rather than written by hand."""
+    DEMO.mkdir(parents=True, exist_ok=True)
+    (DEMO / "compliance.json").write_text(
+        (FIXTURES / "compliance.json").read_text(encoding="utf-8"), encoding="utf-8", newline="\n"
+    )
+    topology = build_topology().model_dump()
+    (DEMO / "topology.json").write_text(
+        json.dumps(topology, indent=2) + "\n", encoding="utf-8", newline="\n"
+    )
+    print(f"demo/                    compliance.json, topology.json -> {DEMO}")
 
 
 if __name__ == "__main__":

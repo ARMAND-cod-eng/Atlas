@@ -30,40 +30,40 @@ export function Metrics({ result }: Props): React.JSX.Element | null {
   }
 
   return (
-    <section className="rounded-md border border-neutral-800 bg-neutral-950 p-3">
-      <h2 className="text-[11px] uppercase tracking-wide text-neutral-500">metrics</h2>
+    <section className="rounded-md border border-line bg-canvas p-3">
+      <h2 className="text-2xs uppercase tracking-wide text-ink-faint">metrics</h2>
 
-      <dl className="mt-2 grid grid-cols-2 gap-y-1 text-[11px]">
+      <dl className="mt-2 grid grid-cols-2 gap-y-1 text-2xs">
         {[...byNode.entries()].map(([node, seconds]) => (
           <div key={node} className="contents">
-            <dt className="text-neutral-500">{node}</dt>
-            <dd className="text-right tabular-nums text-neutral-300">{formatSeconds(seconds)}</dd>
+            <dt className="text-ink-faint">{node}</dt>
+            <dd className="text-right tabular-nums text-ink">{formatSeconds(seconds)}</dd>
           </div>
         ))}
       </dl>
 
       {researcherTimings.length > 1 && (
-        <p className="mt-2 border-t border-neutral-800 pt-2 text-[11px] text-neutral-400">
+        <p className="mt-2 border-t border-line pt-2 text-2xs text-ink-muted">
           {researcherTimings.length} branches cost{' '}
-          <span className="tabular-nums text-neutral-200">{formatSeconds(slowest)}</span> — the
+          <span className="tabular-nums text-ink">{formatSeconds(slowest)}</span> — the
           slowest — not{' '}
-          <span className="tabular-nums text-neutral-200">{formatSeconds(summed)}</span>, their sum.
+          <span className="tabular-nums text-ink">{formatSeconds(summed)}</span>, their sum.
         </p>
       )}
 
-      <div className="mt-3 border-t border-neutral-800 pt-2">
-        <p className="text-[10px] uppercase tracking-wide text-neutral-500">model calls</p>
+      <div className="mt-3 border-t border-line pt-2">
+        <p className="text-2xs uppercase tracking-wide text-ink-faint">model calls</p>
         <ul className="mt-1 space-y-0.5">
           {result.metrics.llm_calls.map((call, index) => (
-            <li key={index} className="flex items-baseline gap-2 text-[10px] tabular-nums">
-              <span className="w-20 shrink-0 truncate text-neutral-400">{call.node}</span>
-              <span className="w-28 shrink-0 truncate text-neutral-500" title={call.model}>
+            <li key={index} className="flex items-baseline gap-2 text-2xs tabular-nums">
+              <span className="w-20 shrink-0 truncate text-ink-muted">{call.node}</span>
+              <span className="w-28 shrink-0 truncate text-ink-faint" title={call.model}>
                 {call.model}
               </span>
-              <span className="text-neutral-500">
+              <span className="text-ink-faint">
                 {formatTokens(call.input_tokens)}→{formatTokens(call.output_tokens)}
               </span>
-              <span className="ml-auto text-neutral-400">{formatSeconds(call.duration_s)}</span>
+              <span className="ml-auto text-ink-muted">{formatSeconds(call.duration_s)}</span>
             </li>
           ))}
         </ul>

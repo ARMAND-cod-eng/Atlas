@@ -9,8 +9,8 @@ export default function Home(): React.JSX.Element {
 
   return (
     <main className="mx-auto flex min-h-screen w-full max-w-2xl flex-col justify-center px-6">
-      <h1 className="text-sm font-medium tracking-wide text-neutral-300">Atlas</h1>
-      <p className="mt-1 text-[13px] text-neutral-500">
+      <h1 className="text-sm font-medium tracking-wide text-ink">Atlas</h1>
+      <p className="mt-1 text-sm text-ink-faint">
         Multi-agent research. A planner decomposes the question, researchers run in parallel, and a
         critic reviews the result before you see it.
       </p>

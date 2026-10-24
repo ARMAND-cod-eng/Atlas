@@ -1,25 +1,151 @@
 @import "tailwindcss";
 
+/*
+ * Design tokens.
+ *
+ * Semantic names, defined once per theme, so a component says what a colour is
+ * for ("a running agent", "primary law") and never which grey it happens to be.
+ * Light is the default; dark follows the system unless the viewer chose, and
+ * the choice is stored on <html data-theme> (see ThemeToggle).
+ */
+:root {
+  --canvas: #f6f6f3;
+  --surface: #ffffff;
+  --raised: #efefeb;
+  --line: #e2e2dc;
+  --line-strong: #cbcbc3;
+  --ink: #1b1b19;
+  --ink-muted: #55554f;
+  --ink-faint: #8a8a83;
+  --accent: #4f46e5;
+  --accent-ink: #ffffff;
+
+  --running: #0284c7;
+  --done: #059669;
+  --failed: #dc2626;
+  --idle: #a8a8a0;
+  --retry: #d97706;
+  --edited: #c026d3;
+
+  /* How much a source can say about the law. */
+  --law: #6d28d9;
+  --guidance: #0f766e;
+  --secondary: #78786f;
+
+  color-scheme: light;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --canvas: #0b0b0c;
+    --surface: #131315;
+    --raised: #1b1b1e;
+    --line: #27272b;
+    --line-strong: #3a3a40;
+    --ink: #ececea;
+    --ink-muted: #a6a6a1;
+    --ink-faint: #6c6c68;
+    --accent: #8b85f5;
+    --accent-ink: #0b0b0c;
+    --running: #38bdf8;
+    --done: #34d399;
+    --failed: #f87171;
+    --idle: #55554f;
+    --retry: #f59e0b;
+    --edited: #e879f9;
+    --law: #a78bfa;
+    --guidance: #2dd4bf;
+    --secondary: #8a8a83;
+    color-scheme: dark;
+  }
+}
+
+:root[data-theme="dark"] {
+  --canvas: #0b0b0c;
+  --surface: #131315;
+  --raised: #1b1b1e;
+  --line: #27272b;
+  --line-strong: #3a3a40;
+  --ink: #ececea;
+  --ink-muted: #a6a6a1;
+  --ink-faint: #6c6c68;
+  --accent: #8b85f5;
+  --accent-ink: #0b0b0c;
+  --running: #38bdf8;
+  --done: #34d399;
+  --failed: #f87171;
+  --idle: #55554f;
+  --retry: #f59e0b;
+  --edited: #e879f9;
+  --law: #a78bfa;
+  --guidance: #2dd4bf;
+  --secondary: #8a8a83;
+  color-scheme: dark;
+}
+
 @theme inline {
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
+
+  --color-canvas: var(--canvas);
+  --color-surface: var(--surface);
+  --color-raised: var(--raised);
+  --color-line: var(--line);
+  --color-line-strong: var(--line-strong);
+  --color-ink: var(--ink);
+  --color-ink-muted: var(--ink-muted);
+  --color-ink-faint: var(--ink-faint);
+  --color-accent: var(--accent);
+  --color-accent-ink: var(--accent-ink);
+  --color-running: var(--running);
+  --color-done: var(--done);
+  --color-failed: var(--failed);
+  --color-idle: var(--idle);
+  --color-retry: var(--retry);
+  --color-edited: var(--edited);
+  --color-law: var(--law);
+  --color-guidance: var(--guidance);
+  --color-secondary: var(--secondary);
+}
+
+/*
+ * A dense type scale for an analyst's workstation: a lot on screen, all of it
+ * legible. Replaces the arbitrary 10–13px sizes each component used to pick.
+ */
+@theme {
+  --text-2xs: 0.6875rem;
+  --text-2xs--line-height: 1rem;
+  --text-xs: 0.75rem;
+  --text-xs--line-height: 1.125rem;
+  --text-sm: 0.8125rem;
+  --text-sm--line-height: 1.25rem;
+  --text-base: 0.875rem;
+  --text-base--line-height: 1.375rem;
 }
 
 body {
   font-family: var(--font-geist-sans), system-ui, sans-serif;
+  background: var(--canvas);
+  color: var(--ink);
 }
 
 /*
  * Minimal typography for the synthesized answer. Not @tailwindcss/typography —
  * that ships a whole editorial scale for a panel that renders headings, lists
- * and links and nothing else. This is the four rules that panel actually needs.
+ * and links and nothing else. This is the handful of rules that panel needs.
  */
+.prose-atlas {
+  font-size: var(--text-sm);
+  line-height: 1.6;
+  color: var(--ink);
+}
+
 .prose-atlas h1,
 .prose-atlas h2,
 .prose-atlas h3 {
-  font-size: 0.8125rem;
+  font-size: var(--text-sm);
   font-weight: 600;
-  color: var(--color-neutral-100);
+  color: var(--ink);
   margin-top: 1.25em;
   margin-bottom: 0.4em;
 }
@@ -52,13 +178,18 @@ body {
 
 .prose-atlas strong {
   font-weight: 600;
-  color: var(--color-neutral-100);
+}
+
+.prose-atlas a {
+  color: var(--accent);
+  text-decoration: underline;
+  text-underline-offset: 2px;
 }
 
 .prose-atlas code {
   font-family: var(--font-geist-mono), monospace;
   font-size: 0.9em;
-  background: var(--color-neutral-900);
+  background: var(--raised);
   padding: 0.1em 0.3em;
   border-radius: 0.2rem;
 }
@@ -66,4 +197,10 @@ body {
 /* The graph canvas provides its own background. */
 .react-flow__attribution {
   display: none;
+}
+
+/* Focus that shows for keyboard users, not for every click. */
+:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
 }

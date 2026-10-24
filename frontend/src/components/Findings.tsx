@@ -22,39 +22,39 @@ export function Findings({ state }: Props): React.JSX.Element | null {
 
   return (
     <section>
-      <h2 className="text-[11px] uppercase tracking-wide text-neutral-500">research</h2>
+      <h2 className="text-2xs uppercase tracking-wide text-ink-faint">research</h2>
       <ul className="mt-2 space-y-3">
         {state.branches.map((branch) => (
           <li key={branch.id}>
             <div className="flex items-baseline gap-2">
-              <span className="shrink-0 font-mono text-[10px] text-neutral-600">
+              <span className="shrink-0 font-mono text-2xs text-ink-faint">
                 {branch.subtaskId}
               </span>
-              <p className="text-[12px] leading-snug text-neutral-300">{branch.question}</p>
+              <p className="text-xs leading-snug text-ink">{branch.question}</p>
             </div>
 
             {branch.status === 'failed' ? (
-              <p className="mt-1 pl-7 text-[11px] text-red-400">
+              <p className="mt-1 pl-7 text-2xs text-failed">
                 {branch.error ?? 'this branch failed'} — the answer below does not include it
               </p>
             ) : branch.sources.length === 0 ? (
-              <p className="mt-1 pl-7 text-[11px] text-neutral-600">
+              <p className="mt-1 pl-7 text-2xs text-ink-faint">
                 {branch.status === 'running' ? 'searching…' : 'no sources'}
               </p>
             ) : (
               <ul className="mt-1 space-y-0.5 pl-7">
                 {branch.sources.map((source) => (
-                  <li key={source.url} className="truncate text-[11px]">
+                  <li key={source.url} className="truncate text-2xs">
                     <a
                       href={source.url}
                       target="_blank"
                       rel="noreferrer"
-                      className="text-neutral-400 hover:text-sky-300"
+                      className="text-ink-muted hover:text-accent"
                       title={source.title}
                     >
                       {source.title}
                     </a>
-                    <span className="ml-1.5 text-neutral-600">{hostOf(source.url)}</span>
+                    <span className="ml-1.5 text-ink-faint">{hostOf(source.url)}</span>
                   </li>
                 ))}
               </ul>
