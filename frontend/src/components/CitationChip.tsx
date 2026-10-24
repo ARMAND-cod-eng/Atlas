@@ -1,6 +1,6 @@
 'use client';
 
-import { useId, useRef, useState } from 'react';
+import { type CSSProperties, useEffect, useId, useRef, useState } from 'react';
 
 import { type Provision, fetchProvision } from '@/lib/api';
 import type { CitationStatus } from '@/lib/citations';
@@ -35,6 +35,23 @@ const STATUS: Record<CitationStatus, { readonly chip: string; readonly mark: str
 
 type Loaded = { readonly state: 'idle' | 'loading' } | { readonly state: 'done'; readonly provision: Provision | null };
 
+const CARD_WIDTH = 320;
+const MARGIN = 8;
+
+/**
+ * Where the card goes: under the chip, or over it near the window's foot, and
+ * never past either side. Fixed to the window, because the result pane scrolls
+ * and would cut off a card positioned inside it.
+ */
+function placeCard(chip: DOMRect): CSSProperties {
+  const width = Math.min(CARD_WIDTH, window.innerWidth - 2 * MARGIN);
+  const left = Math.min(Math.max(MARGIN, chip.left), window.innerWidth - width - MARGIN);
+  const below = window.innerHeight - chip.bottom;
+  return below < 240 && chip.top > below
+    ? { position: 'fixed', left, width, bottom: window.innerHeight - chip.top }
+    : { position: 'fixed', left, width, top: chip.bottom };
+}
+
 /**
  * One citation of the law, as a chip: what the run's citation check found, and
  * on hover, focus or tap the provision's text from the library, with a link to
@@ -48,16 +65,27 @@ export function CitationChip({
   readonly status: CitationStatus;
 }): React.JSX.Element {
   const [open, setOpen] = useState(false);
-  const [alignRight, setAlignRight] = useState(false);
+  const [place, setPlace] = useState<CSSProperties>({});
   const [loaded, setLoaded] = useState<Loaded>({ state: 'idle' });
   const button = useRef<HTMLButtonElement>(null);
   const id = useId();
   const style = STATUS[status];
 
+  // A card fixed to the window would stay put while its chip scrolled away.
+  useEffect(() => {
+    if (!open) return;
+    const close = (): void => setOpen(false);
+    window.addEventListener('scroll', close, true);
+    window.addEventListener('resize', close);
+    return () => {
+      window.removeEventListener('scroll', close, true);
+      window.removeEventListener('resize', close);
+    };
+  }, [open]);
+
   function show(): void {
-    // Opened near the pane's right edge, the card would be cut off: open leftwards.
     const rect = button.current?.getBoundingClientRect();
-    if (rect !== undefined) setAlignRight(rect.left > window.innerWidth - 340);
+    if (rect !== undefined) setPlace(placeCard(rect));
     setOpen(true);
     if (loaded.state !== 'idle') return;
     setLoaded({ state: 'loading' });
@@ -89,15 +117,13 @@ export function CitationChip({
         {style.mark !== '' && <span aria-hidden="true">{style.mark}</span>}
       </button>
       {open && (
-        <span
-          id={id}
-          role="tooltip"
-          className={`absolute top-full z-30 mt-1 block w-80 max-w-[80vw] rounded-md border border-line-strong bg-surface p-3 text-left shadow-lg ${
-            alignRight ? 'right-0' : 'left-0'
-          }`}
-        >
-          <span className="block text-2xs text-ink-muted">{style.says}</span>
-          <ProvisionText loaded={loaded} status={status} />
+        // The gap between chip and card is the card's own padding, so the pointer
+        // crossing it never leaves the chip's hover.
+        <span id={id} role="tooltip" style={place} className="z-50 block py-1 text-left">
+          <span className="block rounded-md border border-line-strong bg-surface p-3 shadow-lg">
+            <span className="block text-2xs text-ink-muted">{style.says}</span>
+            <ProvisionText loaded={loaded} status={status} />
+          </span>
         </span>
       )}
     </span>

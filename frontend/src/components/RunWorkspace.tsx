@@ -10,10 +10,13 @@ import { Inspector } from './Inspector';
 import { Metrics } from './Metrics';
 import { RunStatus } from './RunStatus';
 import { Timeline } from './Timeline';
+import { Compare, Versions } from './Versions';
 import { type PaneSpec, Workspace } from './Workspace';
 import type { RunResult, Topology } from '@/lib/events';
 import type { RunState } from '@/lib/reducer';
 import type { Connection } from '@/lib/useRunStream';
+import { useVersions } from '@/lib/useVersions';
+import { versionRows } from '@/lib/versions';
 
 function evolutionLine(state: RunState): string {
   const reviews = state.criticRounds.length;
@@ -56,6 +59,9 @@ export function RunWorkspace({
   readonly onRevised?: (runId: string) => void;
 }): React.JSX.Element {
   const [selected, setSelected] = useState<string | null>(null);
+  // Asked again when the run's phase changes: finishing changes its own row.
+  const runs = useVersions(state.threadId, runId, state.phase);
+  const rows = runs === null || runId === null ? [] : versionRows(runs, runId);
 
   const panes: PaneSpec[] = [
     {
@@ -64,6 +70,7 @@ export function RunWorkspace({
       subtitle: evolutionLine(state),
       content: (
         <>
+          <Versions rows={rows} />
           <div className="border-b border-line p-3">
             <RunStatus state={state} connection={connection} now={now} />
           </div>
@@ -97,6 +104,7 @@ export function RunWorkspace({
       subtitle: state.answer === null ? 'not written yet' : 'answer ready',
       content: (
         <div className="space-y-6 p-4">
+          <Compare rows={rows} answer={state.answer} />
           <Answer state={state} result={result} />
           <Findings state={state} />
           {followUp}
