@@ -170,6 +170,31 @@ def cmd_claim(args: argparse.Namespace) -> int:
     return 0
 
 
+# --- retrieval -----------------------------------------------------------------
+
+
+def cmd_retrieval(args: argparse.Namespace) -> int:
+    """Recall@k of the library search over the compliance dataset. Offline, free."""
+    from atlas.library.search import LibrarySearch
+    from atlas_eval.retrieval import recall_at_k
+
+    library = load_library()
+    items = load_dataset(*DATASETS["compliance"]).items
+    results = recall_at_k(items, library, LibrarySearch(library), k=args.k)
+    mean = sum(r.recall for r in results) / len(results)
+    complete = sum(1 for r in results if not r.missed)
+    print(
+        f"recall@{args.k}: {mean:.3f} over {len(results)} items; "
+        f"every must-cite found in {complete} of {len(results)}\n"
+    )
+    for result in results:
+        if result.missed:
+            print(f"  {result.item_id}  missed {', '.join(result.missed)}")
+            if args.verbose:
+                print(f"         got {', '.join(result.hits)}")
+    return 0
+
+
 # --- record --------------------------------------------------------------------
 
 
@@ -625,6 +650,13 @@ def build_parser() -> argparse.ArgumentParser:
     claim = sub.add_parser("claim", help="what the dataset's provenance supports claiming")
     claim.add_argument("--dataset", choices=sorted(DATASETS), default="general")
     claim.set_defaults(func=cmd_claim)
+
+    retrieval = sub.add_parser(
+        "retrieval", help="recall@k of the library search on the compliance dataset"
+    )
+    retrieval.add_argument("--k", type=int, default=10)
+    retrieval.add_argument("--verbose", action="store_true", help="show what was returned")
+    retrieval.set_defaults(func=cmd_retrieval)
 
     record = sub.add_parser("record", help="hit live Tavily and write the frozen corpus")
     record.add_argument("--passes", type=int, default=3)

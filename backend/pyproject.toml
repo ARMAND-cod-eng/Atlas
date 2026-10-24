@@ -20,6 +20,7 @@ dependencies = [
     "python-dotenv>=1.0",
     "arq>=0.26",
     "sse-starlette>=2.1",
+    "snowballstemmer>=2.2",
 ]
 
 [dependency-groups]
@@ -73,6 +74,12 @@ plugins = ["pydantic.mypy"]
 # not a blanket relaxation — everything else is checked under --strict.
 [[tool.mypy.overrides]]
 module = ["langchain_anthropic.*", "langchain_openai.*"]
+ignore_missing_imports = true
+
+# snowballstemmer ships no type information at all (no py.typed). Used in one
+# function, atlas.library.search.legal_terms, whose own signature is typed.
+[[tool.mypy.overrides]]
+module = ["snowballstemmer"]
 ignore_missing_imports = true
 
 # --- Tests ---------------------------------------------------------------------

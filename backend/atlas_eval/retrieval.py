@@ -1,0 +1,68 @@
+"""Retrieval recall over the compliance dataset.
+
+For each item, the share of its must-cite provisions the library search returns
+in its top k. A provision counts as returned when a hit is it, contains it (a
+paragraph holding the cited point), or sits inside it (a paragraph of the cited
+article): in each case the words a citation needs are in what the researcher
+read.
+
+The query is the item's question as asked. The researcher searches with its
+subtasks' wording instead, which the planner writes and which drifts from run to
+run; the question is the fixed proxy, and the number it gives is the search's,
+not the agent's.
+"""
+
+from __future__ import annotations
+
+from collections.abc import Sequence
+from typing import Protocol
+
+from pydantic import BaseModel
+
+from atlas.library import Library
+from atlas.library.search import Hit
+from atlas_eval.dataset import EvalItem
+
+
+class Searcher(Protocol):
+    def search(self, query: str, limit: int = 8) -> list[Hit]: ...
+
+
+class ItemRecall(BaseModel):
+    item_id: str
+    found: list[str]
+    missed: list[str]
+    hits: list[str]
+
+    @property
+    def recall(self) -> float:
+        total = len(self.found) + len(self.missed)
+        return len(self.found) / total if total else 1.0
+
+
+def recall_at_k(
+    items: Sequence[EvalItem], library: Library, searcher: Searcher, k: int
+) -> list[ItemRecall]:
+    results: list[ItemRecall] = []
+    for item in items:
+        if item.citations is None:
+            continue
+        hits = searcher.search(item.query, limit=k)
+        found: list[str] = []
+        missed: list[str] = []
+        for label in item.citations.must:
+            target = library.resolve(label)
+            covered = target is not None and any(
+                library.within(target.id, hit.unit.id) or library.within(hit.unit.id, target.id)
+                for hit in hits
+            )
+            (found if covered else missed).append(label)
+        results.append(
+            ItemRecall(
+                item_id=item.id,
+                found=found,
+                missed=missed,
+                hits=[hit.unit.label for hit in hits],
+            )
+        )
+    return results
