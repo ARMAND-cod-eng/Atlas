@@ -2,21 +2,171 @@
 
 [![ci](https://github.com/ARMAND-cod-eng/Atlas/actions/workflows/ci.yml/badge.svg)](https://github.com/ARMAND-cod-eng/Atlas/actions/workflows/ci.yml)
 
-Atlas is a multi-agent research platform. You ask a question; a planner decomposes it into
-independent subtasks, researcher agents investigate them **in parallel** against live web search, a
-critic reviews the findings against the sources actually retrieved and can **send specific branches
-back** for another pass, and a synthesizer writes the answer with citations. The whole run streams to
-the browser as it happens.
+**An auditable research copilot for the EU AI Act and the GDPR.** Ask a compliance question, such
+as *"Is our CV-screening tool high-risk, and what must we do as its provider?"* A team of agents
+researches it in parallel against the official text of the law and writes an answer that cites it
+article by article. Every citation is checked against the law before you see the answer. Every
+agent's work is open: you can read the exact prompt each one was sent, and redirect one branch of
+the research and re-run only that branch.
 
-It runs on LangGraph behind FastAPI, with an arq worker executing runs, Postgres for checkpointed
-state, Redis for the event log and the token budget, and a Next.js frontend that draws the agent
-graph live.
+> A research aid, not legal advice. The law's text is EUR-Lex's, reused under Commission Decision
+> 2011/833/EU; see [NOTICE](NOTICE).
 
-**Built and verified against live providers through Phase 4.** The Phase 5 eval suite is built and
-unit-tested but has not been run yet — see [Evaluation](#evaluation) for exactly where it stands.
-Langfuse tracing (Phase 6) is not started.
+### The problem
 
-Phase notes — what was built, the defects found along the way, and how each was verified:
+Every company shipping an AI or data product into the EU now has to answer questions like these. The
+AI Act's obligations phase in between 2025 and 2027, on top of the GDPR. Each question takes a
+compliance analyst or outside counsel hours. A language model answers in seconds, fluently, and cites
+articles that are wrong or do not exist. Fabricated legal citations are the best-known way generative
+AI fails in law, and courts have sanctioned lawyers for filing them. A better prompt does not fix
+that. A check that knows the law does.
+
+### What Atlas does about it
+
+- **Citations are checked against the law, not trusted.** Each bracketed citation in an answer, such
+  as `[GDPR Art. 33(1)]`, is held to three tests with no model involved:
+  - the provision exists in the act;
+  - a researcher actually retrieved it in this run;
+  - any quotation beside it is the provision's own words.
+
+  A draft that fails is sent back with the failures listed. In the UI each citation is a chip
+  carrying its verdict; hover it to read the article itself.
+- **It reads the law, not a search engine's idea of it.**
+  - Both regulations are ingested from the Publications Office's official XHTML into provisions with
+    stable ids. Golden counts are tested: the AI Act's 113 articles, 13 annexes and 180 recitals; the
+    GDPR's 99 articles and 173 recitals.
+  - Researchers read the law first: by reference ("Article 6"), then by defined term, then by BM25.
+  - Official guidance and the web come after it, kept apart and labelled by authority.
+- **Every agent's work can be inspected.** Click any agent in the graph to see:
+  - its task;
+  - the exact messages it was sent;
+  - what it produced;
+  - every attempt, with each search and model call.
+
+  These records are captured as the calls happen ([`atlas/trace.py`](backend/atlas/trace.py)), never
+  reconstructed from today's prompt templates.
+- **You can redirect a branch and re-run only that branch.** Rewrite one researcher's question on a
+  finished run, and Atlas:
+  1. forks the run's checkpoint;
+  2. researches that branch again, alone;
+  3. carries the other branches over;
+  4. rewrites the answer.
+
+  Each edit becomes a new version, and any two versions can be compared word by word. A person
+  overseeing the AI and redirecting it is the workflow, not an afterthought.
+- **It keeps an audit trail, and deletes on request.**
+  - Postgres keeps every run, every agent call and every event stream past the live stream's hour.
+  - `DELETE /threads/{id}` removes a conversation from every place it is stored.
+  - A nightly job purges threads past their retention period.
+
+  A GDPR tool should practise what it cites.
+
+### Try it in a minute, with no API keys
+
+```powershell
+cd frontend
+npm install
+npm run dev
+```
+
+Open <http://127.0.0.1:3000/demo>. It shows a recorded run replayed through the real workspace:
+
+- researchers reading the regulation library;
+- the citation check catching an invented article in the first draft;
+- the rewrite that fixes it.
+
+Click any agent to read the prompt it was actually sent. The recording ran through the real graph and
+prompts, with only the model scripted, and the run says so: each call reports the model `scripted`.
+
+### Results
+
+**Measured so far:**
+
+| | |
+|---|---|
+| Library retrieval, one search per question | recall@10 **0.750** over the 40 compliance questions; every required provision found for 26 of 40 (`atlas_eval retrieval`) |
+| Engine regression gate, 50 general questions | completion 0.995, grounding 0.955, tool use 0.963; run-to-run noise measured, gate thresholds set from it (5 / 4 / 3 pp) |
+| Tests | **515** backend (plus 13 against Postgres) · **123** frontend, no network calls, no spend |
+
+**Not measured yet: the headline.** The domain eval compares three systems on 40 questions:
+
+- plain Claude, answering from memory;
+- one library search and one answer;
+- Atlas.
+
+It scores the share of answers citing a provision that does not exist, plus citation precision and
+recall, all deterministically. It is built and tested ([below](#the-domain-eval)) but has not been
+run. Its numbers will come from committed run files, never typed in.
+
+The 40 questions were drafted by a model from the regulation text, and every expected citation is
+checked against the library. None has been reviewed by a person yet. `atlas_eval claim` says so, and
+a test keeps that statement honest.
+
+---
+
+## Architecture
+
+```mermaid
+graph LR
+    UI[Next.js workspace]
+    API[FastAPI]
+    Worker[arq worker]
+
+    UI -->|POST /runs, /revisions| API
+    API -->|enqueue| Queue[(Redis queue)]
+    Queue --> Worker
+    Worker -->|events| Stream[(Redis Stream)]
+    Stream -->|SSE + Last-Event-ID| API
+    API -.->|live events| UI
+
+    Worker --> Graph
+    Worker --> Store[(Postgres: checkpoints,<br/>runs, agent calls, events)]
+    Graph --> Library[Regulation library<br/>AI Act + GDPR]
+    Graph --> Web[Web search]
+
+    subgraph Graph[LangGraph]
+        direction LR
+        P[planner] -->|Send x N| R[researcher]
+        H[human edit] -->|one branch| R
+        R --> S[synthesizer]
+        S --> C[critic + citation check]
+        C -->|accept| E([END])
+        C -->|revise: faulted branches only| R
+        C -->|revise: write-up only| S
+    end
+```
+
+**The workspace has three panes.**
+
+| Pane | What it shows |
+|---|---|
+| **Evolution** | Every version of the answer on this conversation, and a timeline of the run on screen: the plan, each branch, each critic verdict with its reason, each edit. |
+| **Agents** | The live graph, and under it an inspector for the agent you select. |
+| **Result** | The answer with its citation chips, the sources grouped by authority, and a word-level comparison with any other version. |
+
+**Editing a branch forks the run; it does not restart it.** A revision writes through a dedicated
+`human_edit` node with LangGraph's `aupdate_state`, from the finished run's checkpoint. Only the
+edited branch researches again, and the synthesizer and critic run as usual. The tests pin each way
+this could quietly go wrong:
+
+- a stale critique from the parent leaking into the new answer;
+- the edit reaching the researcher framed as a reviewer's rejection;
+- old drafts replayed to the synthesizer;
+- the parent's spend counted against the new run's budget;
+- a second revision of the same run silently dropped.
+
+**The run does not belong to the connection.** The API enqueues and relays; the worker executes. A
+client that drops at second 40 of a 67-second run costs nothing: the run finishes, and reconnecting
+replays exactly what was missed from the event log. Verified by killing the API mid-run: the run
+completed with nothing listening, and the UI converged to the identical final state on restart.
+
+**The critic sends back branches, not the whole graph.** Re-running everything would cost about 72s
+and 31k tokens per iteration. Re-planning would also produce a *different decomposition*, so
+per-subtask feedback would have nothing to attach to. A targeted retry costs the slowest faulted
+branch plus one synthesis, and it keeps each subtask's identity, so guidance reaches the branch that
+earned it.
+
+Build notes: what was built, the defects found along the way, and how each was verified.
 
 | | |
 |---|---|
@@ -26,49 +176,8 @@ Phase notes — what was built, the defects found along the way, and how each wa
 | [`docs/PHASE-3.md`](docs/PHASE-3.md) | Worker, Redis event log, SSE with resumable replay |
 | [`docs/PHASE-4.md`](docs/PHASE-4.md) | The frontend and the live agent-graph visualisation |
 
----
-
-## Architecture
-
-```mermaid
-graph LR
-    UI[Next.js frontend]
-    API[FastAPI]
-    Worker[arq worker]
-
-    UI -->|POST /runs| API
-    API -->|enqueue| Queue[(Redis queue)]
-    Queue --> Worker
-    Worker -->|events| Stream[(Redis Stream)]
-    Stream -->|SSE + Last-Event-ID| API
-    API -.->|live events| UI
-
-    Worker --> Graph
-    Graph --> PG[(Postgres<br/>checkpointer)]
-    Graph --> Tavily[Tavily search]
-
-    subgraph Graph[LangGraph]
-        direction LR
-        P[planner] -->|Send x N| R[researcher]
-        R --> S[synthesizer]
-        S --> C[critic]
-        C -->|accept| E([END])
-        C -->|revise: faulted branches only| R
-        C -->|revise: write-up only| S
-    end
-```
-
-**The run does not belong to the connection.** The API enqueues and relays; the worker executes. A
-client that drops at second 40 of a 67-second run costs nothing — the run finishes, and reconnecting
-replays exactly what was missed from the event log. Verified by killing the API mid-run: the run
-completed with nothing listening, and the UI converged to the identical final state on restart.
-
-**The critic sends back branches, not the whole graph.** Re-running everything would cost ~72s and
-~31k tokens per iteration, and re-planning produces a *different decomposition*, so per-subtask
-feedback would have nothing to attach to. Targeted retry costs the slowest faulted branch plus one
-synthesis, and preserves subtask identity so guidance reaches the branch that earned it.
-
 ### Measured
+
 
 | | |
 |---|---|
@@ -77,7 +186,6 @@ synthesis, and preserves subtask identity so guidance reaches the branch that ea
 | Streaming overhead | SSE relay **0.18s**; queue pickup **~1.0s**; a whole run's events cost **78ms** of Redis |
 | Concision prompt on the synthesizer | 4,392 → 2,752 output tokens, **40.5s → 27.1s** |
 | Time to first visual feedback | **1.14s** from submit to the graph on screen |
-| Tests | **317** backend · **43** frontend, no network calls, no spend |
 
 ---
 
@@ -188,7 +296,7 @@ the event stream shows the graph working. Branches start together and finish out
 order — that interleaving is the fan-out, live.
 
 ```powershell
-$run = Invoke-RestMethod -Uri http://127.0.0.1:8000/runs -Method Post -ContentType 'application/json' -Body '{"query":"Compare RAG with long-context LLMs for enterprise document QA."}'
+$run = Invoke-RestMethod -Uri http://127.0.0.1:8000/runs -Method Post -ContentType 'application/json' -Body '{"query":"Is a CV-screening tool high-risk under the AI Act, and what must its provider do?"}'
 curl.exe -N "http://127.0.0.1:8000/runs/$($run.run_id)/events"
 ```
 
@@ -208,10 +316,23 @@ A browser `EventSource` sends the `Last-Event-ID` header automatically on reconn
 the query parameter is for clients like `curl` that do not retry. The same thing works
 in the UI — refresh `/runs/{run_id}` mid-run and it rebuilds from the log.
 
+**Inspect, revise, compare.** Once the run completes:
+
+```powershell
+Invoke-RestMethod "http://127.0.0.1:8000/runs/$($run.run_id)/calls"            # every agent call, summarised
+Invoke-RestMethod "http://127.0.0.1:8000/library/provision?label=AI%20Act%20Art.%206(2)"
+$branch = (Invoke-RestMethod "http://127.0.0.1:8000/runs/$($run.run_id)").result.subtasks[1].id
+$v2 = Invoke-RestMethod -Uri "http://127.0.0.1:8000/runs/$($run.run_id)/revisions" -Method Post -ContentType 'application/json' -Body (@{subtask_id=$branch; question='What must a deployer of a high-risk AI system do?'} | ConvertTo-Json)
+Invoke-RestMethod "http://127.0.0.1:8000/threads/$($run.thread_id)/versions"
+```
+
+The revision is a new run on the same thread: stream it like any other, and only the rewritten
+branch researches again. `GET /runs/{id}/calls/{call_id}` returns one call whole, prompt included.
+
 **The synchronous endpoint still exists**, for clients that want one request and one answer:
 
 ```powershell
-$r = Invoke-RestMethod -Uri http://127.0.0.1:8000/query -Method Post -ContentType 'application/json' -Body '{"query":"What is retrieval-augmented generation?"}'
+$r = Invoke-RestMethod -Uri http://127.0.0.1:8000/query -Method Post -ContentType 'application/json' -Body '{"query":"When does a deployer need a fundamental rights impact assessment under the AI Act?"}'
 $r.answer
 Invoke-RestMethod -Uri http://127.0.0.1:8000/query -Method Post -ContentType 'application/json' -Body (@{query='Summarize that in one sentence.'; thread_id=$r.thread_id} | ConvertTo-Json)
 ```
@@ -254,6 +375,15 @@ from the graph by `backend/scripts/capture_fixtures.py`.
 request. It never calls a model.
 
 ## Evaluation
+
+Two datasets, for two questions:
+
+- **Is the engine still sound?** The 50 general research questions. They gate every change to
+  prompts, graph code or model config.
+- **Is the product better than the alternatives?** The 40 compliance questions. They run the
+  [domain eval](#the-domain-eval).
+
+### The engine eval
 
 `backend/atlas_eval` scores the agent on a 50-query dataset in three categories:
 
@@ -332,6 +462,48 @@ fails.** That is the gate reporting it has nothing to compare against, not a fla
 prompt, same corpus, no planner, researchers or critic. They exist to measure what the full graph
 buys, and a baseline can only be written from the production variant.
 
+### The domain eval
+
+Three systems answer the 40 compliance questions:
+
+| Variant | What it is |
+|---|---|
+| `plain` | One model call, no retrieval, asked to cite in the same bracketed form. What a team gets by asking a model directly. |
+| `single-call` | One library search on the question as asked, answered by Atlas's own synthesizer. |
+| `atlas` | The full graph. |
+
+**Web search is off for all three, and each run file says so.** The comparison is about citing the
+law, and the law comes from the committed library. A live search would make the runs unrepeatable.
+
+**Citations are scored without a judge.** Each item lists the provisions an answer *must* cite and
+the ones it *may*. A citation matches an expected provision when one contains the other, which is
+the citation check's own rule: citing Article 6 covers 6(2). Five measures, each with a bootstrap CI:
+
+| Measure | What it is |
+|---|---|
+| **fabricated** | The share of answers citing at least one provision that does not exist. The headline. |
+| **uncited** | The share of answers citing nothing. A system that never cites can never fabricate, and would otherwise look flawless. |
+| **validity** | The share of citations that name real law, over the answers that cite. |
+| **precision** | The share of real citations that are on point. Real but irrelevant law is how a confident answer pads itself. |
+| **recall** | The share of the must-cite provisions an answer cites, over every answer. |
+
+The judge still scores completion against each item's rubric. Grounding is scored for the two
+systems that retrieve. `plain` retrieves nothing and plans nothing, so neither grounding nor tool use
+can apply to it, and it is not charged for them.
+
+From `backend/`, after reviewing the questions:
+
+```powershell
+uv run python -m atlas_eval review --dataset compliance      # a person approves each item first
+uv run python -m atlas_eval run --dataset compliance --variant plain --name plain-v1
+uv run python -m atlas_eval run --dataset compliance --variant single-call --name single-v1
+uv run python -m atlas_eval run --dataset compliance --name atlas-v1
+uv run python -m atlas_eval citations --runs atlas-v1 plain-v1 single-v1 --reference atlas-v1 --out ../docs/CITATIONS.md
+```
+
+`citations` costs nothing. It re-scores saved answers with today's scorer and pairs each system with
+the reference item by item. `retrieval` measures the library search alone, also for free.
+
 ---
 
 ## Things worth knowing
@@ -354,6 +526,12 @@ Before this was fixed, a follow-up was synthesised partly from the last question
 the budget counted a whole conversation against a per-question limit. The planner, which runs
 once at the start of every run, now resets those keys explicitly. `tests/test_run_isolation.py`
 runs two questions on one thread to keep it that way.
+
+**One engine, two domains.** `ATLAS_DOMAIN` selects the prompts and what a researcher reads.
+`compliance` is the default: the regulation library first, then the web, with the citation check
+enforced. `general` is the original web researcher. The eval always sets the domain from the dataset,
+never from the environment: production defaults to compliance, and the general baseline was measured
+on general.
 
 **Model selection** is a single config constant, `PRIMARY_MODEL`, read only by `atlas/models.py`.
 Nothing else names a model. Override it in `.env` without touching code.
@@ -381,10 +559,21 @@ repository root and is read once at startup. After editing it, stop and restart 
 
 ## Roadmap
 
-**Phase 5 — evaluation, finishing.** The suite is built; what remains is running it: review the
-dataset, record the corpus, commit a baseline, and calibrate the judge against human labels. Then
-measure what Atlas claims rather than assume it — the full graph against a single model call with
-search at the same token budget, and the critic loop on against off.
+**Next: run the domain eval.** A person reviews the 40 compliance questions, and then the three
+systems run, at an estimated $12–15 in total. The headline at the top of this file is filled from
+those run files. The engine's remaining comparisons (no-critic and single-call on the general
+dataset) run in the same session.
 
-**Phase 6 — tracing.** Langfuse. `atlas/metrics.py` is deliberately small and shaped to be replaced
-by deletion rather than unpicked from everywhere.
+**Then, in order of what the measurements say:**
+
+- Paraphrase is most of the retrieval misses ("chatbot" for an AI system interacting with people).
+  The first fix to try is one cheap model call that rewrites the question into the act's vocabulary.
+  Embeddings come only if that falls short.
+- Calibrate the judge against the human labels already collected.
+- Add a third act. That is an ingest command, a golden-count test and labels; the engine does not
+  change.
+
+**Not planned:** per-agent prompt editing, uploading your own documents, multi-tenant
+authentication. The workspace's edit point is a branch's task, deliberately. A rewritten question is
+something a reviewer can read and judge. An edited system prompt changes every later answer in ways
+nobody reviews.
