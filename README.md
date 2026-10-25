@@ -9,6 +9,15 @@ article by article. Every citation is checked against the law before you see the
 agent's work is open: you can read the exact prompt each one was sent, and redirect one branch of
 the research and re-run only that branch.
 
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/img/workspace-dark.png">
+  <img alt="The Atlas workspace: the run's timeline on the left, the agent graph with one researcher's exact prompt open in the middle, and the answer with its checked citation chips on the right" src="docs/img/workspace-light.png">
+</picture>
+
+*The recorded demo. The citation check has caught an invented article, "AI Act Art. 114" (the act
+has 113), and sent the draft back. Researcher 2's exact prompt is open, with the law it was given.
+Each chip in the answer carries its check's verdict.*
+
 > A research aid, not legal advice. The law's text is EUR-Lex's, reused under Commission Decision
 > 2011/833/EU; see [NOTICE](NOTICE).
 
@@ -75,7 +84,8 @@ Open <http://127.0.0.1:3000/demo>. It shows a recorded run replayed through the 
 - the citation check catching an invented article in the first draft;
 - the rewrite that fixes it.
 
-Click any agent to read the prompt it was actually sent. The recording ran through the real graph and
+Click any agent to read the prompt it was actually sent. The open agent and tab live in the URL, so
+<http://127.0.0.1:3000/demo?node=researcher:s1&tab=prompt> goes straight to one researcher's prompt. The recording ran through the real graph and
 prompts, with only the model scripted, and the run says so: each call reports the model `scripted`.
 
 ### Results
@@ -86,7 +96,7 @@ prompts, with only the model scripted, and the run says so: each call reports th
 |---|---|
 | Library retrieval, one search per question | recall@10 **0.750** over the 40 compliance questions; every required provision found for 26 of 40 (`atlas_eval retrieval`) |
 | Engine regression gate, 50 general questions | completion 0.995, grounding 0.955, tool use 0.963; run-to-run noise measured, gate thresholds set from it (5 / 4 / 3 pp) |
-| Tests | **515** backend (plus 13 against Postgres) · **123** frontend, no network calls, no spend |
+| Tests | **515** backend (plus 13 against Postgres) · **127** frontend, no network calls, no spend |
 
 **Not measured yet: the headline.** The domain eval compares three systems on 40 questions:
 
