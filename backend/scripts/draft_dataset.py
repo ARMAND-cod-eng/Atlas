@@ -786,9 +786,11 @@ def build() -> Dataset:
     for item_id, query, low, high, recency, tags, rubric, wrong in drafts:
         entries: list[RubricEntry] = []
         for index, spec in enumerate(rubric, start=1):
-            claim, check = str(spec[0]), str(spec[1])
-            patterns_or_number = spec[2] if len(spec) > 2 else None
-            number = spec[3] if len(spec) > 3 else None  # type: ignore[misc]
+            # Three fields or four: read as a list, whose length is not fixed by its type.
+            fields: list[object] = list(spec)
+            claim, check = str(fields[0]), str(fields[1])
+            patterns_or_number = fields[2] if len(fields) > 2 else None
+            number = fields[3] if len(fields) > 3 else None
             entries.append(
                 RubricEntry(
                     id=f"{item_id}-r{index}",

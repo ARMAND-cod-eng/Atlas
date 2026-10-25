@@ -18,7 +18,7 @@ from atlas_eval import cli
 from atlas_eval.baselines import run_plain, run_single_call
 from atlas_eval.citation_metrics import citation_table, score_run
 from atlas_eval.dataset import DATASETS, load_dataset
-from atlas_eval.runner import RunRecord, run_item
+from atlas_eval.runner import RunRecord, Variant, run_item
 
 COMPLIANCE = load_dataset(*DATASETS["compliance"])
 
@@ -29,10 +29,8 @@ def test_each_variant_runs_its_own_system_in_the_dataset_domain() -> None:
             return runner.func, runner.keywords
         return runner, {}
 
-    assert [
-        described(cli.runner_for(variant, "compliance"))
-        for variant in ("atlas", "no-critic", "single-call", "plain")
-    ] == [
+    variants: tuple[Variant, ...] = ("atlas", "no-critic", "single-call", "plain")
+    assert [described(cli.runner_for(variant, "compliance")) for variant in variants] == [
         (run_item, {"critic_enabled": True, "domain": "compliance"}),
         (run_item, {"critic_enabled": False, "domain": "compliance"}),
         (run_single_call, {"domain": "compliance"}),
@@ -66,9 +64,9 @@ def test_runs_that_would_measure_the_wrong_thing_are_refused_before_they_cost_an
     assert says in capsys.readouterr().out
 
 
-def _run(variant: str, answers: dict[str, str]) -> dict[str, Any]:
+def _run(variant: Variant, answers: dict[str, str]) -> dict[str, Any]:
     records = [
-        RunRecord(item_id=item_id, query="q", answer=answer, variant=variant)  # type: ignore[arg-type]
+        RunRecord(item_id=item_id, query="q", answer=answer, variant=variant)
         for item_id, answer in answers.items()
     ]
     return {
@@ -100,6 +98,7 @@ def test_a_compliance_run_file_records_its_dataset_its_web_and_its_citations(
         "x", [record], SuiteScore(), "atlas", dataset_name="compliance", dataset=COMPLIANCE
     )
     written = json.loads(path.read_text(encoding="utf-8"))
+    must = first.citations.must if first.citations is not None else []
 
     assert (written["dataset"], written["web"]) == ("compliance", "off")
     assert written["citations"]["per_item"] == [
@@ -109,7 +108,7 @@ def test_a_compliance_run_file_records_its_dataset_its_web_and_its_citations(
             "nonexistent": [],
             "unsupported": [],
             "must_covered": ["AI Act Art. 6(2)"],
-            "must_missed": [m for m in first.citations.must if m != "AI Act Art. 6(2)"],  # type: ignore[union-attr]
+            "must_missed": [m for m in must if m != "AI Act Art. 6(2)"],
         }
     ]
 
