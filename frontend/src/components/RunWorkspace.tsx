@@ -1,6 +1,5 @@
 'use client';
 
-import { useState } from 'react';
 import { Panel, PanelGroup, PanelResizeHandle } from 'react-resizable-panels';
 
 import { Answer } from './Answer';
@@ -15,6 +14,7 @@ import { Disclaimer } from './Disclaimer';
 import { type PaneSpec, Workspace } from './Workspace';
 import type { RunResult, Topology } from '@/lib/events';
 import type { RunState } from '@/lib/reducer';
+import { useInspectorLink } from '@/lib/inspectorLink';
 import type { Connection } from '@/lib/useRunStream';
 import { useVersions } from '@/lib/useVersions';
 import { versionRows } from '@/lib/versions';
@@ -62,7 +62,9 @@ export function RunWorkspace({
   readonly followUp?: React.ReactNode;
   readonly onRevised?: (runId: string) => void;
 }): React.JSX.Element {
-  const [selected, setSelected] = useState<string | null>(null);
+  // In the URL, so a link can open one agent's prompt and a reload keeps it.
+  const [link, setSelected, setTab] = useInspectorLink();
+  const selected = link.node;
   // Asked again when the run's phase changes: finishing changes its own row.
   const runs = useVersions(state.threadId, runId, state.phase);
   const rows = runs === null || runId === null ? [] : versionRows(runs, runId);
@@ -97,7 +99,16 @@ export function RunWorkspace({
           </Panel>
           <PanelResizeHandle className="h-px bg-line transition-colors hover:bg-accent data-[resize-handle-state=drag]:bg-accent" />
           <Panel defaultSize={45} minSize={15} className="bg-canvas">
-            <Inspector runId={runId} loadCall={loadCall} state={state} result={result} selected={selected} onRevised={onRevised} />
+            <Inspector
+              runId={runId}
+              loadCall={loadCall}
+              state={state}
+              result={result}
+              selected={selected}
+              tab={link.tab}
+              onTab={setTab}
+              onRevised={onRevised}
+            />
           </Panel>
         </PanelGroup>
       ),

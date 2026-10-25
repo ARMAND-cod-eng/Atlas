@@ -5,9 +5,10 @@ import { useEffect, useState } from 'react';
 import { type AgentCall, reviseRun } from '@/lib/api';
 import type { RunResult, SourceRef } from '@/lib/events';
 import { type Agent, type Attempt, agentOf, byAuthority, reviewsOf } from '@/lib/inspector';
+import type { InspectorTab } from '@/lib/inspectorLink';
 import { type RunState, isFinished } from '@/lib/reducer';
 
-type Tab = 'task' | 'prompt' | 'output' | 'attempts';
+type Tab = InspectorTab;
 
 export type CallSource = (callId: string) => Promise<AgentCall | null>;
 
@@ -29,6 +30,9 @@ interface Props {
   readonly state: RunState;
   readonly result: RunResult | null;
   readonly selected: string | null;
+  /** The open tab, when the page keeps it (in its URL); otherwise the inspector does. */
+  readonly tab?: Tab;
+  readonly onTab?: (tab: Tab) => void;
   /** A revision was started from this run: show it. */
   readonly onRevised?: (runId: string) => void;
 }
@@ -38,8 +42,19 @@ interface Props {
  * produced, and every attempt it made. A finished branch can be rewritten here
  * and re-run on its own.
  */
-export function Inspector({ runId, loadCall, state, result, selected, onRevised }: Props): React.JSX.Element {
-  const [tab, setTab] = useState<Tab>('task');
+export function Inspector({
+  runId,
+  loadCall,
+  state,
+  result,
+  selected,
+  tab: shownTab,
+  onTab,
+  onRevised,
+}: Props): React.JSX.Element {
+  const [ownTab, setOwnTab] = useState<Tab>('task');
+  const tab = shownTab ?? ownTab;
+  const setTab = onTab ?? setOwnTab;
   const agent = selected === null ? null : agentOf(state, result, selected);
 
   if (agent === null) {
