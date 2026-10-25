@@ -219,6 +219,22 @@ async def test_the_single_call_baseline_is_not_scored_on_tool_use(
     assert sorted(judge_calls) == ["ClaimList", "FactVerdict", "FactVerdict", "FactVerdict"]
 
 
+async def test_plain_is_scored_on_completion_alone(judge_calls: list[str]) -> None:
+    """It retrieves nothing and plans nothing: grounding against retrieved
+    evidence and tool use do not apply, and scoring them would charge it zero
+    for checks it cannot pass by design. Its citations are scored apart."""
+    item, _ = _item_and_plan()
+    record = RunRecord(item_id=item.id, query=item.query, answer="an answer", variant="plain")
+    crashed = RunRecord(item_id=item.id, query=item.query, answer="", variant="plain", error="x")
+
+    score = await score_run(item, record)
+
+    assert score.as_dict == {"completion": 1.0}
+    # Three judged rubric entries; no decomposition into claims, no plan verdict.
+    assert judge_calls == ["FactVerdict", "FactVerdict", "FactVerdict"]
+    assert (await score_run(item, crashed)).as_dict == {"completion": 0.0}
+
+
 def test_tool_use_means_skip_the_runs_it_does_not_apply_to() -> None:
     def item(item_id: str, tools: ToolScore) -> ItemScore:
         return ItemScore(
@@ -244,14 +260,14 @@ def test_tool_use_means_skip_the_runs_it_does_not_apply_to() -> None:
 
 
 async def test_each_variant_runs_its_own_system(monkeypatch: pytest.MonkeyPatch) -> None:
-    seen: list[tuple[str, bool | None]] = []
+    seen: list[tuple[str, bool | None, str]] = []
 
-    async def fake_run_item(item: Any, critic_enabled: bool = True) -> RunRecord:
-        seen.append(("graph", critic_enabled))
+    async def fake_run_item(item: Any, critic_enabled: bool = True, domain: str = "?") -> RunRecord:
+        seen.append(("graph", critic_enabled, domain))
         return RunRecord(item_id=item.id, query=item.query, answer="a")
 
-    async def fake_single(item: Any) -> RunRecord:
-        seen.append(("single-call", None))
+    async def fake_single(item: Any, domain: str = "?") -> RunRecord:
+        seen.append(("single-call", None, domain))
         return RunRecord(item_id=item.id, query=item.query, answer="a")
 
     monkeypatch.setattr(cli, "run_item", fake_run_item)
@@ -261,7 +277,11 @@ async def test_each_variant_runs_its_own_system(monkeypatch: pytest.MonkeyPatch)
     for variant in ("atlas", "no-critic", "single-call"):
         await cli.runner_for(variant)(item)
 
-    assert seen == [("graph", True), ("graph", False), ("single-call", None)]
+    assert seen == [
+        ("graph", True, "general"),
+        ("graph", False, "general"),
+        ("single-call", None, "general"),
+    ]
 
 
 def test_a_baseline_is_only_written_from_the_full_system(

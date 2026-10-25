@@ -31,10 +31,12 @@ from typing import Any
 
 from langchain_core.callbacks import get_usage_metadata_callback
 
+from atlas.domains import DomainName
 from atlas.library import Unit, load_library
 from atlas.models import primary_provider
 from atlas.runtime import configure_logging
-from atlas_eval.baselines import run_single_call
+from atlas_eval.baselines import run_plain, run_single_call
+from atlas_eval.citation_metrics import citation_table, score_run, summarize_citations
 from atlas_eval.dataset import (
     DATA_DIR,
     DATASETS,
@@ -213,11 +215,15 @@ def cmd_record(args: argparse.Namespace) -> int:
 # --- run -----------------------------------------------------------------------
 
 
-def runner_for(variant: Variant) -> Callable[[EvalItem], Awaitable[RunRecord]]:
-    """How one item is run under each variant."""
+def runner_for(
+    variant: Variant, domain: DomainName = "general"
+) -> Callable[[EvalItem], Awaitable[RunRecord]]:
+    """How one item is run under each variant, in the dataset's domain."""
+    if variant == "plain":
+        return run_plain
     if variant == "single-call":
-        return run_single_call
-    return functools.partial(run_item, critic_enabled=variant == "atlas")
+        return functools.partial(run_single_call, domain=domain)
+    return functools.partial(run_item, critic_enabled=variant == "atlas", domain=domain)
 
 
 # {model: {"input_tokens": n, "output_tokens": n}}
@@ -291,6 +297,8 @@ def _write_run(
     spend: Mapping[str, Spend] | None = None,
     agent_commit: str | None = None,
     primary: str | None = None,
+    dataset_name: str = "general",
+    dataset: Dataset | None = None,
 ) -> Path:
     RUNS_DIR.mkdir(parents=True, exist_ok=True)
     path = RUNS_DIR / f"{name}.json"
@@ -313,6 +321,20 @@ def _write_run(
         "records": [json.loads(r.model_dump_json()) for r in records],
         "scores": [json.loads(s.model_dump_json()) for s in scores.scores],
     }
+    if dataset_name != "general" and dataset is not None:
+        # The compliance eval reads the law from the library with the web off;
+        # a run file that did not say so would be compared with one that did.
+        citations = score_run(payload, dataset)
+        payload.update(
+            {
+                "dataset": dataset_name,
+                "web": "off",
+                "citations": {
+                    "per_item": [c.model_dump() for c in citations],
+                    "summary": summarize_citations(citations).model_dump(),
+                },
+            }
+        )
     # newline="\n": the same bytes on every platform. On Windows, text mode
     # wrote CRLF and every run file arrived in git needing conversion.
     path.write_text(
@@ -335,6 +357,12 @@ def _git_commit() -> str:
 
 
 def cmd_run(args: argparse.Namespace) -> int:
+    if args.variant == "plain" and args.dataset != "compliance":
+        print("plain answers compliance questions only: it is the no-retrieval baseline there")
+        return 2
+    if args.write_baseline and args.dataset != "general":
+        print("refusing to write a baseline: the gate's baseline is the general dataset's")
+        return 2
     if args.write_baseline and args.variant != "atlas":
         # Checked before anything runs: the gate compares production against the
         # baseline, so a baseline from another system would gate the wrong thing —
@@ -342,13 +370,15 @@ def cmd_run(args: argparse.Namespace) -> int:
         print(f"refusing to write a baseline from the {args.variant!r} variant; use 'atlas'")
         return 2
 
-    dataset = load_dataset()
+    dataset = load_dataset(*DATASETS[args.dataset])
+    domain: DomainName = "compliance" if args.dataset == "compliance" else "general"
     items = _select(dataset, args.smoke, args.only)
-    print(f"running {len(items)} item(s) as {args.variant!r} against the frozen corpus")
+    against = "the law library, web search off" if domain == "compliance" else "the frozen corpus"
+    print(f"running {len(items)} {args.dataset} item(s) as {args.variant!r} against {against}")
 
     with measured_spend() as agent_spend:
         records = asyncio.run(
-            run_items(items, concurrency=args.concurrency, run_one=runner_for(args.variant))
+            run_items(items, concurrency=args.concurrency, run_one=runner_for(args.variant, domain))
         )
     failed = [r for r in records if r.error]
     if failed:
@@ -357,7 +387,19 @@ def cmd_run(args: argparse.Namespace) -> int:
     # Saved before the judge is asked anything. The first rerun lost a whole
     # agent run — 50 items, about 2M tokens — when the judge's provider ran out
     # of credit mid-scoring, because nothing was written until scoring finished.
-    _write_run(args.name, records, SuiteScore(), args.variant, {"agent": agent_spend})
+    saved = _write_run(
+        args.name,
+        records,
+        SuiteScore(),
+        args.variant,
+        {"agent": agent_spend},
+        dataset_name=args.dataset,
+        dataset=dataset,
+    )
+    if domain == "compliance":
+        # Deterministic, so printed before the judge is asked anything.
+        table = citation_table({args.name: _load_run_at(saved)}, dataset, args.name)
+        print(f"\ncitations:\n{table}")
 
     by_id = {item.id: item for item in items}
     try:
@@ -392,7 +434,16 @@ def cmd_run(args: argparse.Namespace) -> int:
         print(f"  {category:<11} {det} deterministic / {jdg} judge  ({share} deterministic)")
 
     # Written even when something crashed: it is what the crash is debugged from.
-    path = _write_run(args.name, records, scores, args.variant, spend, primary=primary)
+    path = _write_run(
+        args.name,
+        records,
+        scores,
+        args.variant,
+        spend,
+        primary=primary,
+        dataset_name=args.dataset,
+        dataset=dataset,
+    )
     print(f"\nwrote {path}")
 
     if failed:
@@ -538,6 +589,28 @@ def cmd_gate(args: argparse.Namespace) -> int:
 # --- noise ---------------------------------------------------------------------
 
 
+def _load_run_at(path: Path) -> dict[str, Any]:
+    loaded: dict[str, Any] = json.loads(path.read_text(encoding="utf-8"))
+    return loaded
+
+
+def cmd_citations(args: argparse.Namespace) -> int:
+    """Citation metrics for run files, each against the reference. Free: no model,
+    no judge, so it can be re-run on old runs whenever the scorer changes."""
+    names = [args.reference, *(name for name in args.runs if name != args.reference)]
+    runs = {name: _load_run(name) for name in names}
+    datasets = {str(run.get("dataset", "general")) for run in runs.values()}
+    if datasets != {"compliance"}:
+        print(f"citation metrics compare compliance runs; these are from {sorted(datasets)}")
+        return 2
+    table = citation_table(runs, load_dataset(*DATASETS["compliance"]), args.reference)
+    print(table)
+    if args.out:
+        Path(args.out).write_text(table, encoding="utf-8", newline="\n")
+        print(f"wrote {args.out}")
+    return 0
+
+
 def _load_run(name: str) -> dict[str, Any]:
     loaded: dict[str, Any] = json.loads((RUNS_DIR / f"{name}.json").read_text(encoding="utf-8"))
     return loaded
@@ -670,8 +743,14 @@ def build_parser() -> argparse.ArgumentParser:
     run.add_argument("--only", default=None)
     run.add_argument("--concurrency", type=int, default=5)
     run.add_argument(
+        "--dataset",
+        choices=sorted(DATASETS),
+        default="general",
+        help="general gates the engine; compliance measures the product (web search off)",
+    )
+    run.add_argument(
         "--variant",
-        choices=["atlas", "no-critic", "single-call"],
+        choices=["atlas", "no-critic", "single-call", "plain"],
         default="atlas",
         help="atlas is production; the others exist to measure it against",
     )
@@ -707,6 +786,14 @@ def build_parser() -> argparse.ArgumentParser:
         help="compare against one threshold in pp instead of each category's own",
     )
     noise.set_defaults(func=cmd_noise)
+
+    citations = sub.add_parser(
+        "citations", help="citation metrics of compliance runs, each against a reference"
+    )
+    citations.add_argument("--runs", nargs="+", required=True, help="run names to compare")
+    citations.add_argument("--reference", required=True, help="the run the others pair with")
+    citations.add_argument("--out", default=None, help="also write the markdown here")
+    citations.set_defaults(func=cmd_citations)
 
     report = sub.add_parser("report", help="results table and chart from run files")
     report.add_argument("--runs", nargs="+", required=True, help="run names to compare")

@@ -26,11 +26,17 @@ class ItemScore(BaseModel):
     grounding: GroundingScore
     tools: ToolScore
     error: str | None = None
+    # False for a system that retrieves nothing (plain): there is no evidence
+    # to ground its claims in. Not grounding's own not_applicable, which marks
+    # an honest abstention and is scored 1.0.
+    grounding_applies: bool = True
 
     @property
     def as_dict(self) -> dict[str, float]:
         """Every category that applies to this run."""
-        scores = {"completion": self.completion.score, "grounding": self.grounding.score}
+        scores = {"completion": self.completion.score}
+        if self.grounding_applies:
+            scores["grounding"] = self.grounding.score
         if not self.tools.not_applicable:
             scores["tools"] = self.tools.score
         return scores
@@ -107,8 +113,9 @@ def _crashed(item: EvalItem, record: RunRecord) -> ItemScore:
         item_id=item.id,
         completion=CompletionScore(score=0.0),
         grounding=GroundingScore(score=0.0),
-        tools=ToolScore(score=0.0, not_applicable=record.variant == "single-call"),
+        tools=ToolScore(score=0.0, not_applicable=record.variant in ("single-call", "plain")),
         error=record.error,
+        grounding_applies=record.variant != "plain",
     )
 
 
@@ -116,6 +123,17 @@ async def score_run(item: EvalItem, record: RunRecord) -> ItemScore:
     """Score one run across all three categories."""
     if record.error is not None:
         return _crashed(item, record)
+
+    if record.variant == "plain":
+        # Nothing retrieved and nothing planned: only completion applies. Its
+        # citations are scored apart, deterministically (citation_metrics).
+        return ItemScore(
+            item_id=item.id,
+            completion=await score_completion(item, record.answer),
+            grounding=GroundingScore(score=0.0, not_applicable=True),
+            tools=ToolScore(score=0.0, not_applicable=True),
+            grounding_applies=False,
+        )
 
     if record.variant == "single-call":
         # No plan, no researchers: tool use does not apply, and scoring it would

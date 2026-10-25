@@ -72,7 +72,11 @@ class CriticEffect(BaseModel):
     deltas: dict[str, Interval] = Field(default_factory=dict)
 
 
-def _interval(values: Sequence[float]) -> Interval:
+def interval(values: Sequence[float]) -> Interval:
+    """The mean of per-item values with its bootstrap 95% CI, in pp. An empty
+    list is an empty interval, not an error: a suite where nothing qualified."""
+    if not values:
+        return Interval(value_pp=0.0, low_pp=0.0, high_pp=0.0, items=0)
     low, high = paired_bootstrap(list(values))
     return Interval(
         value_pp=statistics.fmean(values) * 100, low_pp=low, high_pp=high, items=len(values)
@@ -96,7 +100,7 @@ def summarize(name: str, run: Mapping[str, Any]) -> RunSummary:
         items=len(records),
         crashed=sum(1 for record in records if record.get("error")),
         scores={
-            category: _interval(list(per_item.values()))
+            category: interval(list(per_item.values()))
             for category, per_item in run["per_item"].items()
             if per_item
         },
@@ -116,7 +120,7 @@ def summarize(name: str, run: Mapping[str, Any]) -> RunSummary:
 def paired_delta(reference: Mapping[str, float], other: Mapping[str, float]) -> Interval:
     """``other`` minus ``reference`` over their shared items, in pp."""
     shared = sorted(set(reference) & set(other))
-    return _interval([other[i] - reference[i] for i in shared])
+    return interval([other[i] - reference[i] for i in shared])
 
 
 def deltas_against(reference: Mapping[str, Any], other: Mapping[str, Any]) -> dict[str, Interval]:

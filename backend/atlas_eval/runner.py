@@ -19,7 +19,7 @@ import time
 from collections.abc import Awaitable, Callable
 from contextvars import ContextVar
 from pathlib import Path
-from typing import Literal
+from typing import Literal, Protocol
 from uuid import uuid4
 
 from langchain_core.runnables import RunnableConfig
@@ -48,9 +48,43 @@ logger = logging.getLogger(__name__)
 # Which system produced a run. "atlas" is production; the other two exist only to
 # measure it against: the same graph without the critic, and one search answered
 # by the same synthesizer (atlas_eval.baselines).
-Variant = Literal["atlas", "no-critic", "single-call"]
+Variant = Literal["atlas", "no-critic", "single-call", "plain"]
 
-_ACTIVE: ContextVar[FrozenSearch | None] = ContextVar("atlas_eval_search", default=None)
+
+class EvalSearch(Protocol):
+    """What the eval puts where the graph's web search would be."""
+
+    calls: list[str]
+
+    async def search(
+        self, query: str, max_results: int | None = None, include_content: bool = False
+    ) -> list[Source]: ...
+
+
+class NoWeb:
+    """Web search, off. The compliance eval compares how systems cite the law,
+    and the law comes from the committed library; a live search would make the
+    runs unrepeatable. Each query is still recorded: the agent asked."""
+
+    def __init__(self) -> None:
+        self.calls: list[str] = []
+
+    async def search(
+        self, query: str, max_results: int | None = None, include_content: bool = False
+    ) -> list[Source]:
+        self.calls.append(query)
+        return []
+
+
+def eval_search(item: EvalItem, domain: DomainName, corpus_root: Path | None) -> EvalSearch:
+    """The general eval searches its frozen corpus; the compliance eval has no web."""
+    if domain == "compliance":
+        return NoWeb()
+    corpus = load_corpus(item.id) if corpus_root is None else load_corpus(item.id, corpus_root)
+    return FrozenSearch(corpus)
+
+
+_ACTIVE: ContextVar[EvalSearch | None] = ContextVar("atlas_eval_search", default=None)
 
 
 async def _dispatch(
@@ -170,9 +204,8 @@ async def run_item(
     """
     variant: Variant = "atlas" if critic_enabled else "no-critic"
     install_offline_runtime()
-    corpus = load_corpus(item.id) if corpus_root is None else load_corpus(item.id, corpus_root)
-    frozen = FrozenSearch(corpus)
-    token = _ACTIVE.set(frozen)
+    web = eval_search(item, domain, corpus_root)
+    token = _ACTIVE.set(web)
 
     graph = build_state_graph(critic_enabled=critic_enabled).compile(
         checkpointer=MemorySaver(serde=checkpoint_serde())
@@ -203,7 +236,7 @@ async def run_item(
             sources=response.sources,
             metrics=validate_metrics(final.get("run_metrics")),
             iterations=response.iterations,
-            search_calls=list(frozen.calls),
+            search_calls=list(web.calls),
             duration_s=elapsed,
         )
     except Exception as exc:
@@ -216,7 +249,7 @@ async def run_item(
             query=item.query,
             answer="",
             variant=variant,
-            search_calls=list(frozen.calls),
+            search_calls=list(web.calls),
             duration_s=elapsed,
             error=f"{type(exc).__name__}: {exc}",
         )
