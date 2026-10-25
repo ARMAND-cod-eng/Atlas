@@ -170,6 +170,7 @@ Build notes: what was built, the defects found along the way, and how each was v
 
 | | |
 |---|---|
+| [`docs/REPORT.md`](docs/REPORT.md) | **The compliance copilot: decisions, measurements, failures caught, limitations** |
 | [`docs/PHASE-0.md`](docs/PHASE-0.md) | Foundations: config, provider fallback, checkpointing |
 | [`docs/PHASE-1.md`](docs/PHASE-1.md) | Planner fan-out, parallel researchers, grounded citations |
 | [`docs/PHASE-2.md`](docs/PHASE-2.md) | The critic loop, targeted retry, enforced token budget |
