@@ -19,11 +19,12 @@ to every reconnecting client.
 from __future__ import annotations
 
 import json
+import threading
 from collections.abc import Iterator, Mapping, Sequence
 from contextlib import contextmanager
 from contextvars import ContextVar
 from dataclasses import dataclass
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from typing import Any, Literal
 from uuid import uuid4
 
@@ -160,8 +161,23 @@ def record(
     emit(AGENT_CALL, node, **call.model_dump(mode="json", exclude={"node"}))
 
 
+_LAST_NOW = datetime.min.replace(tzinfo=UTC)
+_NOW_LOCK = threading.Lock()
+
+
 def now() -> datetime:
-    return datetime.now(UTC)
+    """The time a call starts: never earlier than, nor equal to, the last one.
+
+    Calls are listed in the order they started. A coarse clock (Windows ticks in
+    milliseconds) gave calls made back to back the same time, and the tie fell
+    to the random call id. Within the process that runs a run, the times this
+    returns are strictly increasing, so their order is the order of the calls.
+    """
+    global _LAST_NOW
+    with _NOW_LOCK:
+        current = max(datetime.now(UTC), _LAST_NOW + timedelta(microseconds=1))
+        _LAST_NOW = current
+        return current
 
 
 def result_refs(sources: Sequence[Mapping[str, Any] | BaseModel]) -> list[dict[str, Any]]:

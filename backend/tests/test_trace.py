@@ -22,7 +22,7 @@ from langchain_core.messages import AIMessage
 from langchain_core.runnables import RunnableLambda
 from langgraph.checkpoint.memory import MemorySaver
 
-from atlas import eventlog, models
+from atlas import eventlog, models, trace
 from atlas.events import AGENT_CALL, NODE_STARTED
 from atlas.graph import nodes
 from atlas.graph.builder import build_state_graph, checkpoint_serde
@@ -204,3 +204,13 @@ def test_a_structured_output_previews_as_json() -> None:
     call = _call("model", {"verdict": "accept", "notes": None})
 
     assert call.summary()["preview"] == '{"verdict": "accept", "notes": null}'
+
+
+def test_calls_started_in_order_have_ordered_start_times() -> None:
+    # The calls list is ordered by start time. On a coarse clock (Windows ticks
+    # in milliseconds) calls made back to back tied, and the tie fell to the
+    # random call id: a critic could be listed before the draft it reviewed.
+    stamps = [trace.now() for _ in range(2000)]
+
+    assert stamps == sorted(stamps)
+    assert len(set(stamps)) == len(stamps)
