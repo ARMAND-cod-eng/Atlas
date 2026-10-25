@@ -418,14 +418,24 @@ describe('a compliance run', () => {
 });
 
 describe('what the inspector reads', () => {
-  it("records every agent call with the node and span that made it", () => {
+  it('records every agent call with the node and span that made it', () => {
     const state = run(ACCEPTED);
-    const researcherSpans = state.branches.map((b) => b.spans);
+    const researcher = state.calls.filter((c) => c.node === RESEARCHER);
 
-    expect(state.calls.map((c) => [c.node, c.kind, c.name, c.subtask_id])).toEqual(
-      state.branches.map((b) => ['researcher', 'tool', 'web', b.subtaskId]),
+    // Each branch searched once and asked the model once, both in its one span.
+    expect(researcher.map((c) => [c.subtask_id, c.kind, c.span_id]).sort()).toEqual(
+      state.branches
+        .flatMap((b) => [
+          [b.subtaskId, 'model', b.spans[0]],
+          [b.subtaskId, 'tool', b.spans[0]],
+        ])
+        .sort(),
     );
-    expect(state.calls.map((c) => [c.span_id])).toEqual(researcherSpans);
+    expect(state.calls.filter((c) => c.node !== RESEARCHER).map((c) => [c.node, c.kind, typeof c.span_id])).toEqual([
+      [PLANNER, 'model', 'string'],
+      [SYNTHESIZER, 'model', 'string'],
+      [CRITIC, 'model', 'string'],
+    ]);
   });
 
   it('gives a retried branch one span per attempt', () => {

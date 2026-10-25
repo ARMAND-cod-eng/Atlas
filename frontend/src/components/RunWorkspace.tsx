@@ -6,7 +6,7 @@ import { Panel, PanelGroup, PanelResizeHandle } from 'react-resizable-panels';
 import { Answer } from './Answer';
 import { Findings } from './Findings';
 import { GraphCanvas } from './GraphCanvas';
-import { Inspector } from './Inspector';
+import { type CallSource, Inspector } from './Inspector';
 import { Metrics } from './Metrics';
 import { RunStatus } from './RunStatus';
 import { Timeline } from './Timeline';
@@ -41,6 +41,7 @@ function agentsLine(state: RunState): string {
  */
 export function RunWorkspace({
   runId,
+  loadCall,
   state,
   result,
   topology,
@@ -51,6 +52,8 @@ export function RunWorkspace({
 }: {
   /** The run's id, or null for a replay: nothing behind it to fetch or revise. */
   readonly runId: string | null;
+  /** A call's full record, for the inspector's prompts: the API's, or a recording's. */
+  readonly loadCall: CallSource | null;
   readonly state: RunState;
   readonly result: RunResult | null;
   readonly topology: Topology | null;
@@ -94,7 +97,7 @@ export function RunWorkspace({
           </Panel>
           <PanelResizeHandle className="h-px bg-line transition-colors hover:bg-accent data-[resize-handle-state=drag]:bg-accent" />
           <Panel defaultSize={45} minSize={15} className="bg-canvas">
-            <Inspector runId={runId} state={state} result={result} selected={selected} onRevised={onRevised} />
+            <Inspector runId={runId} loadCall={loadCall} state={state} result={result} selected={selected} onRevised={onRevised} />
           </Panel>
         </PanelGroup>
       ),

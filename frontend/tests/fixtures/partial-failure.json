@@ -2,7 +2,7 @@
   {
     "run_id": "partial-failure",
     "seq": 1,
-    "ts": "2026-10-24T20:17:40.026215Z",
+    "ts": "2026-10-25T05:36:17.340135Z",
     "type": "run_started",
     "node": null,
     "payload": {
@@ -13,29 +13,48 @@
   {
     "run_id": "partial-failure",
     "seq": 2,
-    "ts": "2026-10-24T20:17:40.032643Z",
+    "ts": "2026-10-25T05:36:17.345609Z",
     "type": "node_started",
     "node": "planner",
     "payload": {
       "subtask_id": null,
-      "span_id": "5692c86338d7"
+      "span_id": "2dcaa7ff2eb1"
     }
   },
   {
     "run_id": "partial-failure",
     "seq": 3,
-    "ts": "2026-10-24T20:17:40.032643Z",
-    "type": "node_completed",
+    "ts": "2026-10-25T05:36:17.345609Z",
+    "type": "agent_call",
     "node": "planner",
     "payload": {
+      "call_id": "45f64e75dc2e412da4f57a753e86a17b",
+      "span_id": "2dcaa7ff2eb1",
       "subtask_id": null,
-      "span_id": "5692c86338d7"
+      "kind": "model",
+      "name": "scripted",
+      "duration_s": 0.0021031000651419163,
+      "input_tokens": null,
+      "output_tokens": null,
+      "error": null,
+      "preview": "{\"subtasks\": [{\"id\": \"s0\", \"question\": \"How accurate is RAG for enterprise document QA?\", \"rationale\": \"r\"}, {\"id\": \"s1\", \"question\": \"How accurate are long-context LLMs on the same task?\", \"rationale\": \"r\"}, {\"id\": \"s2\", \"question\": \"What are the cost characteristics of each?\", ..."
     }
   },
   {
     "run_id": "partial-failure",
     "seq": 4,
-    "ts": "2026-10-24T20:17:40.033654Z",
+    "ts": "2026-10-25T05:36:17.345609Z",
+    "type": "node_completed",
+    "node": "planner",
+    "payload": {
+      "subtask_id": null,
+      "span_id": "2dcaa7ff2eb1"
+    }
+  },
+  {
+    "run_id": "partial-failure",
+    "seq": 5,
+    "ts": "2026-10-25T05:36:17.356031Z",
     "type": "fan_out",
     "node": "planner",
     "payload": {
@@ -58,28 +77,28 @@
   },
   {
     "run_id": "partial-failure",
-    "seq": 5,
-    "ts": "2026-10-24T20:17:40.038219Z",
+    "seq": 6,
+    "ts": "2026-10-25T05:36:17.376934Z",
     "type": "node_started",
     "node": "researcher",
     "payload": {
       "subtask_id": "s0",
-      "span_id": "5bab6ac69dd8"
+      "span_id": "073121b9790d"
     }
   },
   {
     "run_id": "partial-failure",
-    "seq": 6,
-    "ts": "2026-10-24T20:17:40.038219Z",
+    "seq": 7,
+    "ts": "2026-10-25T05:36:17.376934Z",
     "type": "agent_call",
     "node": "researcher",
     "payload": {
-      "call_id": "1d0a0de12327441b87cec31998954d79",
-      "span_id": "5bab6ac69dd8",
+      "call_id": "b214de85336c4989b6c77af8e3256fd4",
+      "span_id": "073121b9790d",
       "subtask_id": "s0",
       "kind": "tool",
       "name": "web",
-      "duration_s": 2.319994382560253e-05,
+      "duration_s": 9.600003249943256e-05,
       "input_tokens": null,
       "output_tokens": null,
       "error": null,
@@ -88,13 +107,167 @@
   },
   {
     "run_id": "partial-failure",
-    "seq": 7,
-    "ts": "2026-10-24T20:17:40.038219Z",
+    "seq": 8,
+    "ts": "2026-10-25T05:36:17.376934Z",
+    "type": "node_started",
+    "node": "researcher",
+    "payload": {
+      "subtask_id": "s1",
+      "span_id": "2fa19963a02e"
+    }
+  },
+  {
+    "run_id": "partial-failure",
+    "seq": 9,
+    "ts": "2026-10-25T05:36:17.376934Z",
+    "type": "agent_call",
+    "node": "researcher",
+    "payload": {
+      "call_id": "5ee83de6cd7f4cb1b64f9dd0af683d5b",
+      "span_id": "2fa19963a02e",
+      "subtask_id": "s1",
+      "kind": "tool",
+      "name": "web",
+      "duration_s": 5.910010077059269e-05,
+      "input_tokens": null,
+      "output_tokens": null,
+      "error": "SearchError: this source is unreachable",
+      "preview": ""
+    }
+  },
+  {
+    "run_id": "partial-failure",
+    "seq": 10,
+    "ts": "2026-10-25T05:36:17.376934Z",
+    "type": "node_failed",
+    "node": "researcher",
+    "payload": {
+      "subtask_id": "s1",
+      "span_id": "2fa19963a02e",
+      "error": "SearchError: this source is unreachable",
+      "sources": [],
+      "question": "How accurate are long-context LLMs on the same task?",
+      "findings_preview": ""
+    }
+  },
+  {
+    "run_id": "partial-failure",
+    "seq": 11,
+    "ts": "2026-10-25T05:36:17.376934Z",
+    "type": "node_started",
+    "node": "researcher",
+    "payload": {
+      "subtask_id": "s2",
+      "span_id": "2fe7444349a3"
+    }
+  },
+  {
+    "run_id": "partial-failure",
+    "seq": 12,
+    "ts": "2026-10-25T05:36:17.376934Z",
+    "type": "agent_call",
+    "node": "researcher",
+    "payload": {
+      "call_id": "2756b8a9086f4bf2935c51421f3f8075",
+      "span_id": "2fe7444349a3",
+      "subtask_id": "s2",
+      "kind": "tool",
+      "name": "web",
+      "duration_s": 0.00011850008741021156,
+      "input_tokens": null,
+      "output_tokens": null,
+      "error": null,
+      "preview": "https://example.com/what-0; https://example.com/what-1"
+    }
+  },
+  {
+    "run_id": "partial-failure",
+    "seq": 13,
+    "ts": "2026-10-25T05:36:17.376934Z",
+    "type": "node_started",
+    "node": "researcher",
+    "payload": {
+      "subtask_id": "s3",
+      "span_id": "8992fd1a248e"
+    }
+  },
+  {
+    "run_id": "partial-failure",
+    "seq": 14,
+    "ts": "2026-10-25T05:36:17.376934Z",
+    "type": "agent_call",
+    "node": "researcher",
+    "payload": {
+      "call_id": "946a9c03a7ac4be3a2f0c95554f39406",
+      "span_id": "8992fd1a248e",
+      "subtask_id": "s3",
+      "kind": "tool",
+      "name": "web",
+      "duration_s": 0.0001134001649916172,
+      "input_tokens": null,
+      "output_tokens": null,
+      "error": null,
+      "preview": "https://example.com/what-0; https://example.com/what-1"
+    }
+  },
+  {
+    "run_id": "partial-failure",
+    "seq": 15,
+    "ts": "2026-10-25T05:36:17.376934Z",
+    "type": "node_started",
+    "node": "researcher",
+    "payload": {
+      "subtask_id": "s4",
+      "span_id": "adec6ef71361"
+    }
+  },
+  {
+    "run_id": "partial-failure",
+    "seq": 16,
+    "ts": "2026-10-25T05:36:17.376934Z",
+    "type": "agent_call",
+    "node": "researcher",
+    "payload": {
+      "call_id": "bdc44e2b905c46ed9327dac4fd1fa362",
+      "span_id": "adec6ef71361",
+      "subtask_id": "s4",
+      "kind": "tool",
+      "name": "web",
+      "duration_s": 4.479987546801567e-05,
+      "input_tokens": null,
+      "output_tokens": null,
+      "error": null,
+      "preview": "https://example.com/when-0; https://example.com/when-1"
+    }
+  },
+  {
+    "run_id": "partial-failure",
+    "seq": 17,
+    "ts": "2026-10-25T05:36:17.376934Z",
+    "type": "agent_call",
+    "node": "researcher",
+    "payload": {
+      "call_id": "fd923f57389f4cb2aec048ed8251e7ed",
+      "span_id": "073121b9790d",
+      "subtask_id": "s0",
+      "kind": "model",
+      "name": "scripted",
+      "duration_s": 0.012134999968111515,
+      "input_tokens": null,
+      "output_tokens": null,
+      "error": null,
+      "preview": "findings"
+    }
+  },
+  {
+    "run_id": "partial-failure",
+    "seq": 18,
+    "ts": "2026-10-25T05:36:17.376934Z",
     "type": "node_completed",
     "node": "researcher",
     "payload": {
       "subtask_id": "s0",
-      "span_id": "5bab6ac69dd8",
+      "span_id": "073121b9790d",
       "sources": [
         {
           "url": "https://example.com/how-0",
@@ -115,88 +288,32 @@
   },
   {
     "run_id": "partial-failure",
-    "seq": 8,
-    "ts": "2026-10-24T20:17:40.038219Z",
-    "type": "node_started",
-    "node": "researcher",
-    "payload": {
-      "subtask_id": "s1",
-      "span_id": "368aac5a25ee"
-    }
-  },
-  {
-    "run_id": "partial-failure",
-    "seq": 9,
-    "ts": "2026-10-24T20:17:40.038219Z",
+    "seq": 19,
+    "ts": "2026-10-25T05:36:17.376934Z",
     "type": "agent_call",
     "node": "researcher",
     "payload": {
-      "call_id": "42857f9b06314f3ba4123d402f737517",
-      "span_id": "368aac5a25ee",
-      "subtask_id": "s1",
-      "kind": "tool",
-      "name": "web",
-      "duration_s": 1.4199875295162201e-05,
-      "input_tokens": null,
-      "output_tokens": null,
-      "error": "SearchError: this source is unreachable",
-      "preview": ""
-    }
-  },
-  {
-    "run_id": "partial-failure",
-    "seq": 10,
-    "ts": "2026-10-24T20:17:40.038219Z",
-    "type": "node_failed",
-    "node": "researcher",
-    "payload": {
-      "subtask_id": "s1",
-      "span_id": "368aac5a25ee",
-      "error": "SearchError: this source is unreachable",
-      "sources": [],
-      "question": "How accurate are long-context LLMs on the same task?",
-      "findings_preview": ""
-    }
-  },
-  {
-    "run_id": "partial-failure",
-    "seq": 11,
-    "ts": "2026-10-24T20:17:40.038219Z",
-    "type": "node_started",
-    "node": "researcher",
-    "payload": {
+      "call_id": "7714954272ab4987abdf434922775036",
+      "span_id": "2fe7444349a3",
       "subtask_id": "s2",
-      "span_id": "ad7edb919dc0"
-    }
-  },
-  {
-    "run_id": "partial-failure",
-    "seq": 12,
-    "ts": "2026-10-24T20:17:40.038219Z",
-    "type": "agent_call",
-    "node": "researcher",
-    "payload": {
-      "call_id": "6d2885c8f54a4d2a9cf91b5cbcc89a2a",
-      "span_id": "ad7edb919dc0",
-      "subtask_id": "s2",
-      "kind": "tool",
-      "name": "web",
-      "duration_s": 1.9399914890527725e-05,
+      "kind": "model",
+      "name": "scripted",
+      "duration_s": 0.005894700065255165,
       "input_tokens": null,
       "output_tokens": null,
       "error": null,
-      "preview": "https://example.com/what-0; https://example.com/what-1"
+      "preview": "findings"
     }
   },
   {
     "run_id": "partial-failure",
-    "seq": 13,
-    "ts": "2026-10-24T20:17:40.038219Z",
+    "seq": 20,
+    "ts": "2026-10-25T05:36:17.376934Z",
     "type": "node_completed",
     "node": "researcher",
     "payload": {
       "subtask_id": "s2",
-      "span_id": "ad7edb919dc0",
+      "span_id": "2fe7444349a3",
       "sources": [
         {
           "url": "https://example.com/what-0",
@@ -217,43 +334,32 @@
   },
   {
     "run_id": "partial-failure",
-    "seq": 14,
-    "ts": "2026-10-24T20:17:40.038219Z",
-    "type": "node_started",
-    "node": "researcher",
-    "payload": {
-      "subtask_id": "s3",
-      "span_id": "69034dc88e67"
-    }
-  },
-  {
-    "run_id": "partial-failure",
-    "seq": 15,
-    "ts": "2026-10-24T20:17:40.038219Z",
+    "seq": 21,
+    "ts": "2026-10-25T05:36:17.376934Z",
     "type": "agent_call",
     "node": "researcher",
     "payload": {
-      "call_id": "0a26bc50ac2c45eda5427e422119ed2b",
-      "span_id": "69034dc88e67",
+      "call_id": "05ee7645889f4fb0bc1f6416cca21a65",
+      "span_id": "8992fd1a248e",
       "subtask_id": "s3",
-      "kind": "tool",
-      "name": "web",
-      "duration_s": 0.00030479999259114265,
+      "kind": "model",
+      "name": "scripted",
+      "duration_s": 0.0039013000205159187,
       "input_tokens": null,
       "output_tokens": null,
       "error": null,
-      "preview": "https://example.com/what-0; https://example.com/what-1"
+      "preview": "findings"
     }
   },
   {
     "run_id": "partial-failure",
-    "seq": 16,
-    "ts": "2026-10-24T20:17:40.038219Z",
+    "seq": 22,
+    "ts": "2026-10-25T05:36:17.376934Z",
     "type": "node_completed",
     "node": "researcher",
     "payload": {
       "subtask_id": "s3",
-      "span_id": "69034dc88e67",
+      "span_id": "8992fd1a248e",
       "sources": [
         {
           "url": "https://example.com/what-0",
@@ -274,43 +380,32 @@
   },
   {
     "run_id": "partial-failure",
-    "seq": 17,
-    "ts": "2026-10-24T20:17:40.038219Z",
-    "type": "node_started",
-    "node": "researcher",
-    "payload": {
-      "subtask_id": "s4",
-      "span_id": "ec2bda206d25"
-    }
-  },
-  {
-    "run_id": "partial-failure",
-    "seq": 18,
-    "ts": "2026-10-24T20:17:40.038219Z",
+    "seq": 23,
+    "ts": "2026-10-25T05:36:17.376934Z",
     "type": "agent_call",
     "node": "researcher",
     "payload": {
-      "call_id": "888cea2a83bd4bfca7a9c1e3b019ab38",
-      "span_id": "ec2bda206d25",
+      "call_id": "ad24a1ca5a6f47baa74e96a8d23cf778",
+      "span_id": "adec6ef71361",
       "subtask_id": "s4",
-      "kind": "tool",
-      "name": "web",
-      "duration_s": 2.1300045773386955e-05,
+      "kind": "model",
+      "name": "scripted",
+      "duration_s": 0.003208199981600046,
       "input_tokens": null,
       "output_tokens": null,
       "error": null,
-      "preview": "https://example.com/when-0; https://example.com/when-1"
+      "preview": "findings"
     }
   },
   {
     "run_id": "partial-failure",
-    "seq": 19,
-    "ts": "2026-10-24T20:17:40.038219Z",
+    "seq": 24,
+    "ts": "2026-10-25T05:36:17.376934Z",
     "type": "node_completed",
     "node": "researcher",
     "payload": {
       "subtask_id": "s4",
-      "span_id": "ec2bda206d25",
+      "span_id": "adec6ef71361",
       "sources": [
         {
           "url": "https://example.com/when-0",
@@ -331,30 +426,49 @@
   },
   {
     "run_id": "partial-failure",
-    "seq": 20,
-    "ts": "2026-10-24T20:17:40.042287Z",
+    "seq": 25,
+    "ts": "2026-10-25T05:36:17.385506Z",
     "type": "node_started",
     "node": "synthesizer",
     "payload": {
       "subtask_id": null,
-      "span_id": "8000c6120fcc"
+      "span_id": "f29e1a56ac18"
     }
   },
   {
     "run_id": "partial-failure",
-    "seq": 21,
-    "ts": "2026-10-24T20:17:40.042287Z",
+    "seq": 26,
+    "ts": "2026-10-25T05:36:17.385834Z",
+    "type": "agent_call",
+    "node": "synthesizer",
+    "payload": {
+      "call_id": "9bbee7ba37ee4cbcb40c22f1efb7808d",
+      "span_id": "f29e1a56ac18",
+      "subtask_id": null,
+      "kind": "model",
+      "name": "scripted",
+      "duration_s": 0.0009404998272657394,
+      "input_tokens": null,
+      "output_tokens": null,
+      "error": null,
+      "preview": "## Answer\n\nSynthesised from the findings."
+    }
+  },
+  {
+    "run_id": "partial-failure",
+    "seq": 27,
+    "ts": "2026-10-25T05:36:17.385834Z",
     "type": "node_completed",
     "node": "synthesizer",
     "payload": {
       "subtask_id": null,
-      "span_id": "8000c6120fcc"
+      "span_id": "f29e1a56ac18"
     }
   },
   {
     "run_id": "partial-failure",
-    "seq": 22,
-    "ts": "2026-10-24T20:17:40.042287Z",
+    "seq": 28,
+    "ts": "2026-10-25T05:36:17.388882Z",
     "type": "iteration_started",
     "node": "critic",
     "payload": {
@@ -363,30 +477,49 @@
   },
   {
     "run_id": "partial-failure",
-    "seq": 23,
-    "ts": "2026-10-24T20:17:40.042287Z",
+    "seq": 29,
+    "ts": "2026-10-25T05:36:17.388882Z",
     "type": "node_started",
     "node": "critic",
     "payload": {
       "subtask_id": null,
-      "span_id": "d8692f074f1d"
+      "span_id": "af94ad36bd1a"
     }
   },
   {
     "run_id": "partial-failure",
-    "seq": 24,
-    "ts": "2026-10-24T20:17:40.042287Z",
+    "seq": 30,
+    "ts": "2026-10-25T05:36:17.391908Z",
+    "type": "agent_call",
+    "node": "critic",
+    "payload": {
+      "call_id": "5ebf8668d6eb4adfa45c94e9c4f239d8",
+      "span_id": "af94ad36bd1a",
+      "subtask_id": null,
+      "kind": "model",
+      "name": "scripted",
+      "duration_s": 0.0013355000410228968,
+      "input_tokens": null,
+      "output_tokens": null,
+      "error": null,
+      "preview": "{\"overall\": \"accept\", \"per_subtask\": [], \"synthesis_feedback\": null}"
+    }
+  },
+  {
+    "run_id": "partial-failure",
+    "seq": 31,
+    "ts": "2026-10-25T05:36:17.391908Z",
     "type": "node_completed",
     "node": "critic",
     "payload": {
       "subtask_id": null,
-      "span_id": "d8692f074f1d"
+      "span_id": "af94ad36bd1a"
     }
   },
   {
     "run_id": "partial-failure",
-    "seq": 25,
-    "ts": "2026-10-24T20:17:40.042287Z",
+    "seq": 32,
+    "ts": "2026-10-25T05:36:17.391908Z",
     "type": "critic_verdict",
     "node": "critic",
     "payload": {
@@ -400,8 +533,8 @@
   },
   {
     "run_id": "partial-failure",
-    "seq": 26,
-    "ts": "2026-10-24T20:17:40.042287Z",
+    "seq": 33,
+    "ts": "2026-10-25T05:36:17.392789Z",
     "type": "run_completed",
     "node": null,
     "payload": {

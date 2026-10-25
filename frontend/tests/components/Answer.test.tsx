@@ -7,11 +7,11 @@
 import { cleanup, fireEvent, render, screen, within } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-import compliance from './fixtures/compliance.json';
+import compliance from '../fixtures/compliance.json';
 
-import { Answer } from '../src/components/Answer';
-import { API_BASE } from '../src/lib/api';
-import type { AgentEvent, RunResult } from '../src/lib/events';
+import { Answer } from '../../src/components/Answer';
+import { API_BASE } from '../../src/lib/api';
+import type { AgentEvent, RunResult } from '../../src/lib/events';
 import {
   CRITIC,
   PLANNER,
@@ -20,7 +20,7 @@ import {
   type RunState,
   acceptAll,
   initialState,
-} from '../src/lib/reducer';
+} from '../../src/lib/reducer';
 
 const base = acceptAll(
   initialState([PLANNER, RESEARCHER, SYNTHESIZER, CRITIC]),

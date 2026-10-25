@@ -1,0 +1,339 @@
+[
+  {
+    "call_id": "cf3c2b3205ce4a13a7f808a499ef8613",
+    "span_id": "41cdc2dd2c66",
+    "node": "planner",
+    "subtask_id": null,
+    "kind": "model",
+    "name": "scripted",
+    "started_at": "2026-10-25T05:37:06.632428Z",
+    "duration_s": 0.002377500059083104,
+    "request": [
+      {
+        "role": "system",
+        "content": "You are the planning stage of a compliance research system that answers questions about EU law: the AI Act (Regulation (EU) 2024/1689) and the GDPR (Regulation (EU) 2016/679).\n\nBreak the user's question into INDEPENDENT subtasks that can be researched in parallel. No subtask may depend on the answer to another; if one would, merge them.\n\nRules:\n- Produce between 1 and 5 subtasks, and FEWER for simple questions. A question about one provision needs one subtask.\n- Split the way a compliance analyst would: whether the law applies and how the case is classified; what obligations follow, and for whom (provider, deployer, controller, processor); dates and deadlines; how the two acts interact.\n- Each subtask must be a self-contained question, naming the act it concerns when that is clear.\n- If the question assumes something about the law, include a subtask that checks the assumption rather than taking it as given.\n- Give each a short rationale explaining what it contributes to the answer.\n"
+      },
+      {
+        "role": "human",
+        "content": "Is a CV-screening tool high-risk under the AI Act, and what must its provider do?"
+      }
+    ],
+    "response": {
+      "subtasks": [
+        {
+          "id": "s0",
+          "question": "Is an AI system that filters job applications high-risk under the AI Act?",
+          "rationale": "r"
+        },
+        {
+          "id": "s1",
+          "question": "What must a provider of a high-risk AI system do under the AI Act?",
+          "rationale": "r"
+        }
+      ]
+    },
+    "input_tokens": null,
+    "output_tokens": null,
+    "error": null
+  },
+  {
+    "call_id": "f46df44c703e4cc9ae473c40eecb771a",
+    "span_id": "44f7b519c6df",
+    "node": "researcher",
+    "subtask_id": "s0",
+    "kind": "tool",
+    "name": "library",
+    "started_at": "2026-10-25T05:37:06.647099Z",
+    "duration_s": 4.953844799892977,
+    "request": {
+      "query": "Is an AI system that filters job applications high-risk under the AI Act?"
+    },
+    "response": [
+      {
+        "label": "AI Act Annex III(4)(a)",
+        "title": "High-risk AI systems referred to in Article 6(2)"
+      },
+      {
+        "label": "AI Act Annex VIII(7)",
+        "title": "Information to be submitted upon the registration of high-risk AI systems in accordance with Article 49"
+      },
+      {
+        "label": "AI Act Art. 16(b)",
+        "title": "Obligations of providers of high-risk AI systems"
+      },
+      {
+        "label": "AI Act Art. 20(2)",
+        "title": "Corrective actions and duty of information"
+      },
+      {
+        "label": "AI Act Art. 80(1)",
+        "title": "Procedure for dealing with AI systems classified by the provider as non-high-risk in application of Annex III"
+      },
+      {
+        "label": "AI Act Art. 26(7)",
+        "title": "Obligations of deployers of high-risk AI systems"
+      }
+    ],
+    "input_tokens": null,
+    "output_tokens": null,
+    "error": null
+  },
+  {
+    "call_id": "6cc186fca471497c82d682c30f89b4c1",
+    "span_id": "44f7b519c6df",
+    "node": "researcher",
+    "subtask_id": "s0",
+    "kind": "tool",
+    "name": "web",
+    "started_at": "2026-10-25T05:37:11.593204Z",
+    "duration_s": 2.619996666908264e-05,
+    "request": {
+      "query": "Is an AI system that filters job applications high-risk under the AI Act?"
+    },
+    "response": [
+      {
+        "url": "https://example.com/is-0",
+        "title": "is result 0"
+      },
+      {
+        "url": "https://example.com/is-1",
+        "title": "is result 1"
+      }
+    ],
+    "input_tokens": null,
+    "output_tokens": null,
+    "error": null
+  },
+  {
+    "call_id": "861055be45a64a94844b92e531a224bb",
+    "span_id": "44f7b519c6df",
+    "node": "researcher",
+    "subtask_id": "s0",
+    "kind": "model",
+    "name": "scripted",
+    "started_at": "2026-10-25T05:37:11.593205Z",
+    "duration_s": 0.014243700075894594,
+    "request": [
+      {
+        "role": "system",
+        "content": "You are a compliance researcher answering ONE question about EU law from the provisions and sources retrieved for it.\n\nRules:\n- PRIMARY LAW passages are the text of the AI Act or the GDPR, and the only authority for what the law says or requires. Cite every statement about the law with the label of the provision that supports it, in square brackets, exactly as given: [AI Act Art. 6(2)].\n- SECONDARY sources (guidance, web pages) may explain or illustrate, never establish what the law requires. Cite them by URL.\n- Where the precise words matter (a deadline, a threshold, a definition), quote the provision exactly. A misquotation is worse than a paraphrase.\n- Never cite a provision that is not among the passages given to you, and never rely on memory for article numbers. If the passages do not answer the question, say so plainly.\n- If the question assumes something the law contradicts, say so.\n- Be concise and factual. You are producing input for a synthesis step.\n"
+      },
+      {
+        "role": "human",
+        "content": "Question: Is an AI system that filters job applications high-risk under the AI Act?\n\nSources:\nPRIMARY LAW (cite by the bracketed label):\n\n[AI Act Annex III(4)(a)] High-risk AI systems referred to in Article 6(2)\nAI systems intended to be used for the recruitment or selection of natural persons, in particular to place targeted job advertisements, to analyse and filter job applications, and to evaluate candidates;\n\n[AI Act Annex VIII(7)] Information to be submitted upon the registration of high-risk AI systems in accordance with Article 49\nA short summary of the grounds on which the AI system is considered to be not-high-risk in application of the procedure under Article 6(3);\n\n[AI Act Art. 16(b)] Obligations of providers of high-risk AI systems\nindicate on the high-risk AI system or, where that is not possible, on its packaging or its accompanying documentation, as applicable, their name, registered trade name or registered trade mark, the address at which they can be contacted;\n\n[AI Act Art. 20(2)] Corrective actions and duty of information\nWhere the high-risk AI system presents a risk within the meaning of Article 79(1) and the provider becomes aware of that risk, it shall immediately investigate the causes, in collaboration with the reporting deployer, where applicable, and inform the market surveillance authorities competent for the high-risk AI system concerned and, where applicable, the notified body that issued a certificate for that high-risk AI system in accordance with Article 44, in particular, of the nature of the non-compliance and of any relevant corrective action taken.\n\n[AI Act Art. 80(1)] Procedure for dealing with AI systems classified by the provider as non-high-risk in application of Annex III\nWhere a market surveillance authority has sufficient reason to consider that an AI system classified by the provider as non-high-risk pursuant to Article 6(3) is indeed high-risk, the market surveillance authority shall carry out an evaluation of the AI system concerned in respect of its classification as a high-risk AI system based on the conditions set out in Article 6(3) and the Commission guidelines.\n\n[AI Act Art. 26(7)] Obligations of deployers of high-risk AI systems\nBefore putting into service or using a high-risk AI system at the workplace, deployers who are employers shall inform workers’ representatives and the affected workers that they will be subject to the use of the high-risk AI system. This information shall be provided, where applicable, in accordance with the rules and procedures laid down in Union and national law and practice on information of workers and their representatives.\n\nSECONDARY SOURCES (guidance only; cite by URL):\n\n[1] is result 0 (secondary)\nURL: https://example.com/is-0\ns\n\n[2] is result 1 (secondary)\nURL: https://example.com/is-1\ns"
+      }
+    ],
+    "response": "findings",
+    "input_tokens": null,
+    "output_tokens": null,
+    "error": null
+  },
+  {
+    "call_id": "3a848439974c4119a775177488aedbeb",
+    "span_id": "9ee224a03d15",
+    "node": "researcher",
+    "subtask_id": "s1",
+    "kind": "tool",
+    "name": "library",
+    "started_at": "2026-10-25T05:37:11.593206Z",
+    "duration_s": 0.012159199919551611,
+    "request": {
+      "query": "What must a provider of a high-risk AI system do under the AI Act?"
+    },
+    "response": [
+      {
+        "label": "AI Act Art. 16",
+        "title": "Obligations of providers of high-risk AI systems"
+      },
+      {
+        "label": "AI Act Art. 60(1)",
+        "title": "Testing of high-risk AI systems in real world conditions outside AI regulatory sandboxes"
+      },
+      {
+        "label": "AI Act Recital 85",
+        "title": "AI Act Recital 85"
+      },
+      {
+        "label": "AI Act Art. 72(1)",
+        "title": "Post-market monitoring by providers and post-market monitoring plan for high-risk AI systems"
+      },
+      {
+        "label": "AI Act Art. 22(3)(d)",
+        "title": "Authorised representatives of providers of high-risk AI systems"
+      },
+      {
+        "label": "AI Act Art. 31(4)",
+        "title": "Requirements relating to notified bodies"
+      }
+    ],
+    "input_tokens": null,
+    "output_tokens": null,
+    "error": null
+  },
+  {
+    "call_id": "e49fa2cb3560483d8ca268796786d546",
+    "span_id": "9ee224a03d15",
+    "node": "researcher",
+    "subtask_id": "s1",
+    "kind": "tool",
+    "name": "web",
+    "started_at": "2026-10-25T05:37:11.607231Z",
+    "duration_s": 3.50000336766243e-05,
+    "request": {
+      "query": "What must a provider of a high-risk AI system do under the AI Act?"
+    },
+    "response": [
+      {
+        "url": "https://example.com/what-0",
+        "title": "what result 0"
+      },
+      {
+        "url": "https://example.com/what-1",
+        "title": "what result 1"
+      }
+    ],
+    "input_tokens": null,
+    "output_tokens": null,
+    "error": null
+  },
+  {
+    "call_id": "def189f88d23454eb250e50699070432",
+    "span_id": "9ee224a03d15",
+    "node": "researcher",
+    "subtask_id": "s1",
+    "kind": "model",
+    "name": "scripted",
+    "started_at": "2026-10-25T05:37:11.607232Z",
+    "duration_s": 0.0014957000967115164,
+    "request": [
+      {
+        "role": "system",
+        "content": "You are a compliance researcher answering ONE question about EU law from the provisions and sources retrieved for it.\n\nRules:\n- PRIMARY LAW passages are the text of the AI Act or the GDPR, and the only authority for what the law says or requires. Cite every statement about the law with the label of the provision that supports it, in square brackets, exactly as given: [AI Act Art. 6(2)].\n- SECONDARY sources (guidance, web pages) may explain or illustrate, never establish what the law requires. Cite them by URL.\n- Where the precise words matter (a deadline, a threshold, a definition), quote the provision exactly. A misquotation is worse than a paraphrase.\n- Never cite a provision that is not among the passages given to you, and never rely on memory for article numbers. If the passages do not answer the question, say so plainly.\n- If the question assumes something the law contradicts, say so.\n- Be concise and factual. You are producing input for a synthesis step.\n"
+      },
+      {
+        "role": "human",
+        "content": "Question: What must a provider of a high-risk AI system do under the AI Act?\n\nSources:\nPRIMARY LAW (cite by the bracketed label):\n\n[AI Act Art. 16] Obligations of providers of high-risk AI systems\nProviders of high-risk AI systems shall: (a) ensure that their high-risk AI systems are compliant with the requirements set out in Section 2; (b) indicate on the high-risk AI system or, where that is not possible, on its packaging or its accompanying documentation, as applicable, their name, registered trade name or registered trade mark, the address at which they can be contacted; (c) have a quality management system in place which complies with Article 17; (d) keep the documentation referred to in Article 18; (e) when under their control, keep the logs automatically generated by their high-risk AI systems as referred to in Article 19; (f) ensure that the high-risk AI system undergoes the relevant conformity assessment procedure as referred to in Article 43, prior to its being placed on the market or put into service; (g) draw up an EU declaration of conformity in accordance with Article 47; (h) affix the CE marking to the high-risk AI system or, where that is not possible, on its packaging or its accompanying documentation, to indicate conformity with this Regulation, in accordance with Article 48; (i) comply with the registration obligations referred to in Article 49(1); (j) take the necessary corrective actions and provide information as required in Article 20; (k) upon a reasoned request of a national competent authority, demonstrate the conformity of the high-risk AI system with the requirements set out in Section 2; (l) ensure that the high-risk AI system complies with accessibility requirements in accordance with Directives (EU) 2016/2102 and (EU) 2019/882.\n\n[AI Act Art. 60(1)] Testing of high-risk AI systems in real world conditions outside AI regulatory sandboxes\nTesting of high-risk AI systems in real world conditions outside AI regulatory sandboxes may be conducted by providers or prospective providers of high-risk AI systems listed in Annex III, in accordance with this Article and the real-world testing plan referred to in this Article, without prejudice to the prohibitions under Article 5. The Commission shall, by means of implementing acts, specify the detailed elements of the real-world testing plan. Those implementing acts shall be adopted in accordance with the examination procedure referred to in Article 98(2). This paragraph shall be without prejudice to Union or national law on the testing in real world conditions of high-risk AI systems related to products covered by Union harmonisation legislation listed in Annex I.\n\n[AI Act Recital 85] AI Act Recital 85\nGeneral-purpose AI systems may be used as high-risk AI systems by themselves or be components of other high-risk AI systems. Therefore, due to their particular nature and in order to ensure a fair sharing of responsibilities along the AI value chain, the providers of such systems should, irrespective of whether they may be used as high-risk AI systems as such by other providers or as components of high-risk AI systems and unless provided otherwise under this Regulation, closely cooperate with the providers of the relevant high-risk AI systems to enable their compliance with the relevant obligations under this Regulation and with the competent authorities established under this Regulation.\n\n[AI Act Art. 72(1)] Post-market monitoring by providers and post-market monitoring plan for high-risk AI systems\nProviders shall establish and document a post-market monitoring system in a manner that is proportionate to the nature of the AI technologies and the risks of the high-risk AI system.\n\n[AI Act Art. 22(3)(d)] Authorised representatives of providers of high-risk AI systems\ncooperate with competent authorities, upon a reasoned request, in any action the latter take in relation to the high-risk AI system, in particular to reduce and mitigate the risks posed by the high-risk AI system;\n\n[AI Act Art. 31(4)] Requirements relating to notified bodies\nNotified bodies shall be independent of the provider of a high-risk AI system in relation to which they perform conformity assessment activities. Notified bodies shall also be independent of any other operator having an economic interest in high-risk AI systems assessed, as well as of any competitors of the provider. This shall not preclude the use of assessed high-risk AI systems that are necessary for the operations of the conformity assessment body, or the use of such high-risk AI systems for personal purposes.\n\nSECONDARY SOURCES (guidance only; cite by URL):\n\n[1] what result 0 (secondary)\nURL: https://example.com/what-0\ns\n\n[2] what result 1 (secondary)\nURL: https://example.com/what-1\ns"
+      }
+    ],
+    "response": "findings",
+    "input_tokens": null,
+    "output_tokens": null,
+    "error": null
+  },
+  {
+    "call_id": "6f3bcd5d2bce4349965b4e622a117541",
+    "span_id": "a038eabde6ff",
+    "node": "synthesizer",
+    "subtask_id": null,
+    "kind": "model",
+    "name": "scripted",
+    "started_at": "2026-10-25T05:37:11.618950Z",
+    "duration_s": 0.0007470999844372272,
+    "request": [
+      {
+        "role": "system",
+        "content": "You are the synthesis stage of a compliance research system. Merge the research findings into one answer to the user's question about EU law.\n\nRules:\n- Cite every statement about the law with its provision label in square brackets, exactly as it appears in the findings: [AI Act Art. 26(6)], [GDPR Art. 33(1)]. You may ONLY cite provisions and URLs that appear in the findings. An invented or misnumbered citation is the worst failure here: it looks verifiable, and a reader may act on it.\n- Keep what the law requires (cite the provision) apart from guidance or interpretation (say whose).\n- If the question rests on a false premise, correct it first.\n- If the answer turns on facts the question does not give (the user's role, what a system is used for), say what it turns on rather than assuming.\n- If any subtask is reported as FAILED, say which aspects could not be researched. Do not present partial findings as complete.\n- Answer directly and economically. Every sentence that does not add information costs the reader time.\n"
+      },
+      {
+        "role": "human",
+        "content": "Is a CV-screening tool high-risk under the AI Act, and what must its provider do?"
+      },
+      {
+        "role": "human",
+        "content": "Original question: Is a CV-screening tool high-risk under the AI Act, and what must its provider do?\n\nResearch findings:\n\nSubtask s0\nQuestion: Is an AI system that filters job applications high-risk under the AI Act?\n\nfindings\n\nSources:\n- [AI Act Annex III(4)(a)]\n- [AI Act Annex VIII(7)]\n- [AI Act Art. 16(b)]\n- [AI Act Art. 20(2)]\n- [AI Act Art. 80(1)]\n- [AI Act Art. 26(7)]\n- https://example.com/is-0\n- https://example.com/is-1\n\n---\n\nSubtask s1\nQuestion: What must a provider of a high-risk AI system do under the AI Act?\n\nfindings\n\nSources:\n- [AI Act Art. 16]\n- [AI Act Art. 60(1)]\n- [AI Act Recital 85]\n- [AI Act Art. 72(1)]\n- [AI Act Art. 22(3)(d)]\n- [AI Act Art. 31(4)]\n- https://example.com/what-0\n- https://example.com/what-1"
+      }
+    ],
+    "response": "## Answer\n\nYes: it is high-risk [AI Act Annex III(4)(a)] [AI Act Annex VIII(7)] [AI Act Art. 16(b)]. It must also register it [AI Act Art. 114].",
+    "input_tokens": null,
+    "output_tokens": null,
+    "error": null
+  },
+  {
+    "call_id": "5c170a53fd3b4e26b1f6240730e1d3d7",
+    "span_id": "1d98c3192d9a",
+    "node": "critic",
+    "subtask_id": null,
+    "kind": "model",
+    "name": "scripted",
+    "started_at": "2026-10-25T05:37:11.623523Z",
+    "duration_s": 0.0008990999776870012,
+    "request": [
+      {
+        "role": "system",
+        "content": "You are reviewing the research behind a drafted answer, before it reaches the user.\n\nYou are given each subtask's question, the findings written for it, and THE SOURCES THAT WERE ACTUALLY RETRIEVED. Judge the findings against those sources — not against your own knowledge of the topic. If a claim is correct but not supported by any listed source, that is a grounding failure and you should say so.\n\nFor each subtask, check three things:\n1. Did the findings actually answer the subtask's question?\n2. Is every substantive claim traceable to one of the listed sources?\n3. Are there obvious gaps — an aspect of the question the sources cover but the findings ignore?\n\nACCEPTING SOUND WORK IS THE CORRECT OUTCOME. You are a quality gate, not a proof of your own usefulness. Every rejection costs the user another search, another model call, and roughly forty more seconds of waiting. Reject only when a specific, nameable problem would leave the final answer wrong, unsupported, or materially incomplete. Do not reject for style, for phrasing you would have chosen differently, or to appear thorough. If the research is adequate, return \"accept\" and stop.\n\nWhen you do reject a subtask, \"guidance\" must be a concrete instruction the researcher can act on — say what to look for, not that the answer was weak.\n\nIf the research is sound but the final write-up misrepresents it, omits a finding, or cites something absent from the sources, set synthesis_feedback instead of faulting subtasks. That fixes the answer without re-running searches.\n\nThis system answers questions about EU law, so for any claim about what the law says or requires, the standard is the text of the provision it cites. A correct statement cited to the wrong provision is a grounding failure; so is a quotation that does not match the provision's words.\n"
+      },
+      {
+        "role": "human",
+        "content": "Original question: Is a CV-screening tool high-risk under the AI Act, and what must its provider do?\n\nDrafted answer:\n## Answer\n\nYes: it is high-risk [AI Act Annex III(4)(a)] [AI Act Annex VIII(7)] [AI Act Art. 16(b)]. It must also register it [AI Act Art. 114].\n\nResearch under review:\n\n### Subtask s0\nQuestion: Is an AI system that filters job applications high-risk under the AI Act?\nFindings:\nfindings\n\nSources retrieved:\n- [AI Act Annex III(4)(a)] High-risk AI systems referred to in Article 6(2)\n  AI systems intended to be used for the recruitment or selection of natural persons, in particular to place targeted job advertisements, to analyse and filter job applications, and to evaluate candidates;\n- [AI Act Annex VIII(7)] Information to be submitted upon the registration of high-risk AI systems in accordance with Article 49\n  A short summary of the grounds on which the AI system is considered to be not-high-risk in application of the procedure under Article 6(3);\n- [AI Act Art. 16(b)] Obligations of providers of high-risk AI systems\n  indicate on the high-risk AI system or, where that is not possible, on its packaging or its accompanying documentation, as applicable, their name, registered trade name or registered trade mark, the address at which they can be contacted;\n- [AI Act Art. 20(2)] Corrective actions and duty of information\n  Where the high-risk AI system presents a risk within the meaning of Article 79(1) and the provider becomes aware of that risk, it shall immediately investigate the causes, in collaboration with the reporting deployer, where applicable, and inform the market surveillance authorities competent for the high-risk AI system concerned and, where applicable, the notified body that issued a certificate for that high-risk AI system in accordance with Article 44, in particular, of the nature of the non-compliance and of any relevant corrective action taken.\n- [AI Act Art. 80(1)] Procedure for dealing with AI systems classified by the provider as non-high-risk in application of Annex III\n  Where a market surveillance authority has sufficient reason to consider that an AI system classified by the provider as non-high-risk pursuant to Article 6(3) is indeed high-risk, the market surveillance authority shall carry out an evaluation of the AI system concerned in respect of its classification as a high-risk AI system based on the conditions set out in Article 6(3) and the Commission guidelines.\n- [AI Act Art. 26(7)] Obligations of deployers of high-risk AI systems\n  Before putting into service or using a high-risk AI system at the workplace, deployers who are employers shall inform workers’ representatives and the affected workers that they will be subject to the use of the high-risk AI system. This information shall be provided, where applicable, in accordance with the rules and procedures laid down in Union and national law and practice on information of workers and their representatives.\n- https://example.com/is-0 — is result 0\n  s\n- https://example.com/is-1 — is result 1\n  s\n\n### Subtask s1\nQuestion: What must a provider of a high-risk AI system do under the AI Act?\nFindings:\nfindings\n\nSources retrieved:\n- [AI Act Art. 16] Obligations of providers of high-risk AI systems\n  Providers of high-risk AI systems shall: (a) ensure that their high-risk AI systems are compliant with the requirements set out in Section 2; (b) indicate on the high-risk AI system or, where that is not possible, on its packaging or its accompanying documentation, as applicable, their name, registered trade name or registered trade mark, the address at which they can be contacted; (c) have a quality management system in place which complies with Article 17; (d) keep the documentation referred to in Article 18; (e) when under their control, keep the logs automatically generated by their high-risk AI systems as referred to in Article 19; (f) ensure that the high-risk AI system undergoes the relevant conformity assessment procedure as referred to in Article 43, prior to its being placed on the market or put into service; (g) draw up an EU declaration of conformity in accordance with Article 47; (h) affix the CE marking to the high-risk AI system or, where that is not possible, on its packaging or its accompanying documentation, to indicate conformity with this Regulation, in accordance with Article 48; (i) comply with the registration obligations referred to in Article 49(1); (j) take the necessary corrective actions and provide information as required in Article 20; (k) upon a reasoned request of a national competent authority, demonstrate the conformity of the high-risk AI system with the requirements set out in Section 2; (l) ensure that the high-risk AI system complies with accessibility requirements in accordance with Directives (EU) 2016/2102 and (EU) 2019/882.\n- [AI Act Art. 60(1)] Testing of high-risk AI systems in real world conditions outside AI regulatory sandboxes\n  Testing of high-risk AI systems in real world conditions outside AI regulatory sandboxes may be conducted by providers or prospective providers of high-risk AI systems listed in Annex III, in accordance with this Article and the real-world testing plan referred to in this Article, without prejudice to the prohibitions under Article 5. The Commission shall, by means of implementing acts, specify the detailed elements of the real-world testing plan. Those implementing acts shall be adopted in accordance with the examination procedure referred to in Article 98(2). This paragraph shall be without prejudice to Union or national law on the testing in real world conditions of high-risk AI systems related to products covered by Union harmonisation legislation listed in Annex I.\n- [AI Act Recital 85] AI Act Recital 85\n  General-purpose AI systems may be used as high-risk AI systems by themselves or be components of other high-risk AI systems. Therefore, due to their particular nature and in order to ensure a fair sharing of responsibilities along the AI value chain, the providers of such systems should, irrespective of whether they may be used as high-risk AI systems as such by other providers or as components of high-risk AI systems and unless provided otherwise under this Regulation, closely cooperate with the providers of the relevant high-risk AI systems to enable their compliance with the relevant obligations under this Regulation and with the competent authorities established under this Regulation.\n- [AI Act Art. 72(1)] Post-market monitoring by providers and post-market monitoring plan for high-risk AI systems\n  Providers shall establish and document a post-market monitoring system in a manner that is proportionate to the nature of the AI technologies and the risks of the high-risk AI system.\n- [AI Act Art. 22(3)(d)] Authorised representatives of providers of high-risk AI systems\n  cooperate with competent authorities, upon a reasoned request, in any action the latter take in relation to the high-risk AI system, in particular to reduce and mitigate the risks posed by the high-risk AI system;\n- [AI Act Art. 31(4)] Requirements relating to notified bodies\n  Notified bodies shall be independent of the provider of a high-risk AI system in relation to which they perform conformity assessment activities. Notified bodies shall also be independent of any other operator having an economic interest in high-risk AI systems assessed, as well as of any competitors of the provider. This shall not preclude the use of assessed high-risk AI systems that are necessary for the operations of the conformity assessment body, or the use of such high-risk AI systems for personal purposes.\n- https://example.com/what-0 — what result 0\n  s\n- https://example.com/what-1 — what result 1\n  s"
+      }
+    ],
+    "response": {
+      "overall": "accept",
+      "per_subtask": [],
+      "synthesis_feedback": null
+    },
+    "input_tokens": null,
+    "output_tokens": null,
+    "error": null
+  },
+  {
+    "call_id": "007435f08e9f4f9bb528b8ba60c3ddbe",
+    "span_id": "f1dca2897581",
+    "node": "synthesizer",
+    "subtask_id": null,
+    "kind": "model",
+    "name": "scripted",
+    "started_at": "2026-10-25T05:37:11.623524Z",
+    "duration_s": 0.0006735001225024462,
+    "request": [
+      {
+        "role": "system",
+        "content": "You are the synthesis stage of a compliance research system. Merge the research findings into one answer to the user's question about EU law.\n\nRules:\n- Cite every statement about the law with its provision label in square brackets, exactly as it appears in the findings: [AI Act Art. 26(6)], [GDPR Art. 33(1)]. You may ONLY cite provisions and URLs that appear in the findings. An invented or misnumbered citation is the worst failure here: it looks verifiable, and a reader may act on it.\n- Keep what the law requires (cite the provision) apart from guidance or interpretation (say whose).\n- If the question rests on a false premise, correct it first.\n- If the answer turns on facts the question does not give (the user's role, what a system is used for), say what it turns on rather than assuming.\n- If any subtask is reported as FAILED, say which aspects could not be researched. Do not present partial findings as complete.\n- Answer directly and economically. Every sentence that does not add information costs the reader time.\n"
+      },
+      {
+        "role": "human",
+        "content": "Is a CV-screening tool high-risk under the AI Act, and what must its provider do?"
+      },
+      {
+        "role": "ai",
+        "content": "## Answer\n\nYes: it is high-risk [AI Act Annex III(4)(a)] [AI Act Annex VIII(7)] [AI Act Art. 16(b)]. It must also register it [AI Act Art. 114]."
+      },
+      {
+        "role": "human",
+        "content": "Original question: Is a CV-screening tool high-risk under the AI Act, and what must its provider do?\n\nResearch findings:\n\nSubtask s0\nQuestion: Is an AI system that filters job applications high-risk under the AI Act?\n\nfindings\n\nSources:\n- [AI Act Annex III(4)(a)]\n- [AI Act Annex VIII(7)]\n- [AI Act Art. 16(b)]\n- [AI Act Art. 20(2)]\n- [AI Act Art. 80(1)]\n- [AI Act Art. 26(7)]\n- https://example.com/is-0\n- https://example.com/is-1\n\n---\n\nSubtask s1\nQuestion: What must a provider of a high-risk AI system do under the AI Act?\n\nfindings\n\nSources:\n- [AI Act Art. 16]\n- [AI Act Art. 60(1)]\n- [AI Act Recital 85]\n- [AI Act Art. 72(1)]\n- [AI Act Art. 22(3)(d)]\n- [AI Act Art. 31(4)]\n- https://example.com/what-0\n- https://example.com/what-1\n\nA reviewer rejected your previous answer:\nCitation problems in the answer, found by checking it against the law:\n- [AI Act Art. 114] is not a provision of that act. Remove it or cite the provision that actually says this."
+      }
+    ],
+    "response": "## Answer\n\nYes: it is high-risk [AI Act Annex III(4)(a)] [AI Act Annex VIII(7)] [AI Act Art. 16(b)].",
+    "input_tokens": null,
+    "output_tokens": null,
+    "error": null
+  },
+  {
+    "call_id": "f0d1701f366b482ba3684868971fe25a",
+    "span_id": "7c0a86a6930a",
+    "node": "critic",
+    "subtask_id": null,
+    "kind": "model",
+    "name": "scripted",
+    "started_at": "2026-10-25T05:37:11.623525Z",
+    "duration_s": 0.000547999981790781,
+    "request": [
+      {
+        "role": "system",
+        "content": "You are reviewing the research behind a drafted answer, before it reaches the user.\n\nYou are given each subtask's question, the findings written for it, and THE SOURCES THAT WERE ACTUALLY RETRIEVED. Judge the findings against those sources — not against your own knowledge of the topic. If a claim is correct but not supported by any listed source, that is a grounding failure and you should say so.\n\nFor each subtask, check three things:\n1. Did the findings actually answer the subtask's question?\n2. Is every substantive claim traceable to one of the listed sources?\n3. Are there obvious gaps — an aspect of the question the sources cover but the findings ignore?\n\nACCEPTING SOUND WORK IS THE CORRECT OUTCOME. You are a quality gate, not a proof of your own usefulness. Every rejection costs the user another search, another model call, and roughly forty more seconds of waiting. Reject only when a specific, nameable problem would leave the final answer wrong, unsupported, or materially incomplete. Do not reject for style, for phrasing you would have chosen differently, or to appear thorough. If the research is adequate, return \"accept\" and stop.\n\nWhen you do reject a subtask, \"guidance\" must be a concrete instruction the researcher can act on — say what to look for, not that the answer was weak.\n\nIf the research is sound but the final write-up misrepresents it, omits a finding, or cites something absent from the sources, set synthesis_feedback instead of faulting subtasks. That fixes the answer without re-running searches.\n\nThis system answers questions about EU law, so for any claim about what the law says or requires, the standard is the text of the provision it cites. A correct statement cited to the wrong provision is a grounding failure; so is a quotation that does not match the provision's words.\n"
+      },
+      {
+        "role": "human",
+        "content": "Original question: Is a CV-screening tool high-risk under the AI Act, and what must its provider do?\n\nDrafted answer:\n## Answer\n\nYes: it is high-risk [AI Act Annex III(4)(a)] [AI Act Annex VIII(7)] [AI Act Art. 16(b)].\n\nResearch under review:\n\n### Subtask s0\nQuestion: Is an AI system that filters job applications high-risk under the AI Act?\nFindings:\nfindings\n\nSources retrieved:\n- [AI Act Annex III(4)(a)] High-risk AI systems referred to in Article 6(2)\n  AI systems intended to be used for the recruitment or selection of natural persons, in particular to place targeted job advertisements, to analyse and filter job applications, and to evaluate candidates;\n- [AI Act Annex VIII(7)] Information to be submitted upon the registration of high-risk AI systems in accordance with Article 49\n  A short summary of the grounds on which the AI system is considered to be not-high-risk in application of the procedure under Article 6(3);\n- [AI Act Art. 16(b)] Obligations of providers of high-risk AI systems\n  indicate on the high-risk AI system or, where that is not possible, on its packaging or its accompanying documentation, as applicable, their name, registered trade name or registered trade mark, the address at which they can be contacted;\n- [AI Act Art. 20(2)] Corrective actions and duty of information\n  Where the high-risk AI system presents a risk within the meaning of Article 79(1) and the provider becomes aware of that risk, it shall immediately investigate the causes, in collaboration with the reporting deployer, where applicable, and inform the market surveillance authorities competent for the high-risk AI system concerned and, where applicable, the notified body that issued a certificate for that high-risk AI system in accordance with Article 44, in particular, of the nature of the non-compliance and of any relevant corrective action taken.\n- [AI Act Art. 80(1)] Procedure for dealing with AI systems classified by the provider as non-high-risk in application of Annex III\n  Where a market surveillance authority has sufficient reason to consider that an AI system classified by the provider as non-high-risk pursuant to Article 6(3) is indeed high-risk, the market surveillance authority shall carry out an evaluation of the AI system concerned in respect of its classification as a high-risk AI system based on the conditions set out in Article 6(3) and the Commission guidelines.\n- [AI Act Art. 26(7)] Obligations of deployers of high-risk AI systems\n  Before putting into service or using a high-risk AI system at the workplace, deployers who are employers shall inform workers’ representatives and the affected workers that they will be subject to the use of the high-risk AI system. This information shall be provided, where applicable, in accordance with the rules and procedures laid down in Union and national law and practice on information of workers and their representatives.\n- https://example.com/is-0 — is result 0\n  s\n- https://example.com/is-1 — is result 1\n  s\n\n### Subtask s1\nQuestion: What must a provider of a high-risk AI system do under the AI Act?\nFindings:\nfindings\n\nSources retrieved:\n- [AI Act Art. 16] Obligations of providers of high-risk AI systems\n  Providers of high-risk AI systems shall: (a) ensure that their high-risk AI systems are compliant with the requirements set out in Section 2; (b) indicate on the high-risk AI system or, where that is not possible, on its packaging or its accompanying documentation, as applicable, their name, registered trade name or registered trade mark, the address at which they can be contacted; (c) have a quality management system in place which complies with Article 17; (d) keep the documentation referred to in Article 18; (e) when under their control, keep the logs automatically generated by their high-risk AI systems as referred to in Article 19; (f) ensure that the high-risk AI system undergoes the relevant conformity assessment procedure as referred to in Article 43, prior to its being placed on the market or put into service; (g) draw up an EU declaration of conformity in accordance with Article 47; (h) affix the CE marking to the high-risk AI system or, where that is not possible, on its packaging or its accompanying documentation, to indicate conformity with this Regulation, in accordance with Article 48; (i) comply with the registration obligations referred to in Article 49(1); (j) take the necessary corrective actions and provide information as required in Article 20; (k) upon a reasoned request of a national competent authority, demonstrate the conformity of the high-risk AI system with the requirements set out in Section 2; (l) ensure that the high-risk AI system complies with accessibility requirements in accordance with Directives (EU) 2016/2102 and (EU) 2019/882.\n- [AI Act Art. 60(1)] Testing of high-risk AI systems in real world conditions outside AI regulatory sandboxes\n  Testing of high-risk AI systems in real world conditions outside AI regulatory sandboxes may be conducted by providers or prospective providers of high-risk AI systems listed in Annex III, in accordance with this Article and the real-world testing plan referred to in this Article, without prejudice to the prohibitions under Article 5. The Commission shall, by means of implementing acts, specify the detailed elements of the real-world testing plan. Those implementing acts shall be adopted in accordance with the examination procedure referred to in Article 98(2). This paragraph shall be without prejudice to Union or national law on the testing in real world conditions of high-risk AI systems related to products covered by Union harmonisation legislation listed in Annex I.\n- [AI Act Recital 85] AI Act Recital 85\n  General-purpose AI systems may be used as high-risk AI systems by themselves or be components of other high-risk AI systems. Therefore, due to their particular nature and in order to ensure a fair sharing of responsibilities along the AI value chain, the providers of such systems should, irrespective of whether they may be used as high-risk AI systems as such by other providers or as components of high-risk AI systems and unless provided otherwise under this Regulation, closely cooperate with the providers of the relevant high-risk AI systems to enable their compliance with the relevant obligations under this Regulation and with the competent authorities established under this Regulation.\n- [AI Act Art. 72(1)] Post-market monitoring by providers and post-market monitoring plan for high-risk AI systems\n  Providers shall establish and document a post-market monitoring system in a manner that is proportionate to the nature of the AI technologies and the risks of the high-risk AI system.\n- [AI Act Art. 22(3)(d)] Authorised representatives of providers of high-risk AI systems\n  cooperate with competent authorities, upon a reasoned request, in any action the latter take in relation to the high-risk AI system, in particular to reduce and mitigate the risks posed by the high-risk AI system;\n- [AI Act Art. 31(4)] Requirements relating to notified bodies\n  Notified bodies shall be independent of the provider of a high-risk AI system in relation to which they perform conformity assessment activities. Notified bodies shall also be independent of any other operator having an economic interest in high-risk AI systems assessed, as well as of any competitors of the provider. This shall not preclude the use of assessed high-risk AI systems that are necessary for the operations of the conformity assessment body, or the use of such high-risk AI systems for personal purposes.\n- https://example.com/what-0 — what result 0\n  s\n- https://example.com/what-1 — what result 1\n  s"
+      }
+    ],
+    "response": {
+      "overall": "accept",
+      "per_subtask": [],
+      "synthesis_feedback": null
+    },
+    "input_tokens": null,
+    "output_tokens": null,
+    "error": null
+  }
+]

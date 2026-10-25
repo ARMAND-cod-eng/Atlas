@@ -2,12 +2,14 @@
 
 import { useEffect, useState } from 'react';
 
-import { type AgentCall, fetchCall, reviseRun } from '@/lib/api';
+import { type AgentCall, reviseRun } from '@/lib/api';
 import type { RunResult, SourceRef } from '@/lib/events';
 import { type Agent, type Attempt, agentOf, byAuthority, reviewsOf } from '@/lib/inspector';
 import { type RunState, isFinished } from '@/lib/reducer';
 
 type Tab = 'task' | 'prompt' | 'output' | 'attempts';
+
+export type CallSource = (callId: string) => Promise<AgentCall | null>;
 
 const TABS: readonly { readonly id: Tab; readonly label: string }[] = [
   { id: 'task', label: 'Task' },
@@ -19,6 +21,11 @@ const TABS: readonly { readonly id: Tab; readonly label: string }[] = [
 interface Props {
   /** The run on screen; null for a replay, which has no API behind it. */
   readonly runId: string | null;
+  /**
+   * Where a call's full record comes from: the API on a live run, the recording
+   * on the demo. Null where there is neither.
+   */
+  readonly loadCall: CallSource | null;
   readonly state: RunState;
   readonly result: RunResult | null;
   readonly selected: string | null;
@@ -31,7 +38,7 @@ interface Props {
  * produced, and every attempt it made. A finished branch can be rewritten here
  * and re-run on its own.
  */
-export function Inspector({ runId, state, result, selected, onRevised }: Props): React.JSX.Element {
+export function Inspector({ runId, loadCall, state, result, selected, onRevised }: Props): React.JSX.Element {
   const [tab, setTab] = useState<Tab>('task');
   const agent = selected === null ? null : agentOf(state, result, selected);
 
@@ -69,8 +76,8 @@ export function Inspector({ runId, state, result, selected, onRevised }: Props):
         {tab === 'task' && (
           <TaskTab agent={agent} state={state} runId={runId} onRevised={onRevised} />
         )}
-        {tab === 'prompt' && <CallTab agent={agent} runId={runId} show="request" />}
-        {tab === 'output' && <OutputTab agent={agent} state={state} runId={runId} />}
+        {tab === 'prompt' && <CallTab agent={agent} loadCall={loadCall} show="request" />}
+        {tab === 'output' && <OutputTab agent={agent} state={state} loadCall={loadCall} />}
         {tab === 'attempts' && <AttemptsTab attempts={agent.attempts} />}
       </div>
     </div>
@@ -236,7 +243,7 @@ function Reviews({
 // --- the calls ----------------------------------------------------------------------------
 
 /** The latest attempt's model call (or its first call), fetched in full when shown. */
-function useCall(agent: Agent, runId: string | null): {
+function useCall(agent: Agent, loadCall: CallSource | null): {
   readonly attempt: Attempt | null;
   readonly call: AgentCall | null;
   readonly state: 'none' | 'replay' | 'loading' | 'ready' | 'unavailable';
@@ -247,32 +254,32 @@ function useCall(agent: Agent, runId: string | null): {
   const [fetched, setFetched] = useState<{ readonly id: string; readonly call: AgentCall | null } | null>(null);
 
   useEffect(() => {
-    if (runId === null || callId === null) return;
+    if (loadCall === null || callId === null) return;
     let live = true;
-    void fetchCall(runId, callId).then((call) => {
+    void loadCall(callId).then((call) => {
       if (live) setFetched({ id: callId, call });
     });
     return () => {
       live = false;
     };
-  }, [runId, callId]);
+  }, [loadCall, callId]);
 
   if (callId === null) return { attempt, call: null, state: 'none' };
-  if (runId === null) return { attempt, call: null, state: 'replay' };
+  if (loadCall === null) return { attempt, call: null, state: 'replay' };
   if (fetched?.id !== callId) return { attempt, call: null, state: 'loading' };
   return { attempt, call: fetched.call, state: fetched.call === null ? 'unavailable' : 'ready' };
 }
 
 function CallTab({
   agent,
-  runId,
+  loadCall,
   show,
 }: {
   readonly agent: Agent;
-  readonly runId: string | null;
+  readonly loadCall: CallSource | null;
   readonly show: 'request' | 'response';
 }): React.JSX.Element {
-  const { attempt, call, state } = useCall(agent, runId);
+  const { attempt, call, state } = useCall(agent, loadCall);
   if (state === 'none') {
     return (
       <p className="text-xs text-ink-faint">
@@ -353,11 +360,11 @@ function Pre({ children }: { readonly children: React.ReactNode }): React.JSX.El
 function OutputTab({
   agent,
   state,
-  runId,
+  loadCall,
 }: {
   readonly agent: Agent;
   readonly state: RunState;
-  readonly runId: string | null;
+  readonly loadCall: CallSource | null;
 }): React.JSX.Element {
   if (agent.kind === 'branch') {
     const grouped = byAuthority(agent.branch.sources);
@@ -402,7 +409,7 @@ function OutputTab({
       </Labelled>
     );
   }
-  return <CallTab agent={agent} runId={runId} show="response" />;
+  return <CallTab agent={agent} loadCall={loadCall} show="response" />;
 }
 
 function SourceList({

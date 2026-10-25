@@ -6,9 +6,9 @@
 import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { afterEach, describe, expect, it } from 'vitest';
 
-import manifest from '../../backend/atlas/library/sources/manifest.json';
-import { LAW_AS_OF } from '../src/components/Disclaimer';
-import { QuestionForm } from '../src/components/QuestionForm';
+import manifest from '../../../backend/atlas/library/sources/manifest.json';
+import { LAW_AS_OF } from '../../src/components/Disclaimer';
+import { QuestionForm } from '../../src/components/QuestionForm';
 
 afterEach(cleanup);
 

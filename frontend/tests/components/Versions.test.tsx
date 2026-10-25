@@ -6,9 +6,9 @@
 import { cleanup, fireEvent, render, screen, within } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-import { Compare, Versions } from '../src/components/Versions';
-import { API_BASE, type RunVersion } from '../src/lib/api';
-import { versionRows } from '../src/lib/versions';
+import { Compare, Versions } from '../../src/components/Versions';
+import { API_BASE, type RunVersion } from '../../src/lib/api';
+import { versionRows } from '../../src/lib/versions';
 
 const RUNS: readonly RunVersion[] = [
   {

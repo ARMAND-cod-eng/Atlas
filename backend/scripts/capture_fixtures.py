@@ -20,6 +20,11 @@ only way to get the paths that matter most and that a successful run can never
 produce: a branch that fails while its siblings succeed, a critic that exhausts
 its iterations, and a run that dies outright. A reducer tested only on happy
 paths is a reducer tested on the runs that did not need it.
+
+The models are scripted *underneath* ``atlas.models``: the real ``call_model``
+and ``call_structured`` run, so every call is traced as a live one is, with the
+exact prompt the node built. Scripted answers say so: they report the model
+``scripted``.
 """
 
 from __future__ import annotations
@@ -32,20 +37,23 @@ from collections.abc import Awaitable, Callable
 from pathlib import Path
 from typing import Any
 
+from langchain_core.language_models import LanguageModelInput
 from langchain_core.messages import AIMessage
+from langchain_core.runnables import Runnable, RunnableLambda
 from langgraph.checkpoint.memory import MemorySaver
 from pydantic import BaseModel
 
-from atlas import eventlog
+from atlas import eventlog, models, trace
 from atlas.api.topology import build_topology
 from atlas.domains import DomainName, using_domain
 from atlas.errors import ProviderError, SearchError
 from atlas.events import AgentEvent
 from atlas.graph import nodes
-from atlas.graph.builder import build_state_graph
+from atlas.graph.builder import build_state_graph, checkpoint_serde
 from atlas.graph.state import CriticVerdict, PlannerOutput, Source, Subtask, SubtaskVerdict
 from atlas.metrics import RunMetrics
 from atlas.runner import execute_revision, execute_run
+from atlas.store import InMemoryRunStore
 from atlas_eval.runner import install_offline_budget
 
 # Spelled out so the fakes match the real signatures they stand in for, rather
@@ -160,6 +168,49 @@ def fake_search(broken: str | None = None) -> SearchFn:
     return call
 
 
+SCRIPTED = "scripted"
+
+
+def _node() -> str:
+    """The node making the call, from the span the runner opened for it."""
+    span = trace.current_span()
+    return span.node if span is not None else "unknown"
+
+
+def scripted_llm(fn: ModelFn) -> Callable[..., Runnable[LanguageModelInput, AIMessage]]:
+    """``models.get_llm`` answering as ``fn`` scripts it, node by node."""
+
+    async def answer(messages: list[Any]) -> AIMessage:
+        reply = await fn(_node(), messages, RunMetrics())
+        return AIMessage(content=reply.content, response_metadata={"model_name": SCRIPTED})
+
+    def get_llm(
+        temperature: float | None = None, max_tokens: int | None = None
+    ) -> Runnable[LanguageModelInput, AIMessage]:
+        return RunnableLambda(answer)
+
+    return get_llm
+
+
+def scripted_structured(
+    fn: StructuredFn,
+) -> Callable[..., Runnable[LanguageModelInput, dict[str, Any]]]:
+    """``models.get_structured_llm`` answering as ``fn`` scripts it, in the envelope
+    ``with_structured_output(include_raw=True)`` returns."""
+
+    def get_structured_llm(
+        schema: type[BaseModel], temperature: float | None = None
+    ) -> Runnable[LanguageModelInput, dict[str, Any]]:
+        async def answer(messages: list[Any]) -> dict[str, Any]:
+            parsed = await fn(_node(), messages, schema, RunMetrics())
+            raw = AIMessage(content="", response_metadata={"model_name": SCRIPTED})
+            return {"raw": raw, "parsed": parsed, "parsing_error": None}
+
+        return RunnableLambda(answer)
+
+    return get_structured_llm
+
+
 def revise(subtask_id: str) -> CriticVerdict:
     return CriticVerdict(
         overall="revise",
@@ -187,7 +238,7 @@ async def capture(
     domain: DomainName = "general",
     model: ModelFn | None = None,
     revise_branch: tuple[str, str] | None = None,
-) -> None:
+) -> InMemoryRunStore:
     """Run the real graph with controlled inputs and record every event.
 
     ``revise_branch`` (a subtask id, its new question) then revises the run, and
@@ -209,18 +260,24 @@ async def capture(
         "search": nodes.search,
         "call_model": nodes.call_model,
         "call_structured": nodes.call_structured,
+        "get_llm": models.get_llm,
+        "get_structured_llm": models.get_structured_llm,
     }
     eventlog.append = record
     eventlog.store_result = no_store
     nodes.search = fake_search(broken)
-    nodes.call_model = model or fake_model(ANSWER, fail_in)
-    nodes.call_structured = fake_structured(count, verdicts, domain)
+    # The nodes call the real model layer; only the providers under it are scripted.
+    nodes.call_model = models.call_model
+    nodes.call_structured = models.call_structured
+    models.get_llm = scripted_llm(model or fake_model(ANSWER, fail_in))
+    models.get_structured_llm = scripted_structured(fake_structured(count, verdicts, domain))
+    store = InMemoryRunStore()
 
     try:
-        graph = build_state_graph().compile(checkpointer=MemorySaver())
+        graph = build_state_graph().compile(checkpointer=MemorySaver(serde=checkpoint_serde()))
         with using_domain(domain):
             try:
-                await execute_run(name, QUESTION[domain], "thread", graph)
+                await execute_run(name, QUESTION[domain], "thread", graph, store=store)
                 if revise_branch is not None:
                     collected.clear()
                     subtask_id, question = revise_branch
@@ -231,6 +288,7 @@ async def capture(
                         parent_run_id=name,
                         subtask_id=subtask_id,
                         question=question,
+                        store=store,
                     )
             except Exception as exc:
                 print(f"  ({name} ended with {type(exc).__name__}, as intended)")
@@ -240,8 +298,11 @@ async def capture(
         nodes.search = saved["search"]
         nodes.call_model = saved["call_model"]
         nodes.call_structured = saved["call_structured"]
+        models.get_llm = saved["get_llm"]
+        models.get_structured_llm = saved["get_structured_llm"]
 
     write(name, collected)
+    return store
 
 
 def write(name: str, events: list[AgentEvent]) -> None:
@@ -311,26 +372,32 @@ async def main() -> None:
     # checked against the law. The first draft cites an article that does not
     # exist; the check sends it back whatever the critic said, and the second
     # draft is clean.
-    await capture(
+    compliance = await capture(
         "compliance", count=2, verdicts=[ACCEPT], domain="compliance", model=citing_model()
     )
 
-    write_demo()
+    await write_demo(compliance)
     write_citation_cases()
 
 
-def write_demo() -> None:
-    """What the frontend's /demo page replays, offline: a recorded stream and the
-    graph's real topology, both from the backend rather than written by hand."""
+async def write_demo(store: InMemoryRunStore) -> None:
+    """What the frontend's /demo page replays, offline: a recorded stream, every
+    call it made in full (the inspector's prompts, which a live page fetches from
+    the API), and the graph's real topology, all from the backend rather than
+    written by hand."""
     DEMO.mkdir(parents=True, exist_ok=True)
     (DEMO / "compliance.json").write_text(
         (FIXTURES / "compliance.json").read_text(encoding="utf-8"), encoding="utf-8", newline="\n"
+    )
+    calls = [call.model_dump(mode="json") for call in await store.calls("compliance")]
+    (DEMO / "calls.json").write_text(
+        json.dumps(calls, indent=2, ensure_ascii=False) + "\n", encoding="utf-8", newline="\n"
     )
     topology = build_topology().model_dump()
     (DEMO / "topology.json").write_text(
         json.dumps(topology, indent=2) + "\n", encoding="utf-8", newline="\n"
     )
-    print(f"demo/                    compliance.json, topology.json -> {DEMO}")
+    print(f"demo/                    compliance.json, calls.json ({len(calls)}), topology.json")
 
 
 # Citations as models write them, and some that are not citations. The frontend

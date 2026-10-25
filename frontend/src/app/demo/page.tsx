@@ -4,8 +4,10 @@ import Link from 'next/link';
 
 import { RunWorkspace } from '@/components/RunWorkspace';
 import { ThemeToggle } from '@/components/ThemeToggle';
+import calls from '@/demo/calls.json';
 import compliance from '@/demo/compliance.json';
 import topology from '@/demo/topology.json';
+import type { AgentCall } from '@/lib/api';
 import type { AgentEvent, Topology } from '@/lib/events';
 import { useReplay } from '@/lib/useReplay';
 
@@ -13,6 +15,11 @@ import { useReplay } from '@/lib/useReplay';
 // runner, with the models faked: the shapes are the backend's own.
 const EVENTS = compliance as readonly AgentEvent[];
 const TOPOLOGY = topology as Topology;
+
+// Every call the run made, in full, as a live run's API would serve it: the
+// inspector shows the demo's prompts with no backend behind it.
+const CALLS = new Map((calls as readonly AgentCall[]).map((call) => [call.call_id, call]));
+const recordedCall = (callId: string): Promise<AgentCall | null> => Promise.resolve(CALLS.get(callId) ?? null);
 
 /**
  * A recorded compliance run, replayed through the same reducer and workspace a
@@ -45,6 +52,7 @@ export default function DemoPage(): React.JSX.Element {
       </header>
       <RunWorkspace
         runId={null}
+        loadCall={recordedCall}
         state={state}
         result={null}
         topology={TOPOLOGY}

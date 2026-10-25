@@ -2,11 +2,12 @@
 
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { use } from 'react';
+import { use, useCallback } from 'react';
 
 import { QuestionForm } from '@/components/QuestionForm';
 import { RunWorkspace } from '@/components/RunWorkspace';
 import { ThemeToggle } from '@/components/ThemeToggle';
+import { fetchCall } from '@/lib/api';
 import { isFinished } from '@/lib/reducer';
 import { useNow, useRunStream, useTopology } from '@/lib/useRunStream';
 
@@ -37,6 +38,7 @@ export default function RunPage({
   const { state, connection, result, missing } = useRunStream(runId);
   const finished = isFinished(state);
   const now = useNow(!finished && !missing);
+  const loadCall = useCallback((callId: string) => fetchCall(runId, callId), [runId]);
 
   if (missing) {
     return (
@@ -88,6 +90,7 @@ export default function RunPage({
       </header>
       <RunWorkspace
         runId={runId}
+        loadCall={loadCall}
         state={state}
         result={result}
         topology={topology}

@@ -19,13 +19,13 @@ function stateOf(events: unknown) {
 describe('a branch the critic sent back', () => {
   const state = stateOf(retry);
 
-  it('has one attempt per run, each with the search it made', () => {
+  it('has one attempt per run, each with the search and the model call it made', () => {
     const agent = agentOf(state, null, 'researcher:s2');
 
     expect(agent?.kind).toBe('branch');
     expect(agent?.attempts.map((a) => [a.number, a.calls.map((c) => [c.kind, c.name])])).toEqual([
-      [1, [['tool', 'web']]],
-      [2, [['tool', 'web']]],
+      [1, [['tool', 'web'], ['model', 'scripted']]],
+      [2, [['tool', 'web'], ['model', 'scripted']]],
     ]);
     expect(agent?.attempts.map((a) => a.spanId)).toEqual(
       state.branches.find((b) => b.subtaskId === 's2')?.spans,
