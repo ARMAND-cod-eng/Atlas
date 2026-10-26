@@ -32,8 +32,11 @@ from typing import Any
 from langchain_core.callbacks import get_usage_metadata_callback
 
 from atlas.domains import DomainName
+from atlas.graph.nodes import CRITIC
 from atlas.library import Unit, load_library
-from atlas.models import primary_provider
+from atlas.library.support import Judge, SupportJudgements
+from atlas.metrics import RunMetrics
+from atlas.models import call_structured, primary_provider
 from atlas.runtime import configure_logging
 from atlas_eval.baselines import run_plain, run_single_call
 from atlas_eval.citation_metrics import citation_table, score_run, summarize_citations
@@ -56,6 +59,7 @@ from atlas_eval.gate import (
 )
 from atlas_eval.runner import RunRecord, Variant, run_item, run_items
 from atlas_eval.score import SuiteScore, score_all
+from atlas_eval.support_eval import load_support_cases, run_support, score_support
 
 RUNS_DIR = DATA_DIR / "runs"
 LABELS_PATH = DATA_DIR / "labels" / "human.v1.jsonl"
@@ -616,6 +620,73 @@ def _load_run(name: str) -> dict[str, Any]:
     return loaded
 
 
+def support_judge(metrics: RunMetrics) -> Judge:
+    """The support check's judge, as the critic calls it: the production model."""
+
+    async def judge(messages: list[Any]) -> SupportJudgements:
+        return await call_structured(CRITIC, messages, SupportJudgements, metrics)
+
+    return judge
+
+
+def _pct(value: float | None) -> str:
+    return "n/a" if value is None else f"{value:.1%}"
+
+
+def cmd_support(args: argparse.Namespace) -> int:
+    """How often the citation support check judges right, on the labelled cases."""
+    cases = load_support_cases()
+    if args.only:
+        wanted = {i.strip() for i in args.only.split(",") if i.strip()}
+        cases = [case for case in cases if case.id in wanted]
+    reviewed = sum(case.reviewed_by is not None for case in cases)
+    drafted = "model-drafted" if all(c.drafted_by == "model" for c in cases) else "drafted"
+    print(f"{len(cases)} {drafted} cases, {reviewed} reviewed by a person")
+
+    metrics = RunMetrics()
+    with measured_spend() as spend:
+        results = asyncio.run(run_support(cases, support_judge(metrics)))
+    score = score_support([result.outcome for result in results])
+    primary = primary_provider()
+    on_fallback, calls = _off_primary([c.provider for c in metrics.llm_calls], primary)
+
+    RUNS_DIR.mkdir(parents=True, exist_ok=True)
+    path = RUNS_DIR / f"support-{args.name}.json"
+    payload = {
+        "name": args.name,
+        "created": _now(),
+        "commit": _git_commit(),
+        "primary_provider": primary,
+        "models": sorted({c.model for c in metrics.llm_calls}),
+        "spend": spend,
+        "score": score.model_dump(),
+        "results": [result.model_dump() for result in results],
+    }
+    path.write_text(json.dumps(payload, indent=2) + "\n", encoding="utf-8", newline="\n")
+
+    print(
+        f'\n"does not support": precision {_pct(score.precision)}, recall {_pct(score.recall)};'
+        f" false alarms on supported citations {_pct(score.false_alarm_rate)}"
+    )
+    print(
+        f"caught {score.caught}, missed {score.missed}, false alarms {score.false_alarm},"
+        f" passed {score.passed}, unverified {score.unverified}, unanswered {score.unanswered}"
+    )
+    for result in results:
+        if result.outcome in ("missed", "false_alarm", "unverified", "unanswered"):
+            detail = result.reason or (f'quoted "{result.quote}"' if result.quote else "")
+            print(f"  {result.id}  {result.outcome:<11} {result.label}  {detail}")
+    print(f"\nwrote {path}")
+
+    if calls and on_fallback / calls > FALLBACK_LIMIT:
+        print(
+            f"\nFAIL: {on_fallback} of {calls} judgements came from the fallback, not {primary}."
+            " This measures the fallback's judgement, not the check's."
+        )
+        return 1
+    return 0
+
+
 def cmd_noise(args: argparse.Namespace) -> int:
     """Run-to-run noise from reruns of identical code, and what the gate can catch."""
     runs = [_load_run(name) for name in args.runs]
@@ -786,6 +857,13 @@ def build_parser() -> argparse.ArgumentParser:
         help="compare against one threshold in pp instead of each category's own",
     )
     noise.set_defaults(func=cmd_noise)
+
+    support = sub.add_parser(
+        "support", help="how often the citation support check judges right (calls the model)"
+    )
+    support.add_argument("--name", default="latest")
+    support.add_argument("--only", default=None, help="comma-separated case ids")
+    support.set_defaults(func=cmd_support)
 
     citations = sub.add_parser(
         "citations", help="citation metrics of compliance runs, each against a reference"

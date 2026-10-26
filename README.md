@@ -104,7 +104,7 @@ prompts, with only the model scripted, and the run says so: each call reports th
 |---|---|
 | Library retrieval, one search per question | recall@10 **0.750** over the 40 compliance questions; every required provision found for 26 of 40 (`atlas_eval retrieval`) |
 | Engine regression gate, 50 general questions | completion 0.995, grounding 0.955, tool use 0.963; run-to-run noise measured, gate thresholds set from it (5 / 4 / 3 pp) |
-| Tests | **527** backend (plus 13 against Postgres) · **135** frontend, no network calls, no spend |
+| Tests | **540** backend (plus 13 against Postgres) · **135** frontend, no network calls, no spend |
 
 **Not measured yet: the headline.** The domain eval compares three systems on 40 questions:
 
@@ -117,7 +117,12 @@ recall, all deterministically. It is built and tested ([below](#the-domain-eval)
 run. Its numbers will come from committed run files, never typed in.
 
 How often the support check judges correctly is not measured yet either. It is a model's judgement,
-held to quotes it cannot fake, but nobody has counted its mistakes.
+held to quotes it cannot fake, but nobody has counted its mistakes. `atlas_eval support` counts
+them on 24 labelled cases:
+- 12 citations that do support their sentence, in plain words rather than the act's;
+- 12 near misses, such as Art. 34(1) cited for the 72-hour deadline that is Art. 33(1).
+
+It needs model credit to run.
 
 The 40 questions were drafted by a model from the regulation text, and every expected citation is
 checked against the library. None has been reviewed by a person yet. `atlas_eval claim` says so, and
@@ -525,6 +530,23 @@ uv run python -m atlas_eval citations --runs atlas-v1 plain-v1 single-v1 --refer
 
 `citations` costs nothing. It re-scores saved answers with today's scorer and pairs each system with
 the reference item by item. `retrieval` measures the library search alone, also for free.
+
+**The support check is measured on its own.** Its verdicts are counted against 24 labelled cases,
+one model call each:
+
+```powershell
+uv run python -m atlas_eval support --name v1
+```
+
+It reports three numbers:
+- **precision:** of the "does not support" verdicts, how many were right. A wrong one costs a
+  rewrite.
+- **recall:** of the citations that don't support their sentence, how many were caught.
+- **false-alarm rate:** of the citations that do support it, how many were sent back.
+
+The labels check themselves. Each "supports" case names the provision's words that prove it, and a
+test checks those words are in the provision. A run the fallback model answered is refused: it
+would measure the fallback's judgement.
 
 ---
 
