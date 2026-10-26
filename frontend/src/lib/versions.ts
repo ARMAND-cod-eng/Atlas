@@ -79,12 +79,26 @@ function words(text: string): number {
   return text.split(/\s+/).filter((word) => word !== '').length;
 }
 
-/** What changed from one answer to the other, and how many words either way. */
+/**
+ * An answer as a reader sees it: Markdown's emphasis and heading marks gone,
+ * its lines and list bullets kept. A diff of the raw Markdown showed the
+ * marks, and called a word that only gained emphasis "changed".
+ */
+export function readable(markdown: string): string {
+  return markdown
+    .replace(/^#{1,6}\s+/gm, '')
+    .replace(/(\*\*|__)(.+?)\1/g, '$2')
+    .replace(/\*(?=\S)(.+?)(?<=\S)\*/g, '$1')
+    // An underscore inside a word (atlas_eval) is not emphasis, in Markdown or here.
+    .replace(/(?<!\w)_(?=\S)(.+?)(?<=\S)_(?!\w)/g, '$1');
+}
+
+/** What changed from one answer to the other, as read, and how many words either way. */
 export function answerDiff(
   before: string,
   after: string,
 ): { readonly parts: readonly DiffPart[]; readonly added: number; readonly removed: number } {
-  const parts: DiffPart[] = diffWords(before, after).map((change) => ({
+  const parts: DiffPart[] = diffWords(readable(before), readable(after)).map((change) => ({
     kind: change.added ? 'added' : change.removed ? 'removed' : 'same',
     text: change.value,
   }));

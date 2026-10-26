@@ -5,7 +5,7 @@
 import { describe, expect, it } from 'vitest';
 
 import type { RunVersion } from '../src/lib/api';
-import { answerDiff, comparable, versionRows } from '../src/lib/versions';
+import { answerDiff, comparable, readable, versionRows } from '../src/lib/versions';
 
 function run(overrides: Partial<RunVersion> & Pick<RunVersion, 'run_id'>): RunVersion {
   return {
@@ -73,5 +73,23 @@ describe('a diff of two answers', () => {
       added: 0,
       removed: 0,
     });
+  });
+});
+
+describe('the text a diff compares', () => {
+  it('is the answer as read, without its Markdown marks', () => {
+    expect(readable('## Answer\n\n*Offline mode:* **must** register it [AI Act Art. 49(1)].\n- one\n- two')).toBe(
+      'Answer\n\nOffline mode: must register it [AI Act Art. 49(1)].\n- one\n- two',
+    );
+  });
+
+  it('leaves an underscore inside a word alone', () => {
+    expect(readable('Run atlas_eval_support, _then_ check.')).toBe('Run atlas_eval_support, then check.');
+  });
+
+  it('marks only words that changed, not emphasis that moved', () => {
+    expect(answerDiff('The provider *must* register it.', 'The provider **must** register it.').parts).toEqual([
+      { kind: 'same', text: 'The provider must register it.' },
+    ]);
   });
 });
