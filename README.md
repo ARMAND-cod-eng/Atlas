@@ -96,6 +96,25 @@ Click any agent to read the prompt it was actually sent. The open agent and tab 
 <http://127.0.0.1:3000/demo?node=researcher:s1&tab=prompt> goes straight to one researcher's prompt. The recording ran through the real graph and
 prompts, with only the model scripted, and the run says so: each call reports the model `scripted`.
 
+### Or the whole product, offline
+
+The demo is a recording. To run the real stack yourself with no API key (API, worker, graph, library,
+checks, store, workspace), set `ATLAS_OFFLINE=true` in `.env`:
+
+```powershell
+Copy-Item .env.example .env        # then set ATLAS_OFFLINE=true
+docker compose --profile app up --build
+```
+
+Every model and the web search are then scripted:
+- answers are built from what the library returns for each branch;
+- every answer says it was scripted;
+- the page marks the run "offline mode".
+
+Ask a question, open a researcher, rewrite its question, re-run that branch, and compare the two
+versions: the rewritten branch reads different law and the answer changes with it. The scripts never
+pretend to be a model, so this shows the machinery, not the quality.
+
 ### Results
 
 **Measured so far:**
@@ -104,7 +123,7 @@ prompts, with only the model scripted, and the run says so: each call reports th
 |---|---|
 | Library retrieval, one search per question | recall@10 **0.750** over the 40 compliance questions; every required provision found for 26 of 40 (`atlas_eval retrieval`) |
 | Engine regression gate, 50 general questions | completion 0.995, grounding 0.955, tool use 0.963; run-to-run noise measured, gate thresholds set from it (5 / 4 / 3 pp) |
-| Tests | **540** backend (plus 13 against Postgres) · **135** frontend, no network calls, no spend |
+| Tests | **547** backend (plus 13 against Postgres) · **136** frontend, no network calls, no spend |
 
 **Not measured yet: the headline.** The domain eval compares three systems on 40 questions:
 
