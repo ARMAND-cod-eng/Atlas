@@ -28,6 +28,7 @@ import {
   SYNTHESIZER,
   acceptAll,
   initialState,
+  isScripted,
   resumeFrom,
   type BranchState,
   type NodeStatus,
@@ -414,6 +415,14 @@ describe('a compliance run', () => {
 
     expect(first?.label).toBe('AI Act Annex III(4)(a)');
     expect(first?.authority).toBe('primary_law');
+  });
+});
+
+describe('a scripted run', () => {
+  it('is told apart by its model calls', () => {
+    // The recorded runs were made with scripted models, and their calls say so.
+    expect(isScripted(run(COMPLIANCE))).toBe(true);
+    expect(isScripted({ ...run(COMPLIANCE), calls: run(COMPLIANCE).calls.filter((c) => c.kind === 'tool') })).toBe(false);
   });
 });
 

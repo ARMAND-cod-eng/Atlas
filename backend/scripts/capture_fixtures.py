@@ -37,13 +37,11 @@ from collections.abc import Awaitable, Callable
 from pathlib import Path
 from typing import Any
 
-from langchain_core.language_models import LanguageModelInput
 from langchain_core.messages import AIMessage
-from langchain_core.runnables import Runnable, RunnableLambda
 from langgraph.checkpoint.memory import MemorySaver
 from pydantic import BaseModel
 
-from atlas import eventlog, models, trace
+from atlas import eventlog, models
 from atlas.api.topology import build_topology
 from atlas.domains import DomainName, using_domain
 from atlas.errors import ProviderError, SearchError
@@ -53,6 +51,7 @@ from atlas.graph.builder import build_state_graph, checkpoint_serde
 from atlas.graph.state import CriticVerdict, PlannerOutput, Source, Subtask, SubtaskVerdict
 from atlas.library.support import SupportJudgement, SupportJudgements
 from atlas.metrics import RunMetrics
+from atlas.offline import no_fallback, scripted_llm, scripted_structured
 from atlas.runner import execute_revision, execute_run
 from atlas.store import InMemoryRunStore
 from atlas_eval.runner import install_offline_budget
@@ -217,53 +216,6 @@ def fake_search(broken: str | None = None) -> SearchFn:
         ]
 
     return call
-
-
-SCRIPTED = "scripted"
-
-
-def _node() -> str:
-    """The node making the call, from the span the runner opened for it."""
-    span = trace.current_span()
-    return span.node if span is not None else "unknown"
-
-
-def scripted_llm(fn: ModelFn) -> Callable[..., Runnable[LanguageModelInput, AIMessage]]:
-    """``models.get_llm`` answering as ``fn`` scripts it, node by node."""
-
-    async def answer(messages: list[Any]) -> AIMessage:
-        reply = await fn(_node(), messages, RunMetrics())
-        return AIMessage(content=reply.content, response_metadata={"model_name": SCRIPTED})
-
-    def get_llm(
-        temperature: float | None = None, max_tokens: int | None = None
-    ) -> Runnable[LanguageModelInput, AIMessage]:
-        return RunnableLambda(answer)
-
-    return get_llm
-
-
-def scripted_structured(
-    fn: StructuredFn,
-) -> Callable[..., Runnable[LanguageModelInput, dict[str, Any]]]:
-    """``models.get_structured_llm`` answering as ``fn`` scripts it, in the envelope
-    ``with_structured_output(include_raw=True)`` returns."""
-
-    def get_structured_llm(
-        schema: type[BaseModel], temperature: float | None = None
-    ) -> Runnable[LanguageModelInput, dict[str, Any]]:
-        async def answer(messages: list[Any]) -> dict[str, Any]:
-            parsed = await fn(_node(), messages, schema, RunMetrics())
-            raw = AIMessage(content="", response_metadata={"model_name": SCRIPTED})
-            return {"raw": raw, "parsed": parsed, "parsing_error": None}
-
-        return RunnableLambda(answer)
-
-    return get_structured_llm
-
-
-def no_fallback(*args: object, **kwargs: object) -> Runnable[LanguageModelInput, Any]:
-    raise RuntimeError("a scripted recording reached the structured fallback")
 
 
 def revise(subtask_id: str) -> CriticVerdict:

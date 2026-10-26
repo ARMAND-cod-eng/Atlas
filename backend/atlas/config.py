@@ -12,7 +12,7 @@ import functools
 from pathlib import Path
 from typing import Literal
 
-from pydantic import ValidationError
+from pydantic import ValidationError, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 # The .env lives at the repository root so a single file serves both this package
@@ -29,6 +29,10 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 ENV_FILE: Path = Path(__file__).resolve().parents[2] / ".env"
 
 
+# How a boolean arrives from the environment, before it is parsed.
+_TRUE = {"1", "true", "yes", "on"}
+
+
 class Settings(BaseSettings):
     """Runtime configuration, populated from the environment and the root .env."""
 
@@ -39,10 +43,15 @@ class Settings(BaseSettings):
     )
 
     # Secrets — no defaults, deliberately. An absent key should stop startup, not
-    # surface later as an opaque 401 from a provider.
+    # surface later as an opaque 401 from a provider. Offline mode, which calls no
+    # provider, is the one exception (_no_keys_offline).
     anthropic_api_key: str
     openai_api_key: str
     tavily_api_key: str
+    # Offline mode (atlas.offline): the whole product with the models and web
+    # search scripted, so it runs, and can be shown, with no API key. Every answer
+    # and every call says it was scripted. Off unless asked for.
+    atlas_offline: bool = False
 
     # Models. Changing the model Atlas runs on is a one-line change, here.
     primary_model: str = "claude-sonnet-5"
@@ -138,6 +147,16 @@ class Settings(BaseSettings):
             return f"postgresql+psycopg://{self.database_url[len(prefix) :]}"
         return self.database_url
 
+    @model_validator(mode="before")
+    @classmethod
+    def _no_keys_offline(cls, data: object) -> object:
+        """Offline mode calls no provider, so it needs no key. Anything else still
+        fails as a missing variable, with the message that says how to fix it."""
+        if isinstance(data, dict) and str(data.get("atlas_offline", "")).lower() in _TRUE:
+            for key in ("anthropic_api_key", "openai_api_key", "tavily_api_key"):
+                data.setdefault(key, "")
+        return data
+
 
 @functools.lru_cache(maxsize=1)
 def get_settings() -> Settings:
@@ -160,6 +179,8 @@ def get_settings() -> Settings:
                 "Atlas configuration is incomplete.\n"
                 f"  Missing required variable(s): {', '.join(missing)}\n"
                 f"  Looked for a .env at: {ENV_FILE}\n"
-                "  Fix: copy .env.example to .env at the repository root and fill it in."
+                "  Fix: copy .env.example to .env at the repository root and fill it in.\n"
+                "  Or, to try Atlas with no key at all, set ATLAS_OFFLINE=true: every model\n"
+                "  is then scripted, and every answer says so."
             ) from exc
         raise RuntimeError(f"Atlas configuration is invalid:\n{exc}") from exc

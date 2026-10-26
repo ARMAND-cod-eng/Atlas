@@ -31,6 +31,7 @@ from atlas import eventlog
 from atlas.config import get_settings
 from atlas.db.session import dispose_engine, get_engine
 from atlas.graph.builder import build_graph
+from atlas.offline import install_offline
 from atlas.retention import forget_thread, purge_expired
 from atlas.runner import execute_revision, execute_run
 from atlas.runtime import configure_logging
@@ -120,6 +121,9 @@ async def startup(ctx: dict[str, Any]) -> None:
     settings = get_settings()
     configure_logging(settings.log_level)
     logger.info("worker starting", extra={"primary_model": settings.primary_model})
+    if settings.atlas_offline:
+        install_offline()
+        logger.warning("offline mode: every model and the web are scripted, and answers say so")
     ctx["graph"] = await build_graph()
     # The worker owns the schema, as it owns the checkpointer's: the API only
     # reads and writes rows, and two processes racing CREATE TABLE at boot can

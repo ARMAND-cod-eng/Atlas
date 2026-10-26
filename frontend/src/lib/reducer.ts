@@ -531,3 +531,11 @@ export function isFinished(state: RunState): boolean {
 export function terminalTypeOf(event: AgentEvent): boolean {
   return isTerminal(event.type);
 }
+
+/**
+ * Whether a run's answers came from scripted models (offline mode, or a
+ * recording): its model calls say so, and the page should too.
+ */
+export function isScripted(state: RunState): boolean {
+  return state.calls.some((call) => call.kind === 'model' && call.name === 'scripted');
+}

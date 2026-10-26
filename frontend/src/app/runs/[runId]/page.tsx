@@ -8,7 +8,7 @@ import { QuestionForm } from '@/components/QuestionForm';
 import { RunWorkspace } from '@/components/RunWorkspace';
 import { ThemeToggle } from '@/components/ThemeToggle';
 import { fetchCall } from '@/lib/api';
-import { isFinished } from '@/lib/reducer';
+import { isFinished, isScripted } from '@/lib/reducer';
 import { useNow, useRunStream, useTopology } from '@/lib/useRunStream';
 
 /**
@@ -83,6 +83,14 @@ export default function RunPage({
           <Link href={`/runs/${previous}`} className="shrink-0 text-xs text-ink-faint hover:text-ink">
             ← previous question
           </Link>
+        )}
+        {isScripted(state) && (
+          <span
+            className="shrink-0 rounded bg-retry/15 px-1.5 py-0.5 text-2xs text-retry"
+            title="ATLAS_OFFLINE is on: every model and the web are scripted, so no answer here was written by a model."
+          >
+            offline mode · scripted models
+          </span>
         )}
         <p className="min-w-0 flex-1 truncate text-xs text-ink-muted">{state.query ?? 'loading run…'}</p>
         <span className="hidden shrink-0 font-mono text-2xs text-ink-faint sm:inline">{runId}</span>
