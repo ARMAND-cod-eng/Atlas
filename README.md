@@ -14,9 +14,11 @@ the research and re-run only that branch.
   <img alt="The Atlas workspace: the run's timeline on the left, the agent graph with one researcher's exact prompt open in the middle, and the answer with its checked citation chips on the right" src="docs/img/workspace-light.png">
 </picture>
 
-*The recorded demo. The citation check has caught an invented article, "AI Act Art. 114" (the act
-has 113), and sent the draft back. Researcher 2's exact prompt is open, with the law it was given.
-Each chip in the answer carries its check's verdict.*
+*The recorded demo, with the synthesizer's drafts open. The first draft cited an article that does
+not exist ("AI Act Art. 114"; the act has 113). It also cited two real, retrieved provisions for
+something they do not say: Art. 16(b) is about the provider's contact details, not about what is
+high-risk. Both checks sent it back. The rewrite keeps the one citation that holds, read against its
+provision.*
 
 > A research aid, not legal advice. The law's text is EUR-Lex's, reused under Commission Decision
 > 2011/833/EU; see [NOTICE](NOTICE).
@@ -38,8 +40,13 @@ that. A check that knows the law does.
   - a researcher actually retrieved it in this run;
   - any quotation beside it is the provision's own words.
 
-  A draft that fails is sent back with the failures listed. In the UI each citation is a chip
-  carrying its verdict; hover it to read the article itself.
+  Then a model reads each citation that passed, one sentence and one provision at a time, and judges
+  whether the provision says what the sentence says. A "yes" counts only if it quotes the provision's
+  own words, and the quote is checked against the text.
+
+  A draft that fails either check is sent back with the failures listed. In the UI each citation is
+  a chip carrying its verdict; hover it to read the article, and why it was or was not judged to
+  support its sentence.
 - **It reads the law, not a search engine's idea of it.**
   - Both regulations are ingested from the Publications Office's official XHTML into provisions with
     stable ids. Golden counts are tested: the AI Act's 113 articles, 13 annexes and 180 recitals; the
@@ -81,8 +88,9 @@ npm run dev
 Open <http://127.0.0.1:3000/demo>. It shows a recorded run replayed through the real workspace:
 
 - researchers reading the regulation library;
-- the citation check catching an invented article in the first draft;
-- the rewrite that fixes it.
+- the first draft caught twice: once citing an invented article, and once citing two real provisions
+  for what they do not say;
+- the rewrite that fixes both.
 
 Click any agent to read the prompt it was actually sent. The open agent and tab live in the URL, so
 <http://127.0.0.1:3000/demo?node=researcher:s1&tab=prompt> goes straight to one researcher's prompt. The recording ran through the real graph and
@@ -96,7 +104,7 @@ prompts, with only the model scripted, and the run says so: each call reports th
 |---|---|
 | Library retrieval, one search per question | recall@10 **0.750** over the 40 compliance questions; every required provision found for 26 of 40 (`atlas_eval retrieval`) |
 | Engine regression gate, 50 general questions | completion 0.995, grounding 0.955, tool use 0.963; run-to-run noise measured, gate thresholds set from it (5 / 4 / 3 pp) |
-| Tests | **515** backend (plus 13 against Postgres) · **127** frontend, no network calls, no spend |
+| Tests | **527** backend (plus 13 against Postgres) · **135** frontend, no network calls, no spend |
 
 **Not measured yet: the headline.** The domain eval compares three systems on 40 questions:
 
@@ -107,6 +115,9 @@ prompts, with only the model scripted, and the run says so: each call reports th
 It scores the share of answers citing a provision that does not exist, plus citation precision and
 recall, all deterministically. It is built and tested ([below](#the-domain-eval)) but has not been
 run. Its numbers will come from committed run files, never typed in.
+
+How often the support check judges correctly is not measured yet either. It is a model's judgement,
+held to quotes it cannot fake, but nobody has counted its mistakes.
 
 The 40 questions were drafted by a model from the regulation text, and every expected citation is
 checked against the library. None has been reviewed by a person yet. `atlas_eval claim` says so, and
@@ -481,7 +492,7 @@ Three systems answer the 40 compliance questions:
 |---|---|
 | `plain` | One model call, no retrieval, asked to cite in the same bracketed form. What a team gets by asking a model directly. |
 | `single-call` | One library search on the question as asked, answered by Atlas's own synthesizer. |
-| `atlas` | The full graph. |
+| `atlas` | The full graph, including the support check. |
 
 **Web search is off for all three, and each run file says so.** The comparison is about citing the
 law, and the law comes from the committed library. A live search would make the runs unrepeatable.

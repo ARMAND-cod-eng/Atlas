@@ -126,8 +126,28 @@ approve an answer citing an article that does not exist; this check is not a jud
 not defer to one. When the rounds run out, the answer goes out marked `unverified_citation` rather
 than silently.
 
+**Then, a check of what the citation says.** The first live run through the new workspace cited
+`[AI Act Art. 2(3)]` for the act reaching providers outside the Union. That paragraph is the
+national-security exclusion; the rule meant is Art. 2(1)(c). The provision existed and had been
+retrieved, so the three tests passed it. The model critic, asked to hold claims to their provisions,
+passed it too. Telling the two apart takes reading, so a model does it, as narrowly as possible
+(`atlas/library/support.py`):
+
+- **It sees one claim at a time.** For each citation that passed the three tests, the judge gets
+  one sentence and the cited provision's own text. It never sees the whole answer or its sources.
+- **"Supported" must quote the provision's words, verbatim.** The quote is checked against the
+  text with the same matcher as quotations in answers. A support claim whose quote is not there is
+  *unverified*. That is not evidence the citation is wrong, so nothing is sent back for it; nor is
+  it evidence it is right, so it is not counted as supported.
+- **Only an explicit "does not support" sends a draft back.** The judge's one-line reason goes to
+  the rewrite. Out of rounds, the answer goes out marked `unsupported_citation`.
+- **Its cost is bounded.** One call per critic round, run alongside the critic's own review, up to
+  12 citations, with the rest counted unchecked. A failed call is recorded as
+  `citation_support_unavailable`, never read as a pass.
+
 **How the UI and the API stay in step.** The UI shows each citation as a chip with the last check's
-verdict. The chip's parser is a TypeScript port of the backend's. It is held to a fixture the backend
+verdict. A support judgement is shown only on the draft it judged: draft *n* is read in critic
+round *n*, and a reading of another draft says nothing about the answer on screen. The chip's parser is a TypeScript port of the backend's. It is held to a fixture the backend
 writes from its own parser (`citation-cases.json`), so the two cannot drift apart silently.
 
 ### 3.5 Editing a branch forks a run
@@ -251,6 +271,7 @@ wrong thing, while everything looks fine. These were found during this work:
 | The component tests typechecked | Two never had: on a case-insensitive disk `Inspector.test.tsx` and `inspector.test.ts` share a name, and TypeScript keeps only the `.ts` | A required prop added without a type error |
 | The demo showed agents | Its recording bypassed the model layer, so it held no prompts to show | Opening the Prompt tab on the demo |
 | A compliance baseline could be scored | The judge charged `plain` for tool use and grounding it cannot have | A test, failing first, at 0.67 |
+| A live answer's citations all passed | One cited the national-security exclusion, Art. 2(3), for extraterritorial reach, Art. 2(1)(c); real, retrieved, and wrong | Reading the provision a chip linked to. That reading is now the support check |
 | A deleted run's stream was gone | The Redis test double's DEL ignored streams, so the tests could not tell | Making the double behave like Redis |
 | `DELETE /threads/{id}` was queued | A renamed worker function would have left every deletion queued for nobody | A test pinning the job's registered name |
 
@@ -260,9 +281,10 @@ wrong thing, while everything looks fine. These were found during this work:
 |---|---|
 | Library retrieval, one search per question | recall@10 0.750, recall@5 0.625, all must-cites for 26 of 40 |
 | Engine regression gate, 50 general questions | completion 0.995, grounding 0.955, tool use 0.963; thresholds 5 / 4 / 3 pp from a measured noise floor |
-| Tests | 515 backend, 13 more against Postgres, 127 frontend; no network, no spend |
+| Tests | 527 backend, 13 more against Postgres, 135 frontend; no network, no spend |
 | **Not measured: the domain eval** | Built and tested; needs about $12–15 of model calls (estimated) |
 | **Not measured: Atlas's own retrieval** | One search per branch, rather than per question |
+| **Not measured: the support check's accuracy** | How often its "does not support" is right, and how often it misses one |
 | **Not done: dataset review** | The 40 compliance questions were drafted by a model; none has been reviewed by a person |
 
 ## 6. Limitations
@@ -274,9 +296,10 @@ wrong thing, while everything looks fine. These were found during this work:
   questions and rubrics are a model's drafts until a person reviews them, and the README says so.
 - **The eval measures citing the law, not guidance.** With the web off, it does not measure how
   well Atlas uses official guidance.
-- **The citation check stops at existence, retrieval and quotation.** It tests that a cited
-  provision exists, was read, and is quoted faithfully. It does not test that the provision supports
-  the sentence around it; that is the judge's grounding score, which is a judgement.
+- **Whether a provision supports its sentence is a judgement.** The deterministic check stops at
+  existence, retrieval and quotation. The support check goes further, but it is a model reading, held
+  to quotes it cannot fake and not yet measured. A wrong "does not support" costs a rewrite; a missed
+  one goes out as before.
 - **One person.** The dataset, the labels and the review are one person's.
 
 ## 7. Reproducing
