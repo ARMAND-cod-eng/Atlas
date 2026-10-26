@@ -118,6 +118,46 @@ describe('citation chips', () => {
   });
 });
 
+describe('the support check on a chip', () => {
+  const WRONG = 'Outside the EU too [AI Act Art. 2(3)].';
+  const law = { ...CHECK, ok: true, cited: ['AI Act Art. 2(3)'], unresolved: [], unretrieved: [] };
+
+  function judged(iteration: number): RunState {
+    return {
+      ...withAnswer(WRONG, law),
+      supportChecks: [
+        {
+          iteration,
+          supported: [],
+          unsupported: [{ label: 'AI Act Art. 2(3)', sentence: WRONG, quote: '', reason: 'It excludes national security.' }],
+          unverified: [],
+          unchecked: 0,
+        },
+      ],
+    };
+  }
+
+  it('says when a real provision does not say what it is cited for, and why', async () => {
+    vi.stubGlobal('fetch', vi.fn(async () => new Response('{}', { status: 500 })));
+    render(<Answer state={judged(1)} result={null} />);
+
+    const chip = screen.getByRole('button', { name: /AI Act Art\. 2\(3\)/ });
+    expect(chip.textContent).toBe('AI Act Art. 2(3)≠');
+    fireEvent.mouseEnter(chip);
+
+    const card = await screen.findByRole('tooltip');
+    expect(within(card).getByText('It excludes national security.')).toBeDefined();
+    expect(within(card).getByText(`Cited for: ${WRONG}`)).toBeDefined();
+    expect(screen.getByText(/1 does not say what it is cited for/)).toBeDefined();
+  });
+
+  it("ignores a reading of another draft", () => {
+    render(<Answer state={judged(2)} result={null} />);
+
+    expect(screen.getByRole('button').textContent).toBe('AI Act Art. 2(3)✓');
+  });
+});
+
 describe('sources', () => {
   it('list two paragraphs of one article, which share its URL, without a key clash', () => {
     const errors = vi.spyOn(console, 'error').mockImplementation(() => undefined);

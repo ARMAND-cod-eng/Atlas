@@ -51,6 +51,7 @@ from atlas.events import AgentEvent
 from atlas.graph import nodes
 from atlas.graph.builder import build_state_graph, checkpoint_serde
 from atlas.graph.state import CriticVerdict, PlannerOutput, Source, Subtask, SubtaskVerdict
+from atlas.library.support import SupportJudgement, SupportJudgements
 from atlas.metrics import RunMetrics
 from atlas.runner import execute_revision, execute_run
 from atlas.store import InMemoryRunStore
@@ -98,8 +99,10 @@ def plan(count: int, domain: DomainName = "general") -> PlannerOutput:
 
 
 def citing_model() -> ModelFn:
-    """A synthesizer that cites the provisions it was given: first with an invented
-    article added, which the citation check sends back, then without it."""
+    """A synthesizer that cites the provisions it was given. Its first draft adds
+    an invented article, which the check against the law catches, and cites two
+    real ones for what they do not say, which the support check catches. The
+    rewrite keeps the one citation that holds."""
     drafts = 0
 
     async def call(
@@ -113,10 +116,17 @@ def citing_model() -> ModelFn:
         if node != nodes.SYNTHESIZER:
             return AIMessage(content="findings")
         labels = re.findall(r"- \[((?:AI Act|GDPR)[^\]]+)\]", str(messages[-1].content))
-        cited = " ".join(f"[{label}]" for label in labels[:3])
         drafts += 1
-        invented = " It must also register it [AI Act Art. 114]." if drafts == 1 else ""
-        return AIMessage(content=f"## Answer\n\nYes: it is high-risk {cited}.{invented}")
+        if drafts == 1:
+            cited = " ".join(f"[{label}]" for label in labels[:3])
+            return AIMessage(
+                content=f"## Answer\n\nYes: it is high-risk {cited}. "
+                "It must also register it [AI Act Art. 114]."
+            )
+        return AIMessage(
+            content="## Answer\n\nYes: a tool that analyses and filters job applications is "
+            f"high-risk [{labels[0]}]."
+        )
 
     return call
 
@@ -150,9 +160,50 @@ def fake_structured(
     ) -> BaseModel:
         if schema is CriticVerdict:
             return remaining.pop(0) if len(remaining) > 1 else remaining[0]
+        if schema is SupportJudgements:
+            return supporting_judge(messages)
         return plan(count, domain)
 
     return call
+
+
+_ITEM = re.compile(
+    r"^\[(\d+)\] Sentence: .*?\nCited: (.*?)\nProvision text:\n(.*?)(?=\n\n\[\d+\] Sentence: |\Z)",
+    re.S | re.M,
+)
+
+# How the scripted support check reads the demo's first draft, which calls a tool
+# high-risk citing three provisions. Only Annex III(4)(a) says so; the other two
+# are real, retrieved, and about something else.
+SCRIPTED_SUPPORT: dict[str, tuple[bool, str]] = {
+    "AI Act Annex III(4)(a)": (True, "to analyse and filter job applications"),
+    "AI Act Annex VIII(7)": (
+        False,
+        "Annex VIII(7) lists what a provider registers when it claims a system is not "
+        "high-risk; it does not make a system high-risk.",
+    ),
+    "AI Act Art. 16(b)": (
+        False,
+        "Art. 16(b) requires the provider's name and contact address on the system; it "
+        "says nothing about whether a system is high-risk.",
+    ),
+}
+
+
+def supporting_judge(messages: object) -> SupportJudgements:
+    """The support check, scripted as a careful reader would answer it: the
+    demo's citations as SCRIPTED_SUPPORT says, any other citation supported by
+    the first words of its provision, so a quote is always the provision's own."""
+    prompt = str(messages[-1].content) if isinstance(messages, list) and messages else ""
+    judgements = []
+    for n, label, text in _ITEM.findall(prompt):
+        supported, said = SCRIPTED_SUPPORT.get(label, (True, " ".join(text.split()[:8])))
+        judgements.append(
+            SupportJudgement(item=int(n), supported=True, quote=said)
+            if supported
+            else SupportJudgement(item=int(n), supported=False, reason=said)
+        )
+    return SupportJudgements(judgements=judgements)
 
 
 def fake_search(broken: str | None = None) -> SearchFn:
@@ -211,6 +262,10 @@ def scripted_structured(
     return get_structured_llm
 
 
+def no_fallback(*args: object, **kwargs: object) -> Runnable[LanguageModelInput, Any]:
+    raise RuntimeError("a scripted recording reached the structured fallback")
+
+
 def revise(subtask_id: str) -> CriticVerdict:
     return CriticVerdict(
         overall="revise",
@@ -262,6 +317,7 @@ async def capture(
         "call_structured": nodes.call_structured,
         "get_llm": models.get_llm,
         "get_structured_llm": models.get_structured_llm,
+        "get_structured_fallback": models.get_structured_fallback,
     }
     eventlog.append = record
     eventlog.store_result = no_store
@@ -271,6 +327,9 @@ async def capture(
     nodes.call_structured = models.call_structured
     models.get_llm = scripted_llm(model or fake_model(ANSWER, fail_in))
     models.get_structured_llm = scripted_structured(fake_structured(count, verdicts, domain))
+    # A scripted answer that fails to parse would be retried on the structured
+    # fallback, a real provider. A recording must never reach one.
+    models.get_structured_fallback = no_fallback
     store = InMemoryRunStore()
 
     try:
@@ -300,6 +359,7 @@ async def capture(
         nodes.call_structured = saved["call_structured"]
         models.get_llm = saved["get_llm"]
         models.get_structured_llm = saved["get_structured_llm"]
+        models.get_structured_fallback = saved["get_structured_fallback"]
 
     write(name, collected)
     return store

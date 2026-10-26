@@ -207,3 +207,33 @@ describe('the prompt tab', () => {
     expect(sent).toEqual([]);
   });
 });
+
+describe("the synthesizer's drafts", () => {
+  it('counts a citation that does not say what it is cited for as a problem with its draft', () => {
+    const base = stateOf(retry);
+    const lawOk = { ok: true, cited: ['AI Act Art. 2(3)'], unresolved: [], unretrieved: [], misquoted: [], ungroundedUrls: [] };
+    const state: RunState = {
+      ...base,
+      citationChecks: [lawOk, lawOk],
+      supportChecks: [
+        {
+          iteration: 1,
+          supported: [],
+          unsupported: [{ label: 'AI Act Art. 2(3)', sentence: 's', quote: '', reason: 'national security' }],
+          unverified: [],
+          unchecked: 0,
+        },
+        { iteration: 2, supported: [], unsupported: [], unverified: [], unchecked: 0 },
+      ],
+    };
+    render(<Inspector runId={null} loadCall={null} state={state} result={null} selected={SYNTHESIZER} />);
+
+    fireEvent.click(screen.getByRole('tab', { name: 'Output' }));
+
+    expect(screen.getByText(/^Draft 1:/).textContent).toBe('Draft 1: problems found');
+    expect(screen.getByText(/^Draft 2:/).textContent).toBe('Draft 2: every citation verified');
+    expect(screen.getByText(/does not say what it is cited for/).textContent).toBe(
+      'AI Act Art. 2(3) does not say what it is cited for: national security',
+    );
+  });
+});

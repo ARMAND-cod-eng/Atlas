@@ -34,11 +34,13 @@ import {
   RUN_STARTED,
   AGENT_CALL,
   CITATION_CHECK,
+  CITATION_SUPPORT,
   REVISION_STARTED,
   type AgentEvent,
   type CallSummary,
   type SourceRef,
   type SubtaskVerdict,
+  type SupportEntry,
   isTerminal,
 } from './events';
 
@@ -102,6 +104,16 @@ export interface CitationCheck {
   readonly ungroundedUrls: readonly string[];
 }
 
+/** One draft's citations, judged by a model against their provisions' text. */
+export interface SupportCheck {
+  /** The critic round, which is the draft it judged. */
+  readonly iteration: number;
+  readonly supported: readonly SupportEntry[];
+  readonly unsupported: readonly SupportEntry[];
+  readonly unverified: readonly SupportEntry[];
+  readonly unchecked: number;
+}
+
 export type RunPhase = 'connecting' | 'running' | 'completed' | 'failed';
 
 export interface RunState {
@@ -128,6 +140,7 @@ export interface RunState {
   readonly calls: readonly CallEntry[];
   readonly revision: RevisionInfo | null;
   readonly citationChecks: readonly CitationCheck[];
+  readonly supportChecks: readonly SupportCheck[];
   /**
    * Every applied event, in order. Appended by `accept` as each is applied, so
    * a replayed run and a live one produce the same timeline.
@@ -179,6 +192,7 @@ export function initialState(nodeIds: readonly string[]): RunState {
     calls: [],
     revision: null,
     citationChecks: [],
+    supportChecks: [],
     timeline: [],
     nextSeq: 1,
     buffered: {},
@@ -419,6 +433,21 @@ function apply(state: RunState, event: AgentEvent): RunState {
             unretrieved: event.payload.unretrieved,
             misquoted: event.payload.misquoted,
             ungroundedUrls: event.payload.ungrounded_urls,
+          },
+        ],
+      };
+
+    case CITATION_SUPPORT:
+      return {
+        ...state,
+        supportChecks: [
+          ...state.supportChecks,
+          {
+            iteration: event.payload.iteration,
+            supported: event.payload.supported,
+            unsupported: event.payload.unsupported,
+            unverified: event.payload.unverified,
+            unchecked: event.payload.unchecked,
           },
         ],
       };

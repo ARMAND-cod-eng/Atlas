@@ -8,7 +8,7 @@ import { describe, expect, it } from 'vitest';
 import cases from './fixtures/citation-cases.json';
 import compliance from './fixtures/compliance.json';
 
-import { CITE_PREFIX, citedLabels, markCitations, statusOf } from '../src/lib/citations';
+import { CITE_PREFIX, citedLabels, judgementsOf, markCitations, statusOf, supportFor } from '../src/lib/citations';
 import type { AgentEvent } from '../src/lib/events';
 import { CRITIC, PLANNER, RESEARCHER, SYNTHESIZER, acceptAll, initialState } from '../src/lib/reducer';
 
@@ -72,5 +72,45 @@ describe("a citation's status", () => {
     expect(labels.length).toBeGreaterThan(0);
     // The check lists each provision once; the answer may cite one twice.
     expect([...new Set(labels)]).toEqual(last?.cited);
+  });
+});
+
+describe('the support check', () => {
+  const check = {
+    ok: true,
+    cited: ['AI Act Art. 2(3)', 'AI Act Art. 2(1)(c)', 'GDPR Art. 5'],
+    unresolved: [],
+    unretrieved: [],
+    misquoted: [],
+    ungroundedUrls: [],
+  };
+  const support = {
+    iteration: 1,
+    supported: [{ label: 'AI Act Art. 2(1)(c)', sentence: 'Outside the EU too.', quote: 'located in a third country', reason: '' }],
+    unsupported: [{ label: 'AI Act Art. 2(3)', sentence: 'Outside the EU too.', quote: '', reason: 'national security' }],
+    unverified: [],
+    unchecked: 0,
+  };
+
+  it('marks what the reading found, and leaves a citation it did not read as verified', () => {
+    expect(
+      ['AI Act Art. 2(3)', 'AI Act Art. 2(1)(c)', 'GDPR Art. 5'].map((label) => statusOf(label, check, support)),
+    ).toEqual(['unsupported', 'supported', 'verified']);
+    expect(judgementsOf('AI Act Art. 2(3)', support).map((e) => e.reason)).toEqual(['national security']);
+  });
+
+  it('never lets the reading overrule the law check', () => {
+    const invented = { ...check, unresolved: ['AI Act Art. 2(3)'] };
+
+    expect(statusOf('AI Act Art. 2(3)', invented, support)).toBe('unknown');
+  });
+
+  it("uses only the reading of the draft on screen", () => {
+    const twoDrafts = [check, check];
+
+    expect(supportFor([check], [support])).toEqual(support);
+    // Draft 2 is on screen; round 1 read draft 1, and round 2 has not happened.
+    expect(supportFor(twoDrafts, [support])).toBeNull();
+    expect(supportFor(twoDrafts, [support, { ...support, iteration: 2 }])?.iteration).toBe(2);
   });
 });

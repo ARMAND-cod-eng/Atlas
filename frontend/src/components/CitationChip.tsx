@@ -4,8 +4,19 @@ import { type CSSProperties, useEffect, useId, useRef, useState } from 'react';
 
 import { type Provision, fetchProvision } from '@/lib/api';
 import type { CitationStatus } from '@/lib/citations';
+import type { SupportEntry } from '@/lib/events';
 
 const STATUS: Record<CitationStatus, { readonly chip: string; readonly mark: string; readonly says: string }> = {
+  supported: {
+    chip: 'border-law/40 bg-law/10 text-law',
+    mark: '✓',
+    says: 'Checked: the provision exists and was retrieved, and a model reading it found it says what it is cited for.',
+  },
+  unsupported: {
+    chip: 'border-retry/50 bg-retry/10 text-retry',
+    mark: '≠',
+    says: 'The provision exists and was retrieved, but a model reading it found it does not say what it is cited for.',
+  },
   verified: {
     chip: 'border-law/40 bg-law/10 text-law',
     mark: '✓',
@@ -60,9 +71,12 @@ function placeCard(chip: DOMRect): CSSProperties {
 export function CitationChip({
   label,
   status,
+  judgements = [],
 }: {
   readonly label: string;
   readonly status: CitationStatus;
+  /** What the support check said of this citation, sentence by sentence. */
+  readonly judgements?: readonly SupportEntry[];
 }): React.JSX.Element {
   const [open, setOpen] = useState(false);
   const [place, setPlace] = useState<CSSProperties>({});
@@ -122,10 +136,29 @@ export function CitationChip({
         <span id={id} role="tooltip" style={place} className="z-50 block py-1 text-left">
           <span className="block rounded-md border border-line-strong bg-surface p-3 shadow-lg">
             <span className="block text-2xs text-ink-muted">{style.says}</span>
+            <Judgements judgements={judgements} />
             <ProvisionText loaded={loaded} status={status} />
           </span>
         </span>
       )}
+    </span>
+  );
+}
+
+function Judgements({ judgements }: { readonly judgements: readonly SupportEntry[] }): React.JSX.Element | null {
+  if (judgements.length === 0) return null;
+  return (
+    <span className="mt-2 block space-y-1.5">
+      {judgements.map((entry) => (
+        <span key={entry.sentence} className="block text-2xs leading-relaxed">
+          <span className="block text-ink-faint">Cited for: {entry.sentence}</span>
+          {entry.reason !== '' ? (
+            <span className="block text-retry">{entry.reason}</span>
+          ) : (
+            <span className="block text-ink">It says: “{entry.quote}”</span>
+          )}
+        </span>
+      ))}
     </span>
   );
 }

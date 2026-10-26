@@ -68,6 +68,14 @@ DEGRADED_WEB_SEARCH_FAILED = "web_search_failed"
 # retrieved, or a misquotation. Only when no round was left to fix it; the
 # answer carries an "Unverified" note naming the problem.
 DEGRADED_UNVERIFIED_CITATION = "unverified_citation"
+# A compliance answer went out citing a provision the support check judged not
+# to say what its sentence says (atlas.library.support), with no round left to
+# fix it. The answer's "Unverified" note names the citation and the reason.
+DEGRADED_UNSUPPORTED_CITATION = "unsupported_citation"
+# The support check's model call failed, so this answer's citations were checked
+# against the law but not read for what they say. The run goes on: a check that
+# could not run is reported, not mistaken for one that passed.
+DEGRADED_CITATION_SUPPORT_UNAVAILABLE = "citation_support_unavailable"
 
 
 class LLMCall(BaseModel):

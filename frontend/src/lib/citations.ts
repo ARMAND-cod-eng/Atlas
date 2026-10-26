@@ -8,7 +8,8 @@
  * verdict in the run's citation check, by the label the backend would give it.
  */
 
-import type { CitationCheck } from './reducer';
+import type { SupportEntry } from './events';
+import type { CitationCheck, SupportCheck } from './reducer';
 
 const BRACKET = /\[([^[\]]{3,200})\]/g;
 const LABEL =
@@ -77,16 +78,50 @@ export function markCitations(markdown: string): { readonly markdown: string; re
   return { markdown: marked, labels };
 }
 
-export type CitationStatus = 'verified' | 'unknown' | 'unretrieved' | 'misquoted' | 'unchecked';
+export type CitationStatus =
+  | 'supported'
+  | 'unsupported'
+  | 'verified'
+  | 'unknown'
+  | 'unretrieved'
+  | 'misquoted'
+  | 'unchecked';
 
 /**
- * What the run's last citation check said of one citation. A run in a domain
- * without the check (or that never wrote an answer) has nothing to say.
+ * The support check of the draft on screen, or null. Draft n is judged in
+ * critic round n, so a judgement from another round, or a draft the critic
+ * never judged, says nothing about this answer and is not used.
  */
-export function statusOf(label: string, check: CitationCheck | null): CitationStatus {
+export function supportFor(
+  checks: readonly CitationCheck[],
+  supports: readonly SupportCheck[],
+): SupportCheck | null {
+  return supports.findLast((support) => support.iteration === checks.length) ?? null;
+}
+
+/**
+ * What the run's last checks said of one citation. The check against the law
+ * decides first: a provision that does not exist was never worth reading. Only
+ * a citation that passed it can be judged supported, or not, by the support
+ * check. A run in a domain without the checks has nothing to say.
+ */
+export function statusOf(
+  label: string,
+  check: CitationCheck | null,
+  support: SupportCheck | null = null,
+): CitationStatus {
   if (check === null) return 'unchecked';
   if (check.unresolved.includes(label)) return 'unknown';
   if (check.unretrieved.includes(label)) return 'unretrieved';
   if (check.misquoted.some(([cited]) => cited === label)) return 'misquoted';
-  return check.cited.includes(label) ? 'verified' : 'unchecked';
+  if (!check.cited.includes(label)) return 'unchecked';
+  if (support?.unsupported.some((entry) => entry.label === label) === true) return 'unsupported';
+  if (support?.supported.some((entry) => entry.label === label) === true) return 'supported';
+  return 'verified';
+}
+
+/** What the support check said of one citation, wherever it was cited. */
+export function judgementsOf(label: string, support: SupportCheck | null): readonly SupportEntry[] {
+  if (support === null) return [];
+  return [...support.unsupported, ...support.supported].filter((entry) => entry.label === label);
 }

@@ -19,11 +19,29 @@ function entries(events: unknown) {
 
 describe('the timeline of a compliance run', () => {
   it('shows the citation check catching the invented article, then passing', () => {
-    const checks = entries(compliance).filter((e) => e.text.toLowerCase().includes('citation'));
+    const checks = entries(compliance).filter(
+      (e) => e.text.startsWith('Citation check') || e.text.endsWith('checked against the law'),
+    );
 
     expect(checks.map((e) => [e.tone, e.text, e.detail])).toEqual([
       ['failed', 'Citation check: 1 problem', 'AI Act Art. 114 does not exist'],
-      ['law', '3 citations checked against the law', null],
+      ['law', '1 citation checked against the law', null],
+    ]);
+  });
+
+  it('shows each round reading the real citations for what they say', () => {
+    // The invented article failed the law check, so the reading skips it.
+    const reads = entries(compliance).filter((e) => e.text.startsWith('Support check'));
+
+    // Each problem line names the provision, then why.
+    const named = (detail: string | null) => detail?.split('\n').map((line) => line.split(':')[0]);
+    expect(reads.map((e) => [e.tone, e.text, named(e.detail)])).toEqual([
+      [
+        'failed',
+        'Support check: 2 citations do not say what they are cited for',
+        ['AI Act Annex VIII(7)', 'AI Act Art. 16(b)'],
+      ],
+      ['law', 'Support check: 1 citation says what it is cited for', undefined],
     ]);
   });
 

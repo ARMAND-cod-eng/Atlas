@@ -23,6 +23,8 @@ export const AGENT_CALL = 'agent_call';
 export const REVISION_STARTED = 'revision_started';
 /** A compliance draft's citations, checked against the law. */
 export const CITATION_CHECK = 'citation_check';
+/** The same draft's citations, judged by a model for whether each says what it is cited for. */
+export const CITATION_SUPPORT = 'citation_support';
 
 /** A stream ends deliberately with one of these, or it broke. */
 export const TERMINAL_TYPES = [RUN_COMPLETED, RUN_FAILED] as const;
@@ -43,6 +45,14 @@ export interface SourceRef {
   /** A provision's citation label, "AI Act Art. 6(2)". Absent for a web page. */
   readonly label?: string | null;
   readonly authority?: Authority;
+}
+
+/** One citation, judged against its provision: the quote that supports it, or why not. */
+export interface SupportEntry {
+  readonly label: string;
+  readonly sentence: string;
+  readonly quote: string;
+  readonly reason: string;
 }
 
 /** One agent call as the live stream carries it. */
@@ -157,6 +167,18 @@ export type AgentEvent =
       }
     >
   | Base<
+      typeof CITATION_SUPPORT,
+      {
+        /** The critic round, which is the draft it judged. */
+        readonly iteration: number;
+        readonly supported: readonly SupportEntry[];
+        readonly unsupported: readonly SupportEntry[];
+        /** Judged supported, but the quoted support is not in the provision's text. */
+        readonly unverified: readonly SupportEntry[];
+        readonly unchecked: number;
+      }
+    >
+  | Base<
       typeof RUN_COMPLETED,
       {
         readonly answer: string;
@@ -189,6 +211,7 @@ export const EVENT_TYPES = [
   AGENT_CALL,
   REVISION_STARTED,
   CITATION_CHECK,
+  CITATION_SUPPORT,
   RUN_COMPLETED,
   RUN_FAILED,
 ] as const;

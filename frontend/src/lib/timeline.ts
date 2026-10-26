@@ -10,6 +10,7 @@
 import {
   AGENT_CALL,
   CITATION_CHECK,
+  CITATION_SUPPORT,
   CRITIC_VERDICT,
   FAN_OUT,
   NODE_COMPLETED,
@@ -123,6 +124,25 @@ function describe(event: AgentEvent): Omit<TimelineEntry, 'seq' | 'at' | 'nodeId
             : `Review ${event.payload.iteration}: the write-up needs work`,
         detail:
           [...reasons, event.payload.synthesis_feedback ?? ''].filter(Boolean).join('\n') || null,
+      };
+    }
+    case CITATION_SUPPORT: {
+      const { supported, unsupported, unverified, unchecked } = event.payload;
+      const notes = [
+        unverified.length > 0 ? `${plural(unverified.length, 'citation')} claimed supported without the provision's words` : '',
+        unchecked > 0 ? `${plural(unchecked, 'citation')} not judged` : '',
+      ].filter(Boolean);
+      if (unsupported.length === 0) {
+        return {
+          tone: 'law',
+          text: `Support check: ${plural(supported.length, 'citation')} ${supported.length === 1 ? 'says what it is' : 'say what they are'} cited for`,
+          detail: notes.join('\n') || null,
+        };
+      }
+      return {
+        tone: 'failed',
+        text: `Support check: ${plural(unsupported.length, 'citation')} ${unsupported.length === 1 ? 'does not say what it is' : 'do not say what they are'} cited for`,
+        detail: [...unsupported.map((entry) => `${entry.label}: ${entry.reason}`), ...notes].join('\n'),
       };
     }
     case CITATION_CHECK: {

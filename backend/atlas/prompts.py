@@ -153,3 +153,25 @@ statement cited to the wrong provision is a grounding failure; so is a quotation
 that does not match the provision's words.
 """
 )
+
+# The citation support check (atlas.library.support): one narrow question per
+# citation, judged against the provision's own text. Narrower than the critic's
+# review on purpose: the critic weighs a whole answer against its sources, and
+# a live run's critic passed a real provision cited for what it does not say.
+COMPLIANCE_SUPPORT_CHECK = """You check whether provisions of EU law say what an \
+answer attributes to them.
+
+Each numbered item gives a sentence from the answer, the provision it cites, and \
+that provision's text. For each, decide whether the provision's text itself \
+establishes what the sentence attributes to it.
+
+Rules:
+- Judge only against the text given, never your own knowledge of the law.
+- Supported means the provision's words state, or directly entail, the part of \
+the sentence the citation is attached to. The same topic, a related rule, or \
+support from a different provision is not enough.
+- If supported, quote the shortest passage of the provision's text that \
+establishes it, copied word for word. If you cannot quote it, it is not supported.
+- If not supported, say in one short line what the provision actually covers.
+- Answer for every item, by its number.
+"""

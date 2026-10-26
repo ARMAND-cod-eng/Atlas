@@ -11,6 +11,7 @@ provider outage produces an actual error response.
 
 from __future__ import annotations
 
+import asyncio
 import logging
 import re
 import time
@@ -28,6 +29,7 @@ from atlas.config import get_settings
 from atlas.domains import current_domain
 from atlas.events import (
     CITATION_CHECK,
+    CITATION_SUPPORT,
     CRITIC_VERDICT,
     FAN_OUT,
     ITERATION_STARTED,
@@ -46,9 +48,11 @@ from atlas.graph.state import (
 from atlas.library import load_library
 from atlas.library.citations import CitationReport, check_citations
 from atlas.library.sources import law_sources, with_authority
+from atlas.library.support import SupportJudgements, SupportReport, check_support
 from atlas.metrics import (
     DEGRADED_BUDGET_CHECK_UNAVAILABLE,
     DEGRADED_BUDGET_EXCEEDED,
+    DEGRADED_CITATION_SUPPORT_UNAVAILABLE,
     DEGRADED_CRITIC_MAX_ITERATIONS,
     DEGRADED_CRITIC_NOT_ACTIONABLE,
     DEGRADED_CRITIC_UNAVAILABLE,
@@ -57,6 +61,7 @@ from atlas.metrics import (
     DEGRADED_RESEARCHER_FAILED,
     DEGRADED_SYNTHESIS_TRUNCATED,
     DEGRADED_UNGROUNDED_CITATION,
+    DEGRADED_UNSUPPORTED_CITATION,
     DEGRADED_UNVERIFIED_CITATION,
     DEGRADED_WEB_SEARCH_FAILED,
     CriticRound,
@@ -718,19 +723,35 @@ async def critic(state: AtlasState) -> dict[str, Any]:
             if DEGRADED_BUDGET_EXCEEDED not in (state.get("run_metrics") or RunMetrics()).degraded:
                 metrics.degraded.append(DEGRADED_BUDGET_EXCEEDED)
             verdict = CriticVerdict(overall="accept")
-        else:
-            verdict = _drop_unknown_subtasks(
-                await _review(state, metrics), state["subtasks"], metrics
-            )
 
-        if current_domain().library:
-            report = check_citations(state["answer"], state["research_results"], load_library())
-            if not report.ok:
+        report = (
+            check_citations(state["answer"], state["research_results"], load_library())
+            if current_domain().library
+            else None
+        )
+        support: SupportReport | None = None
+        if not exceeded:
+            if report is not None and get_settings().citation_support_check:
+                # The review and the support check are independent model calls.
+                reviewed, support = await asyncio.gather(
+                    _review(state, metrics), _check_support(state["answer"], report, metrics)
+                )
+            else:
+                reviewed = await _review(state, metrics)
+            verdict = _drop_unknown_subtasks(reviewed, state["subtasks"], metrics)
+
+        if report is not None:
+            unsupported = support is not None and not support.ok
+            if not report.ok or unsupported:
                 last_round = exceeded or iteration >= get_settings().max_critic_iterations
-                if last_round:
+                if last_round and not report.ok:
                     metrics.degraded.append(DEGRADED_UNVERIFIED_CITATION)
+                if last_round and unsupported:
+                    metrics.degraded.append(DEGRADED_UNSUPPORTED_CITATION)
                 if not exceeded:
-                    verdict = _with_citation_feedback(verdict, report)
+                    verdict = _with_citation_feedback(verdict, report, support)
+            if support is not None:
+                emit(CITATION_SUPPORT, CRITIC, iteration=iteration, **support.model_dump())
 
         metrics.critic_rounds.append(
             CriticRound(
@@ -812,16 +833,45 @@ def _drop_unknown_subtasks(
     )
 
 
-def _with_citation_feedback(verdict: CriticVerdict, report: CitationReport) -> CriticVerdict:
+def _with_citation_feedback(
+    verdict: CriticVerdict, report: CitationReport, support: SupportReport | None
+) -> CriticVerdict:
     """Send the answer back for a rewrite that fixes its citations.
 
     Whatever the model critic decided: it is a model, and a model can approve
     an answer citing an article that does not exist. The check against the law
-    is not a judgement, so it does not defer to one. Any research the critic
-    faulted stays faulted.
+    is not a judgement, so it does not defer to one. The support check is a
+    judgement, but a narrower one held to the provision's text, and a live
+    critic passed a provision cited for what it does not say. Any research the
+    critic faulted stays faulted.
     """
-    feedback = "\n\n".join(part for part in (verdict.synthesis_feedback, report.feedback()) if part)
+    parts = [
+        verdict.synthesis_feedback,
+        None if report.ok else report.feedback(),
+        None if support is None or support.ok else support.feedback(),
+    ]
+    feedback = "\n\n".join(part for part in parts if part)
     return verdict.model_copy(update={"overall": "revise", "synthesis_feedback": feedback})
+
+
+async def _check_support(
+    answer: str, report: CitationReport, metrics: RunMetrics
+) -> SupportReport | None:
+    """Whether each cited provision says what its sentence says; None if the
+    judge could not be asked, which is recorded rather than read as a pass."""
+
+    async def judge(messages: list[BaseMessage]) -> SupportJudgements:
+        return await call_structured(CRITIC, messages, SupportJudgements, metrics)
+
+    try:
+        return await check_support(answer, report, load_library(), judge)
+    except Exception as exc:
+        logger.warning(
+            "citation support check failed; the citations go unread",
+            extra={"error_type": type(exc).__name__, "error": str(exc)[:300]},
+        )
+        metrics.degraded.append(DEGRADED_CITATION_SUPPORT_UNAVAILABLE)
+        return None
 
 
 def _exhaustion_note(verdict: CriticVerdict) -> str:

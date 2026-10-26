@@ -18,6 +18,7 @@ from pydantic import BaseModel
 from atlas import budget, eventlog
 from atlas.config import get_settings
 from atlas.graph.state import AtlasState, CriticVerdict, PlannerOutput, Subtask
+from atlas.library.support import SupportJudgements
 from atlas.metrics import RunMetrics
 from atlas.runtime import loop_factory
 
@@ -298,15 +299,19 @@ def make_call_model(content: str = "findings") -> FakeModel:
 def make_call_structured(
     plan: PlannerOutput,
     verdicts: Sequence[CriticVerdict] | None = None,
+    supports: Sequence[SupportJudgements] | None = None,
 ) -> FakeStructured:
     """A stand-in for ``atlas.models.call_structured``, dispatching on schema.
 
-    One fake serves both structured callers. Verdicts are consumed in order and
+    One fake serves every structured caller. Verdicts are consumed in order and
     the last one repeats, so a graph test states the critic's decisions as a list
     and does not have to count calls. Defaults to accepting once — most tests care
-    about something other than the critic and should not loop.
+    about something other than the critic and should not loop. The citation
+    support judge, likewise, answers from ``supports``; by default it judges
+    nothing, which leaves every citation unchecked and sends nothing back.
     """
     remaining = list(verdicts if verdicts is not None else [CriticVerdict(overall="accept")])
+    judgements = list(supports if supports is not None else [SupportJudgements()])
 
     async def fake_structured(
         node: str,
@@ -317,6 +322,8 @@ def make_call_structured(
     ) -> BaseModel:
         if schema is CriticVerdict:
             return remaining.pop(0) if len(remaining) > 1 else remaining[0]
+        if schema is SupportJudgements:
+            return judgements.pop(0) if len(judgements) > 1 else judgements[0]
         return plan
 
     return fake_structured

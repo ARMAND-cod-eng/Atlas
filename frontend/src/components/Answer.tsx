@@ -3,11 +3,11 @@
 import ReactMarkdown from 'react-markdown';
 
 import { CitationChip } from './CitationChip';
-import { CITE_PREFIX, markCitations, statusOf } from '@/lib/citations';
+import { CITE_PREFIX, judgementsOf, markCitations, statusOf, supportFor } from '@/lib/citations';
 import { hostOf } from '@/lib/format';
 import type { RunResult, SourceRef } from '@/lib/events';
 import { byAuthority } from '@/lib/inspector';
-import type { RunState } from '@/lib/reducer';
+import type { RunState, SupportCheck } from '@/lib/reducer';
 
 interface Props {
   readonly state: RunState;
@@ -32,6 +32,8 @@ export function Answer({ state, result }: Props): React.JSX.Element | null {
   const failedBranches = state.branches.filter((branch) => branch.status === 'failed');
   const { markdown, labels } = markCitations(state.answer);
   const check = state.citationChecks.at(-1) ?? null;
+  // Only the judgement of the draft on screen: an earlier draft's says nothing about this one.
+  const support = supportFor(state.citationChecks, state.supportChecks);
   const grouped = byAuthority(result?.sources ?? []);
 
   return (
@@ -51,7 +53,15 @@ export function Answer({ state, result }: Props): React.JSX.Element | null {
             a: ({ href, children }) => {
               if (href?.startsWith(CITE_PREFIX) === true) {
                 const label = labels[Number(href.slice(CITE_PREFIX.length))];
-                if (label !== undefined) return <CitationChip label={label} status={statusOf(label, check)} />;
+                if (label !== undefined) {
+                  return (
+                    <CitationChip
+                      label={label}
+                      status={statusOf(label, check, support)}
+                      judgements={judgementsOf(label, support)}
+                    />
+                  );
+                }
               }
               return (
                 <a
@@ -70,7 +80,7 @@ export function Answer({ state, result }: Props): React.JSX.Element | null {
         </ReactMarkdown>
       </article>
 
-      {check !== null && <CheckSummary check={check} />}
+      {check !== null && <CheckSummary check={check} support={support} />}
 
       <SourceGroup title="Primary law" tone="text-law" sources={grouped.law} />
       <SourceGroup title="Official guidance" tone="text-guidance" sources={grouped.guidance} />
@@ -79,13 +89,30 @@ export function Answer({ state, result }: Props): React.JSX.Element | null {
   );
 }
 
-function CheckSummary({ check }: { readonly check: NonNullable<RunState['citationChecks'][number]> }): React.JSX.Element {
+function CheckSummary({
+  check,
+  support,
+}: {
+  readonly check: NonNullable<RunState['citationChecks'][number]>;
+  readonly support: SupportCheck | null;
+}): React.JSX.Element {
   const problems = check.unresolved.length + check.unretrieved.length + check.misquoted.length;
+  const unsupported = support?.unsupported.length ?? 0;
+  const judged = support === null ? 0 : support.supported.length + unsupported + support.unverified.length;
   return (
-    <p className={`text-2xs ${problems === 0 ? 'text-ink-faint' : 'text-retry'}`}>
+    <p className={`text-2xs ${problems + unsupported === 0 ? 'text-ink-faint' : 'text-retry'}`}>
       {problems === 0
-        ? `All ${check.cited.length} citations checked against the law: each exists and was retrieved.`
+        ? check.cited.length === 1
+          ? 'The citation was checked against the law: it exists and was retrieved.'
+          : `All ${check.cited.length} citations checked against the law: each exists and was retrieved.`
         : `${problems} of ${check.cited.length} citations failed the check against the law. Hover a chip for why.`}
+      {support !== null &&
+        judged > 0 &&
+        (unsupported === 0
+          ? judged === 1
+            ? ' A model read it against its provision: it says what it is cited for.'
+            : ` A model read ${judged} against their provisions: each says what it is cited for.`
+          : ` A model read ${judged} against their provisions: ${unsupported} ${unsupported === 1 ? 'does' : 'do'} not say what ${unsupported === 1 ? 'it is' : 'they are'} cited for.`)}
     </p>
   );
 }

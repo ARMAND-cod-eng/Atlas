@@ -402,24 +402,37 @@ function OutputTab({
     return (
       <Labelled label="Citation checks, one per draft">
         <ol className="space-y-1">
-          {state.citationChecks.map((check, index) => (
-            <li key={index} className="text-2xs">
-              <span className={check.ok ? 'text-done' : 'text-failed'}>
-                Draft {index + 1}: {check.ok ? 'every citation verified' : 'problems found'}
-              </span>
-              {check.unresolved.map((label) => (
-                <span key={label} className="block pl-4 text-ink-muted">{label} does not exist</span>
-              ))}
-              {check.unretrieved.map((label) => (
-                <span key={label} className="block pl-4 text-ink-muted">{label} was never retrieved</span>
-              ))}
-              {check.misquoted.map(([label, quote]) => (
-                <span key={`${label}${quote}`} className="block pl-4 text-ink-muted">
-                  “{quote}” is not in {label}
+          {state.citationChecks.map((check, index) => {
+            // Draft n is read in critic round n; an unsupported citation is a
+            // problem with the draft as much as an invented one.
+            const unsupported = state.supportChecks
+              .filter((support) => support.iteration === index + 1)
+              .flatMap((support) => support.unsupported);
+            const clean = check.ok && unsupported.length === 0;
+            return (
+              <li key={index} className="text-2xs">
+                <span className={clean ? 'text-done' : 'text-failed'}>
+                  Draft {index + 1}: {clean ? 'every citation verified' : 'problems found'}
                 </span>
-              ))}
-            </li>
-          ))}
+                {check.unresolved.map((label) => (
+                  <span key={label} className="block pl-4 text-ink-muted">{label} does not exist</span>
+                ))}
+                {check.unretrieved.map((label) => (
+                  <span key={label} className="block pl-4 text-ink-muted">{label} was never retrieved</span>
+                ))}
+                {check.misquoted.map(([label, quote]) => (
+                  <span key={`${label}${quote}`} className="block pl-4 text-ink-muted">
+                    “{quote}” is not in {label}
+                  </span>
+                ))}
+                {unsupported.map((entry) => (
+                  <span key={`${entry.label}${entry.sentence}`} className="block pl-4 text-ink-muted">
+                    {entry.label} does not say what it is cited for: {entry.reason}
+                  </span>
+                ))}
+              </li>
+            );
+          })}
         </ol>
       </Labelled>
     );

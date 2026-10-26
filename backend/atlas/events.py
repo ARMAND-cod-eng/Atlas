@@ -49,6 +49,10 @@ REVISION_STARTED = "revision_started"
 # which provisions it cites, and any that do not exist, were never retrieved, or
 # are misquoted. What a client draws its citation chips from.
 CITATION_CHECK = "citation_check"
+# A compliance answer's citations, judged by a model for whether each provision
+# says what its sentence says (atlas.library.support). Once per critic round,
+# and only for citations that passed the check against the law.
+CITATION_SUPPORT = "citation_support"
 # One call an agent made, to a model or a search (atlas.trace). Nodes emit the
 # full record; the runner stores it and streams a summary under the same type.
 AGENT_CALL = "agent_call"

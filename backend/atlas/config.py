@@ -72,6 +72,9 @@ class Settings(BaseSettings):
     # results kept beside them as secondary sources (0 turns the web off).
     library_results: int = 6
     compliance_web_results: int = 3
+    # Whether the compliance critic also asks a model if each cited provision says
+    # what its sentence says (atlas.library.support). One structured call a round.
+    citation_support_check: bool = True
 
     # Days a conversation is kept after its last question; then the nightly purge
     # deletes it everywhere (atlas.retention). 0 keeps everything.
