@@ -25,7 +25,7 @@ describe('the timeline of a compliance run', () => {
 
     expect(checks.map((e) => [e.tone, e.text, e.detail])).toEqual([
       ['failed', 'Citation check: 1 problem', 'AI Act Art. 114 does not exist'],
-      ['law', '1 citation checked against the law', null],
+      ['law', '2 citations checked against the law', null],
     ]);
   });
 
@@ -36,12 +36,8 @@ describe('the timeline of a compliance run', () => {
     // Each problem line names the provision, then why.
     const named = (detail: string | null) => detail?.split('\n').map((line) => line.split(':')[0]);
     expect(reads.map((e) => [e.tone, e.text, named(e.detail)])).toEqual([
-      [
-        'failed',
-        'Support check: 2 citations do not say what they are cited for',
-        ['AI Act Annex VIII(7)', 'AI Act Art. 16(b)'],
-      ],
-      ['law', 'Support check: 1 citation says what it is cited for', undefined],
+      ['failed', 'Support check: 1 citation does not say what it is cited for', ['AI Act Art. 6(1)']],
+      ['law', 'Support check: 2 citations say what they are cited for', undefined],
     ]);
   });
 

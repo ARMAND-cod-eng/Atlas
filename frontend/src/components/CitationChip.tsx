@@ -10,12 +10,12 @@ const STATUS: Record<CitationStatus, { readonly chip: string; readonly mark: str
   supported: {
     chip: 'border-law/40 bg-law/10 text-law',
     mark: '✓',
-    says: 'Checked: the provision exists and was retrieved, and a model reading it found it says what it is cited for.',
+    says: 'Checked: the provision exists and was retrieved, and the support check found it says what it is cited for.',
   },
   unsupported: {
     chip: 'border-retry/50 bg-retry/10 text-retry',
     mark: '≠',
-    says: 'The provision exists and was retrieved, but a model reading it found it does not say what it is cited for.',
+    says: 'The provision exists and was retrieved, but the support check found it does not say what it is cited for.',
   },
   verified: {
     chip: 'border-law/40 bg-law/10 text-law',

@@ -110,9 +110,9 @@ function CheckSummary({
         judged > 0 &&
         (unsupported === 0
           ? judged === 1
-            ? ' A model read it against its provision: it says what it is cited for.'
-            : ` A model read ${judged} against their provisions: each says what it is cited for.`
-          : ` A model read ${judged} against their provisions: ${unsupported} ${unsupported === 1 ? 'does' : 'do'} not say what ${unsupported === 1 ? 'it is' : 'they are'} cited for.`)}
+            ? ' The support check read it against its provision: it says what it is cited for.'
+            : ` The support check read ${judged} against their provisions: each says what it is cited for.`
+          : ` The support check read ${judged} against their provisions: ${unsupported} ${unsupported === 1 ? 'does' : 'do'} not say what ${unsupported === 1 ? 'it is' : 'they are'} cited for.`)}
     </p>
   );
 }

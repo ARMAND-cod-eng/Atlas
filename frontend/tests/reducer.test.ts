@@ -430,13 +430,13 @@ describe('the support check', () => {
   it('keeps each round reading the citations that passed the law check', () => {
     const state = run(COMPLIANCE);
 
-    // The first draft cited two real provisions for what they do not say; the
-    // rewrite kept the one that does. The invented article is never read.
+    // The first draft cited Art. 6(1), a real provision, for what it does not say;
+    // the rewrite kept the two that do. The invented article is never read.
     expect(
       state.supportChecks.map((s) => [s.iteration, s.supported.map((e) => e.label), s.unsupported.map((e) => e.label)]),
     ).toEqual([
-      [1, ['AI Act Annex III(4)(a)'], ['AI Act Annex VIII(7)', 'AI Act Art. 16(b)']],
-      [2, ['AI Act Annex III(4)(a)'], []],
+      [1, ['AI Act Annex III(4)(a)', 'AI Act Art. 6(2)'], ['AI Act Art. 6(1)']],
+      [2, ['AI Act Annex III(4)(a)', 'AI Act Art. 6(2)'], []],
     ]);
   });
 });

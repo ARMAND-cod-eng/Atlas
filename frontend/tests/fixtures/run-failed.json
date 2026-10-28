@@ -2,7 +2,7 @@
   {
     "run_id": "run-failed",
     "seq": 1,
-    "ts": "2026-10-26T03:02:30.391635Z",
+    "ts": "2026-10-28T04:06:35.531554Z",
     "type": "run_started",
     "node": null,
     "payload": {
@@ -13,27 +13,27 @@
   {
     "run_id": "run-failed",
     "seq": 2,
-    "ts": "2026-10-26T03:02:30.391635Z",
+    "ts": "2026-10-28T04:06:35.531554Z",
     "type": "node_started",
     "node": "planner",
     "payload": {
       "subtask_id": null,
-      "span_id": "814490dc23bd"
+      "span_id": "614fc8e73505"
     }
   },
   {
     "run_id": "run-failed",
     "seq": 3,
-    "ts": "2026-10-26T03:02:30.403433Z",
+    "ts": "2026-10-28T04:06:35.531554Z",
     "type": "agent_call",
     "node": "planner",
     "payload": {
-      "call_id": "bc1ed8bec576487b88d710d1d9594e77",
-      "span_id": "814490dc23bd",
+      "call_id": "9c1b608f0b6f48da84bf342df46127d9",
+      "span_id": "614fc8e73505",
       "subtask_id": null,
       "kind": "model",
       "name": "scripted",
-      "duration_s": 0.001275199931114912,
+      "duration_s": 0.0005549999987124465,
       "input_tokens": null,
       "output_tokens": null,
       "error": null,
@@ -43,18 +43,18 @@
   {
     "run_id": "run-failed",
     "seq": 4,
-    "ts": "2026-10-26T03:02:30.403433Z",
+    "ts": "2026-10-28T04:06:35.531554Z",
     "type": "node_completed",
     "node": "planner",
     "payload": {
       "subtask_id": null,
-      "span_id": "814490dc23bd"
+      "span_id": "614fc8e73505"
     }
   },
   {
     "run_id": "run-failed",
     "seq": 5,
-    "ts": "2026-10-26T03:02:30.403433Z",
+    "ts": "2026-10-28T04:06:35.531554Z",
     "type": "fan_out",
     "node": "planner",
     "payload": {
@@ -74,27 +74,27 @@
   {
     "run_id": "run-failed",
     "seq": 6,
-    "ts": "2026-10-26T03:02:30.406955Z",
+    "ts": "2026-10-28T04:06:35.540247Z",
     "type": "node_started",
     "node": "researcher",
     "payload": {
       "subtask_id": "s0",
-      "span_id": "c9bd07c599c8"
+      "span_id": "1cf1a4540ed1"
     }
   },
   {
     "run_id": "run-failed",
     "seq": 7,
-    "ts": "2026-10-26T03:02:30.406955Z",
+    "ts": "2026-10-28T04:06:35.540247Z",
     "type": "agent_call",
     "node": "researcher",
     "payload": {
-      "call_id": "d9598c474b5b4734b12ddc732ba8bb5e",
-      "span_id": "c9bd07c599c8",
+      "call_id": "fbc640664c904314847adda59f3ba24b",
+      "span_id": "1cf1a4540ed1",
       "subtask_id": "s0",
       "kind": "tool",
       "name": "web",
-      "duration_s": 5.9499870985746384e-05,
+      "duration_s": 2.2700005501974374e-05,
       "input_tokens": null,
       "output_tokens": null,
       "error": null,
@@ -104,27 +104,27 @@
   {
     "run_id": "run-failed",
     "seq": 8,
-    "ts": "2026-10-26T03:02:30.406955Z",
+    "ts": "2026-10-28T04:06:35.540247Z",
     "type": "node_started",
     "node": "researcher",
     "payload": {
       "subtask_id": "s1",
-      "span_id": "52b516aa91df"
+      "span_id": "d74a7393b294"
     }
   },
   {
     "run_id": "run-failed",
     "seq": 9,
-    "ts": "2026-10-26T03:02:30.406955Z",
+    "ts": "2026-10-28T04:06:35.540247Z",
     "type": "agent_call",
     "node": "researcher",
     "payload": {
-      "call_id": "b9771f17442847198b4cd9115c0c9199",
-      "span_id": "52b516aa91df",
+      "call_id": "f5c1ba6683344d84b50c3d864371bc14",
+      "span_id": "d74a7393b294",
       "subtask_id": "s1",
       "kind": "tool",
       "name": "web",
-      "duration_s": 5.179992876946926e-05,
+      "duration_s": 1.799999881768599e-05,
       "input_tokens": null,
       "output_tokens": null,
       "error": null,
@@ -134,27 +134,27 @@
   {
     "run_id": "run-failed",
     "seq": 10,
-    "ts": "2026-10-26T03:02:30.406955Z",
+    "ts": "2026-10-28T04:06:35.540247Z",
     "type": "node_started",
     "node": "researcher",
     "payload": {
       "subtask_id": "s2",
-      "span_id": "642a60cae03d"
+      "span_id": "ae2c31c95a33"
     }
   },
   {
     "run_id": "run-failed",
     "seq": 11,
-    "ts": "2026-10-26T03:02:30.406955Z",
+    "ts": "2026-10-28T04:06:35.540247Z",
     "type": "agent_call",
     "node": "researcher",
     "payload": {
-      "call_id": "172f4203ca50495ca4102ee1bac804bd",
-      "span_id": "642a60cae03d",
+      "call_id": "e851045a1fc74bc088dad906bb29b0ce",
+      "span_id": "ae2c31c95a33",
       "subtask_id": "s2",
       "kind": "tool",
       "name": "web",
-      "duration_s": 5.8900099247694016e-05,
+      "duration_s": 1.799999881768599e-05,
       "input_tokens": null,
       "output_tokens": null,
       "error": null,
@@ -164,16 +164,16 @@
   {
     "run_id": "run-failed",
     "seq": 12,
-    "ts": "2026-10-26T03:02:30.406955Z",
+    "ts": "2026-10-28T04:06:35.540247Z",
     "type": "agent_call",
     "node": "researcher",
     "payload": {
-      "call_id": "5fe42fc58bb3404ab010557fc81873bd",
-      "span_id": "c9bd07c599c8",
+      "call_id": "29377ab508a04159b8ebafffaf778a71",
+      "span_id": "1cf1a4540ed1",
       "subtask_id": "s0",
       "kind": "model",
       "name": "scripted",
-      "duration_s": 0.005556200165301561,
+      "duration_s": 0.0016886000012164004,
       "input_tokens": null,
       "output_tokens": null,
       "error": null,
@@ -183,12 +183,12 @@
   {
     "run_id": "run-failed",
     "seq": 13,
-    "ts": "2026-10-26T03:02:30.406955Z",
+    "ts": "2026-10-28T04:06:35.540247Z",
     "type": "node_completed",
     "node": "researcher",
     "payload": {
       "subtask_id": "s0",
-      "span_id": "c9bd07c599c8",
+      "span_id": "1cf1a4540ed1",
       "sources": [
         {
           "url": "https://example.com/how-0",
@@ -210,16 +210,16 @@
   {
     "run_id": "run-failed",
     "seq": 14,
-    "ts": "2026-10-26T03:02:30.406955Z",
+    "ts": "2026-10-28T04:06:35.540247Z",
     "type": "agent_call",
     "node": "researcher",
     "payload": {
-      "call_id": "d387bd247c824903b0d96e7f1215ff6f",
-      "span_id": "52b516aa91df",
+      "call_id": "a8fa2ca94fd94919b76a1cb20f6dd7fa",
+      "span_id": "d74a7393b294",
       "subtask_id": "s1",
       "kind": "model",
       "name": "scripted",
-      "duration_s": 0.004433399997651577,
+      "duration_s": 0.0014203000027919188,
       "input_tokens": null,
       "output_tokens": null,
       "error": null,
@@ -229,12 +229,12 @@
   {
     "run_id": "run-failed",
     "seq": 15,
-    "ts": "2026-10-26T03:02:30.406955Z",
+    "ts": "2026-10-28T04:06:35.540247Z",
     "type": "node_completed",
     "node": "researcher",
     "payload": {
       "subtask_id": "s1",
-      "span_id": "52b516aa91df",
+      "span_id": "d74a7393b294",
       "sources": [
         {
           "url": "https://example.com/how-0",
@@ -256,16 +256,16 @@
   {
     "run_id": "run-failed",
     "seq": 16,
-    "ts": "2026-10-26T03:02:30.406955Z",
+    "ts": "2026-10-28T04:06:35.540247Z",
     "type": "agent_call",
     "node": "researcher",
     "payload": {
-      "call_id": "ab90a7046afc455b916c2da8dfbd9afa",
-      "span_id": "642a60cae03d",
+      "call_id": "1a6c304ab9024cd6835508f6b7a0dd21",
+      "span_id": "ae2c31c95a33",
       "subtask_id": "s2",
       "kind": "model",
       "name": "scripted",
-      "duration_s": 0.001964000053703785,
+      "duration_s": 0.0011643000034382567,
       "input_tokens": null,
       "output_tokens": null,
       "error": null,
@@ -275,12 +275,12 @@
   {
     "run_id": "run-failed",
     "seq": 17,
-    "ts": "2026-10-26T03:02:30.406955Z",
+    "ts": "2026-10-28T04:06:35.540247Z",
     "type": "node_completed",
     "node": "researcher",
     "payload": {
       "subtask_id": "s2",
-      "span_id": "642a60cae03d",
+      "span_id": "ae2c31c95a33",
       "sources": [
         {
           "url": "https://example.com/what-0",
@@ -302,27 +302,27 @@
   {
     "run_id": "run-failed",
     "seq": 18,
-    "ts": "2026-10-26T03:02:30.420061Z",
+    "ts": "2026-10-28T04:06:35.540247Z",
     "type": "node_started",
     "node": "synthesizer",
     "payload": {
       "subtask_id": null,
-      "span_id": "2803a8973cec"
+      "span_id": "9d5283ab42e6"
     }
   },
   {
     "run_id": "run-failed",
     "seq": 19,
-    "ts": "2026-10-26T03:02:30.420061Z",
+    "ts": "2026-10-28T04:06:35.540247Z",
     "type": "agent_call",
     "node": "synthesizer",
     "payload": {
-      "call_id": "4d73d43362ba445da0479b674dc78afe",
-      "span_id": "2803a8973cec",
+      "call_id": "6c9acfb87e1241ab813592b3992235d1",
+      "span_id": "9d5283ab42e6",
       "subtask_id": null,
       "kind": "model",
       "name": "claude-sonnet-5",
-      "duration_s": 0.0016445000655949116,
+      "duration_s": 0.00042160000157309696,
       "input_tokens": null,
       "output_tokens": null,
       "error": "ProviderError: everything is down",
@@ -332,19 +332,19 @@
   {
     "run_id": "run-failed",
     "seq": 20,
-    "ts": "2026-10-26T03:02:30.420061Z",
+    "ts": "2026-10-28T04:06:35.540247Z",
     "type": "node_failed",
     "node": "synthesizer",
     "payload": {
       "subtask_id": null,
-      "span_id": "2803a8973cec",
+      "span_id": "9d5283ab42e6",
       "error": "ProviderError: all providers failed: ProviderError: everything is down"
     }
   },
   {
     "run_id": "run-failed",
     "seq": 21,
-    "ts": "2026-10-26T03:02:30.420061Z",
+    "ts": "2026-10-28T04:06:35.540247Z",
     "type": "run_failed",
     "node": null,
     "payload": {

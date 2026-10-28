@@ -99,9 +99,9 @@ def plan(count: int, domain: DomainName = "general") -> PlannerOutput:
 
 def citing_model() -> ModelFn:
     """A synthesizer that cites the provisions it was given. Its first draft adds
-    an invented article, which the check against the law catches, and cites two
-    real ones for what they do not say, which the support check catches. The
-    rewrite keeps the one citation that holds."""
+    an invented article, which the check against the law catches, and cites a
+    real one for what it does not say, which the support check catches. The
+    rewrite keeps the citations that hold."""
     drafts = 0
 
     async def call(
@@ -122,9 +122,10 @@ def citing_model() -> ModelFn:
                 content=f"## Answer\n\nYes: it is high-risk {cited}. "
                 "It must also register it [AI Act Art. 114]."
             )
+        kept = " ".join(f"[{label}]" for label in labels[:3] if SCRIPTED_SUPPORT[label][0])
         return AIMessage(
             content="## Answer\n\nYes: a tool that analyses and filters job applications is "
-            f"high-risk [{labels[0]}]."
+            f"high-risk {kept}."
         )
 
     return call
@@ -176,27 +177,32 @@ _ITEM = re.compile(
 # are real, retrieved, and about something else.
 SCRIPTED_SUPPORT: dict[str, tuple[bool, str]] = {
     "AI Act Annex III(4)(a)": (True, "to analyse and filter job applications"),
-    "AI Act Annex VIII(7)": (
-        False,
-        "Annex VIII(7) lists what a provider registers when it claims a system is not "
-        "high-risk; it does not make a system high-risk.",
+    "AI Act Art. 6(2)": (
+        True,
+        "AI systems referred to in Annex III shall be considered to be high-risk",
     ),
-    "AI Act Art. 16(b)": (
+    "AI Act Art. 6(1)": (
         False,
-        "Art. 16(b) requires the provider's name and contact address on the system; it "
-        "says nothing about whether a system is high-risk.",
+        "Art. 6(1) makes high-risk an AI system that is a safety component of a product "
+        "under the Union harmonisation law in Annex I; a recruitment tool is not one.",
     ),
 }
 
 
 def supporting_judge(messages: object) -> SupportJudgements:
-    """The support check, scripted as a careful reader would answer it: the
-    demo's citations as SCRIPTED_SUPPORT says, any other citation supported by
-    the first words of its provision, so a quote is always the provision's own."""
+    """The support check, scripted as a careful reader would answer it, citation
+    by citation, as SCRIPTED_SUPPORT says. A citation it has no answer for stops
+    the recording: a default of "supported" once passed Art. 6(1) for a CV tool,
+    after better retrieval changed what the demo's first draft cites."""
     prompt = str(messages[-1].content) if isinstance(messages, list) and messages else ""
     judgements = []
-    for n, label, text in _ITEM.findall(prompt):
-        supported, said = SCRIPTED_SUPPORT.get(label, (True, " ".join(text.split()[:8])))
+    for n, label, _text in _ITEM.findall(prompt):
+        if label not in SCRIPTED_SUPPORT:
+            raise RuntimeError(
+                f"the demo's first draft cites {label}, which SCRIPTED_SUPPORT does not "
+                "judge: say how a careful reader would, then record again"
+            )
+        supported, said = SCRIPTED_SUPPORT[label]
         judgements.append(
             SupportJudgement(item=int(n), supported=True, quote=said)
             if supported

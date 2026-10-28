@@ -15,8 +15,10 @@ What the scripts write is built from the run's own research, not canned:
 
 So the citation check and the support check see real citations of retrieved
 provisions, a rewritten branch reads different law, and the answer changes with
-it. The critic accepts; the support check finds each citation supported,
-quoting the provision's first words, which really are its own.
+it. The critic accepts. The support check judges nothing: whether a provision
+says what a sentence says is a model's judgement, and a script that said "yes"
+would be a judgement nobody made. Every citation is left unchecked, and the
+chips show what the deterministic check against the law found, which is real.
 
 The same wrappers script the frontend's recorded fixtures
 (``scripts/capture_fixtures.py``), with each scenario's own scripts.
@@ -37,7 +39,7 @@ from pydantic import BaseModel
 from atlas import models, trace
 from atlas.graph import nodes
 from atlas.graph.state import CriticVerdict, PlannerOutput, Source, Subtask
-from atlas.library.support import SupportJudgement, SupportJudgements
+from atlas.library.support import SupportJudgements
 from atlas.metrics import RunMetrics
 
 SCRIPTED = "scripted"
@@ -139,10 +141,6 @@ _CLAUSE = re.compile(
 )
 _LAW = re.compile(r"^\[((?:AI Act|GDPR) [^\]]+)\] (.*)$", re.MULTILINE)
 _FOUND = re.compile(r"^- \[((?:AI Act|GDPR) [^\]]+)\] (.*)$", re.MULTILINE)
-_ITEM = re.compile(
-    r"^\[(\d+)\] Sentence: .*?\nCited: .*?\nProvision text:\n(.*?)(?=\n\n\[\d+\] Sentence: |\Z)",
-    re.S | re.M,
-)
 MAX_BRANCHES = 3
 MAX_CITED = 4
 PER_BRANCH = 2
@@ -192,19 +190,14 @@ async def offline_model(node: str, messages: object, metrics: RunMetrics, **_: o
 async def offline_structured(
     node: str, messages: object, schema: type[BaseModel], metrics: RunMetrics, **_: object
 ) -> BaseModel:
-    """The plan, an accepting critic, and a support check that quotes the law."""
+    """The plan, an accepting critic, and a support check that judges nothing."""
     prompt = _last(messages)
     if schema is PlannerOutput:
         return plan_of(prompt)
     if schema is CriticVerdict:
         return CriticVerdict(overall="accept")
     if schema is SupportJudgements:
-        return SupportJudgements(
-            judgements=[
-                SupportJudgement(item=int(n), supported=True, quote=" ".join(text.split()[:8]))
-                for n, text in _ITEM.findall(prompt)
-            ]
-        )
+        return SupportJudgements()
     raise TypeError(f"offline mode has no script for {schema.__name__}")
 
 

@@ -2,7 +2,7 @@
   {
     "run_id": "compliance",
     "seq": 1,
-    "ts": "2026-10-26T03:02:30.703792Z",
+    "ts": "2026-10-28T04:06:59.860364Z",
     "type": "run_started",
     "node": null,
     "payload": {
@@ -13,27 +13,27 @@
   {
     "run_id": "compliance",
     "seq": 2,
-    "ts": "2026-10-26T03:02:30.710788Z",
+    "ts": "2026-10-28T04:06:59.869414Z",
     "type": "node_started",
     "node": "planner",
     "payload": {
       "subtask_id": null,
-      "span_id": "2a1c55b95346"
+      "span_id": "8f23e9ffbea7"
     }
   },
   {
     "run_id": "compliance",
     "seq": 3,
-    "ts": "2026-10-26T03:02:30.710788Z",
+    "ts": "2026-10-28T04:06:59.872421Z",
     "type": "agent_call",
     "node": "planner",
     "payload": {
-      "call_id": "e94ade0425494578b59149739abd518b",
-      "span_id": "2a1c55b95346",
+      "call_id": "c6732589ef7c450ea8520dabad9f575f",
+      "span_id": "8f23e9ffbea7",
       "subtask_id": null,
       "kind": "model",
       "name": "scripted",
-      "duration_s": 0.0028700002003461123,
+      "duration_s": 0.0020392000005813316,
       "input_tokens": null,
       "output_tokens": null,
       "error": null,
@@ -43,18 +43,18 @@
   {
     "run_id": "compliance",
     "seq": 4,
-    "ts": "2026-10-26T03:02:30.710788Z",
+    "ts": "2026-10-28T04:06:59.872421Z",
     "type": "node_completed",
     "node": "planner",
     "payload": {
       "subtask_id": null,
-      "span_id": "2a1c55b95346"
+      "span_id": "8f23e9ffbea7"
     }
   },
   {
     "run_id": "compliance",
     "seq": 5,
-    "ts": "2026-10-26T03:02:30.710788Z",
+    "ts": "2026-10-28T04:06:59.873429Z",
     "type": "fan_out",
     "node": "planner",
     "payload": {
@@ -72,46 +72,46 @@
   {
     "run_id": "compliance",
     "seq": 6,
-    "ts": "2026-10-26T03:02:38.816251Z",
+    "ts": "2026-10-28T04:07:03.557540Z",
     "type": "node_started",
     "node": "researcher",
     "payload": {
       "subtask_id": "s0",
-      "span_id": "82bbf139af70"
+      "span_id": "c1baeab85e2f"
     }
   },
   {
     "run_id": "compliance",
     "seq": 7,
-    "ts": "2026-10-26T03:02:38.816251Z",
+    "ts": "2026-10-28T04:07:03.557540Z",
     "type": "agent_call",
     "node": "researcher",
     "payload": {
-      "call_id": "ae5d9bfc1bb44cf0b4e10b9eb48cc463",
-      "span_id": "82bbf139af70",
+      "call_id": "d2a4b171b7fa4b2ea384112818d9bb07",
+      "span_id": "c1baeab85e2f",
       "subtask_id": "s0",
       "kind": "tool",
       "name": "library",
-      "duration_s": 8.084015499800444,
+      "duration_s": 3.6708370999986073,
       "input_tokens": null,
       "output_tokens": null,
       "error": null,
-      "preview": "AI Act Annex III(4)(a); AI Act Annex VIII(7); AI Act Art. 16(b); AI Act Art. 20(2); AI Act Art. 80(1); AI Act Art. 26(7)"
+      "preview": "AI Act Annex III(4)(a); AI Act Art. 6(2); AI Act Art. 6(1); AI Act Art. 6(3); AI Act Art. 80(1); AI Act Art. 6(4)"
     }
   },
   {
     "run_id": "compliance",
     "seq": 8,
-    "ts": "2026-10-26T03:02:38.816251Z",
+    "ts": "2026-10-28T04:07:03.557540Z",
     "type": "agent_call",
     "node": "researcher",
     "payload": {
-      "call_id": "21f6b4959176425095e80b49c2ee9d6c",
-      "span_id": "82bbf139af70",
+      "call_id": "5f5496e18baf42ec92b29e36ad3dd016",
+      "span_id": "c1baeab85e2f",
       "subtask_id": "s0",
       "kind": "tool",
       "name": "web",
-      "duration_s": 0.00012059998698532581,
+      "duration_s": 3.480000304989517e-05,
       "input_tokens": null,
       "output_tokens": null,
       "error": null,
@@ -121,27 +121,27 @@
   {
     "run_id": "compliance",
     "seq": 9,
-    "ts": "2026-10-26T03:02:38.816251Z",
+    "ts": "2026-10-28T04:07:03.557540Z",
     "type": "node_started",
     "node": "researcher",
     "payload": {
       "subtask_id": "s1",
-      "span_id": "56624f0a1b55"
+      "span_id": "4199ce847f54"
     }
   },
   {
     "run_id": "compliance",
     "seq": 10,
-    "ts": "2026-10-26T03:02:38.816251Z",
+    "ts": "2026-10-28T04:07:03.557540Z",
     "type": "agent_call",
     "node": "researcher",
     "payload": {
-      "call_id": "aecbefa2308044298bc843e71f616407",
-      "span_id": "56624f0a1b55",
+      "call_id": "9dd6dddff2d24211b8bdfac6513008b2",
+      "span_id": "4199ce847f54",
       "subtask_id": "s1",
       "kind": "tool",
       "name": "library",
-      "duration_s": 0.011895299889147282,
+      "duration_s": 0.0064435000022058375,
       "input_tokens": null,
       "output_tokens": null,
       "error": null,
@@ -151,16 +151,16 @@
   {
     "run_id": "compliance",
     "seq": 11,
-    "ts": "2026-10-26T03:02:38.816251Z",
+    "ts": "2026-10-28T04:07:03.557540Z",
     "type": "agent_call",
     "node": "researcher",
     "payload": {
-      "call_id": "eeb25d89111d4a8da44464ed318600e9",
-      "span_id": "56624f0a1b55",
+      "call_id": "9011a9a384ec48e282d5d407dff27839",
+      "span_id": "4199ce847f54",
       "subtask_id": "s1",
       "kind": "tool",
       "name": "web",
-      "duration_s": 3.9700185880064964e-05,
+      "duration_s": 2.6100002287421376e-05,
       "input_tokens": null,
       "output_tokens": null,
       "error": null,
@@ -170,16 +170,16 @@
   {
     "run_id": "compliance",
     "seq": 12,
-    "ts": "2026-10-26T03:02:38.821082Z",
+    "ts": "2026-10-28T04:07:03.558541Z",
     "type": "agent_call",
     "node": "researcher",
     "payload": {
-      "call_id": "3bfa98ebb90341148b0bf528c9531e17",
-      "span_id": "82bbf139af70",
+      "call_id": "5bdf805c26304898a3b3071be0ede030",
+      "span_id": "c1baeab85e2f",
       "subtask_id": "s0",
       "kind": "model",
       "name": "scripted",
-      "duration_s": 0.014934400096535683,
+      "duration_s": 0.00811779999639839,
       "input_tokens": null,
       "output_tokens": null,
       "error": null,
@@ -189,12 +189,12 @@
   {
     "run_id": "compliance",
     "seq": 13,
-    "ts": "2026-10-26T03:02:38.821082Z",
+    "ts": "2026-10-28T04:07:03.558541Z",
     "type": "node_completed",
     "node": "researcher",
     "payload": {
       "subtask_id": "s0",
-      "span_id": "82bbf139af70",
+      "span_id": "c1baeab85e2f",
       "sources": [
         {
           "url": "http://data.europa.eu/eli/reg/2024/1689/oj#anx_III",
@@ -203,21 +203,21 @@
           "authority": "primary_law"
         },
         {
-          "url": "http://data.europa.eu/eli/reg/2024/1689/oj#anx_VIII",
-          "title": "Information to be submitted upon the registration of high-risk AI systems in accordance with Article 49",
-          "label": "AI Act Annex VIII(7)",
+          "url": "http://data.europa.eu/eli/reg/2024/1689/oj#art_6",
+          "title": "Classification rules for high-risk AI systems",
+          "label": "AI Act Art. 6(2)",
           "authority": "primary_law"
         },
         {
-          "url": "http://data.europa.eu/eli/reg/2024/1689/oj#art_16",
-          "title": "Obligations of providers of high-risk AI systems",
-          "label": "AI Act Art. 16(b)",
+          "url": "http://data.europa.eu/eli/reg/2024/1689/oj#art_6",
+          "title": "Classification rules for high-risk AI systems",
+          "label": "AI Act Art. 6(1)",
           "authority": "primary_law"
         },
         {
-          "url": "http://data.europa.eu/eli/reg/2024/1689/oj#art_20",
-          "title": "Corrective actions and duty of information",
-          "label": "AI Act Art. 20(2)",
+          "url": "http://data.europa.eu/eli/reg/2024/1689/oj#art_6",
+          "title": "Classification rules for high-risk AI systems",
+          "label": "AI Act Art. 6(3)",
           "authority": "primary_law"
         },
         {
@@ -227,9 +227,9 @@
           "authority": "primary_law"
         },
         {
-          "url": "http://data.europa.eu/eli/reg/2024/1689/oj#art_26",
-          "title": "Obligations of deployers of high-risk AI systems",
-          "label": "AI Act Art. 26(7)",
+          "url": "http://data.europa.eu/eli/reg/2024/1689/oj#art_6",
+          "title": "Classification rules for high-risk AI systems",
+          "label": "AI Act Art. 6(4)",
           "authority": "primary_law"
         },
         {
@@ -252,16 +252,16 @@
   {
     "run_id": "compliance",
     "seq": 14,
-    "ts": "2026-10-26T03:02:38.821082Z",
+    "ts": "2026-10-28T04:07:03.558541Z",
     "type": "agent_call",
     "node": "researcher",
     "payload": {
-      "call_id": "90c5625f337043d68d5ad24553775f4e",
-      "span_id": "56624f0a1b55",
+      "call_id": "2bb6a0b3f24b48619bee607e561d2060",
+      "span_id": "4199ce847f54",
       "subtask_id": "s1",
       "kind": "model",
       "name": "scripted",
-      "duration_s": 0.0019022999331355095,
+      "duration_s": 0.0009687000056146644,
       "input_tokens": null,
       "output_tokens": null,
       "error": null,
@@ -271,12 +271,12 @@
   {
     "run_id": "compliance",
     "seq": 15,
-    "ts": "2026-10-26T03:02:38.821082Z",
+    "ts": "2026-10-28T04:07:03.558541Z",
     "type": "node_completed",
     "node": "researcher",
     "payload": {
       "subtask_id": "s1",
-      "span_id": "56624f0a1b55",
+      "span_id": "4199ce847f54",
       "sources": [
         {
           "url": "http://data.europa.eu/eli/reg/2024/1689/oj#art_16",
@@ -334,45 +334,45 @@
   {
     "run_id": "compliance",
     "seq": 16,
-    "ts": "2026-10-26T03:02:38.821082Z",
+    "ts": "2026-10-28T04:07:03.560541Z",
     "type": "node_started",
     "node": "synthesizer",
     "payload": {
       "subtask_id": null,
-      "span_id": "1ef0a8a9dff3"
+      "span_id": "e64d6788fa57"
     }
   },
   {
     "run_id": "compliance",
     "seq": 17,
-    "ts": "2026-10-26T03:02:38.821082Z",
+    "ts": "2026-10-28T04:07:03.561541Z",
     "type": "agent_call",
     "node": "synthesizer",
     "payload": {
-      "call_id": "b8aa92b993b64522a045e9fe4f9a1f83",
-      "span_id": "1ef0a8a9dff3",
+      "call_id": "585e4489da40408a85b36d3c96cdd653",
+      "span_id": "e64d6788fa57",
       "subtask_id": null,
       "kind": "model",
       "name": "scripted",
-      "duration_s": 0.0016229001339524984,
+      "duration_s": 0.0006597999963560142,
       "input_tokens": null,
       "output_tokens": null,
       "error": null,
-      "preview": "## Answer\n\nYes: it is high-risk [AI Act Annex III(4)(a)] [AI Act Annex VIII(7)] [AI Act Art. 16(b)]. It must also register it [AI Act Art. 114]."
+      "preview": "## Answer\n\nYes: it is high-risk [AI Act Annex III(4)(a)] [AI Act Art. 6(2)] [AI Act Art. 6(1)]. It must also register it [AI Act Art. 114]."
     }
   },
   {
     "run_id": "compliance",
     "seq": 18,
-    "ts": "2026-10-26T03:02:38.821082Z",
+    "ts": "2026-10-28T04:07:03.561541Z",
     "type": "citation_check",
     "node": "synthesizer",
     "payload": {
       "ok": false,
       "cited": [
         "AI Act Annex III(4)(a)",
-        "AI Act Annex VIII(7)",
-        "AI Act Art. 16(b)",
+        "AI Act Art. 6(2)",
+        "AI Act Art. 6(1)",
         "AI Act Art. 114"
       ],
       "unresolved": [
@@ -386,18 +386,18 @@
   {
     "run_id": "compliance",
     "seq": 19,
-    "ts": "2026-10-26T03:02:38.821082Z",
+    "ts": "2026-10-28T04:07:03.561541Z",
     "type": "node_completed",
     "node": "synthesizer",
     "payload": {
       "subtask_id": null,
-      "span_id": "1ef0a8a9dff3"
+      "span_id": "e64d6788fa57"
     }
   },
   {
     "run_id": "compliance",
     "seq": 20,
-    "ts": "2026-10-26T03:02:38.821082Z",
+    "ts": "2026-10-28T04:07:03.563541Z",
     "type": "iteration_started",
     "node": "critic",
     "payload": {
@@ -407,27 +407,27 @@
   {
     "run_id": "compliance",
     "seq": 21,
-    "ts": "2026-10-26T03:02:38.821082Z",
+    "ts": "2026-10-28T04:07:03.563541Z",
     "type": "node_started",
     "node": "critic",
     "payload": {
       "subtask_id": null,
-      "span_id": "70d769bd8004"
+      "span_id": "d433694cdc69"
     }
   },
   {
     "run_id": "compliance",
     "seq": 22,
-    "ts": "2026-10-26T03:02:38.821082Z",
+    "ts": "2026-10-28T04:07:03.564541Z",
     "type": "agent_call",
     "node": "critic",
     "payload": {
-      "call_id": "812edbc0b8d54c82a18b27e54041a9d0",
-      "span_id": "70d769bd8004",
+      "call_id": "4123399836aa4f56bf62f02febba5363",
+      "span_id": "d433694cdc69",
       "subtask_id": null,
       "kind": "model",
       "name": "scripted",
-      "duration_s": 0.0016465000808238983,
+      "duration_s": 0.0009805000008782372,
       "input_tokens": null,
       "output_tokens": null,
       "error": null,
@@ -437,26 +437,26 @@
   {
     "run_id": "compliance",
     "seq": 23,
-    "ts": "2026-10-26T03:02:38.821082Z",
+    "ts": "2026-10-28T04:07:03.564541Z",
     "type": "agent_call",
     "node": "critic",
     "payload": {
-      "call_id": "42b8317d89564c7ba45e0040860d7f2c",
-      "span_id": "70d769bd8004",
+      "call_id": "fa7bf1182ed1420f8f1ef2f5d6262036",
+      "span_id": "d433694cdc69",
       "subtask_id": null,
       "kind": "model",
       "name": "scripted",
-      "duration_s": 0.0014011000748723745,
+      "duration_s": 0.000790000005508773,
       "input_tokens": null,
       "output_tokens": null,
       "error": null,
-      "preview": "{\"judgements\": [{\"item\": 1, \"supported\": true, \"quote\": \"to analyse and filter job applications\", \"reason\": \"\"}, {\"item\": 2, \"supported\": false, \"quote\": \"\", \"reason\": \"Annex VIII(7) lists what a provider registers when it claims a system is not high-risk; it does not make a syst..."
+      "preview": "{\"judgements\": [{\"item\": 1, \"supported\": true, \"quote\": \"to analyse and filter job applications\", \"reason\": \"\"}, {\"item\": 2, \"supported\": true, \"quote\": \"AI systems referred to in Annex III shall be considered to be high-risk\", \"reason\": \"\"}, {\"item\": 3, \"supported\": false, \"quot..."
     }
   },
   {
     "run_id": "compliance",
     "seq": 24,
-    "ts": "2026-10-26T03:02:38.821082Z",
+    "ts": "2026-10-28T04:07:03.564541Z",
     "type": "citation_support",
     "node": "critic",
     "payload": {
@@ -464,23 +464,23 @@
       "supported": [
         {
           "label": "AI Act Annex III(4)(a)",
-          "sentence": "Yes: it is high-risk [AI Act Annex III(4)(a)] [AI Act Annex VIII(7)] [AI Act Art. 16(b)].",
+          "sentence": "Yes: it is high-risk [AI Act Annex III(4)(a)] [AI Act Art. 6(2)] [AI Act Art. 6(1)].",
           "quote": "to analyse and filter job applications",
+          "reason": ""
+        },
+        {
+          "label": "AI Act Art. 6(2)",
+          "sentence": "Yes: it is high-risk [AI Act Annex III(4)(a)] [AI Act Art. 6(2)] [AI Act Art. 6(1)].",
+          "quote": "AI systems referred to in Annex III shall be considered to be high-risk",
           "reason": ""
         }
       ],
       "unsupported": [
         {
-          "label": "AI Act Annex VIII(7)",
-          "sentence": "Yes: it is high-risk [AI Act Annex III(4)(a)] [AI Act Annex VIII(7)] [AI Act Art. 16(b)].",
+          "label": "AI Act Art. 6(1)",
+          "sentence": "Yes: it is high-risk [AI Act Annex III(4)(a)] [AI Act Art. 6(2)] [AI Act Art. 6(1)].",
           "quote": "",
-          "reason": "Annex VIII(7) lists what a provider registers when it claims a system is not high-risk; it does not make a system high-risk."
-        },
-        {
-          "label": "AI Act Art. 16(b)",
-          "sentence": "Yes: it is high-risk [AI Act Annex III(4)(a)] [AI Act Annex VIII(7)] [AI Act Art. 16(b)].",
-          "quote": "",
-          "reason": "Art. 16(b) requires the provider's name and contact address on the system; it says nothing about whether a system is high-risk."
+          "reason": "Art. 6(1) makes high-risk an AI system that is a safety component of a product under the Union harmonisation law in Annex I; a recruitment tool is not one."
         }
       ],
       "unverified": [],
@@ -490,18 +490,18 @@
   {
     "run_id": "compliance",
     "seq": 25,
-    "ts": "2026-10-26T03:02:38.821082Z",
+    "ts": "2026-10-28T04:07:03.564541Z",
     "type": "node_completed",
     "node": "critic",
     "payload": {
       "subtask_id": null,
-      "span_id": "70d769bd8004"
+      "span_id": "d433694cdc69"
     }
   },
   {
     "run_id": "compliance",
     "seq": 26,
-    "ts": "2026-10-26T03:02:38.821082Z",
+    "ts": "2026-10-28T04:07:03.564541Z",
     "type": "critic_verdict",
     "node": "critic",
     "payload": {
@@ -510,49 +510,50 @@
       "faulted_subtask_ids": [],
       "has_synthesis_feedback": true,
       "per_subtask": [],
-      "synthesis_feedback": "Citation problems in the answer, found by checking it against the law:\n- [AI Act Art. 114] is not a provision of that act. Remove it or cite the provision that actually says this.\n\nCitations that do not say what they are cited for, judged against each provision's text:\n- [AI Act Annex VIII(7)] is cited for \"Yes: it is high-risk [AI Act Annex III(4)(a)] [AI Act Annex VIII(7)] [AI Act Art. 16(b)].\" but does not say that: Annex VIII(7) lists what a provider registers when it claims a system is not high-risk; it does not make a system high-risk. Cite the provision that does, or drop the claim.\n- [AI Act Art. 16(b)] is cited for \"Yes: it is high-risk [AI Act Annex III(4)(a)] [AI Act Annex VIII(7)] [AI Act Art. 16(b)].\" but does not say that: Art. 16(b) requires the provider's name and contact address on the system; it says nothing about whether a system is high-risk. Cite the provision that does, or drop the claim."
+      "synthesis_feedback": "Citation problems in the answer, found by checking it against the law:\n- [AI Act Art. 114] is not a provision of that act. Remove it or cite the provision that actually says this.\n\nCitations that do not say what they are cited for, judged against each provision's text:\n- [AI Act Art. 6(1)] is cited for \"Yes: it is high-risk [AI Act Annex III(4)(a)] [AI Act Art. 6(2)] [AI Act Art. 6(1)].\" but does not say that: Art. 6(1) makes high-risk an AI system that is a safety component of a product under the Union harmonisation law in Annex I; a recruitment tool is not one. Cite the provision that does, or drop the claim."
     }
   },
   {
     "run_id": "compliance",
     "seq": 27,
-    "ts": "2026-10-26T03:02:38.837794Z",
+    "ts": "2026-10-28T04:07:03.566544Z",
     "type": "node_started",
     "node": "synthesizer",
     "payload": {
       "subtask_id": null,
-      "span_id": "4be1b1bfab7a"
+      "span_id": "e7dc6594b4f5"
     }
   },
   {
     "run_id": "compliance",
     "seq": 28,
-    "ts": "2026-10-26T03:02:38.837794Z",
+    "ts": "2026-10-28T04:07:03.566544Z",
     "type": "agent_call",
     "node": "synthesizer",
     "payload": {
-      "call_id": "c0f68002a8154e1bba6ea425d068c008",
-      "span_id": "4be1b1bfab7a",
+      "call_id": "b8bebbb703e74e3690c5162c21942e5d",
+      "span_id": "e7dc6594b4f5",
       "subtask_id": null,
       "kind": "model",
       "name": "scripted",
-      "duration_s": 0.0013979999348521233,
+      "duration_s": 0.0005229000016697682,
       "input_tokens": null,
       "output_tokens": null,
       "error": null,
-      "preview": "## Answer\n\nYes: a tool that analyses and filters job applications is high-risk [AI Act Annex III(4)(a)]."
+      "preview": "## Answer\n\nYes: a tool that analyses and filters job applications is high-risk [AI Act Annex III(4)(a)] [AI Act Art. 6(2)]."
     }
   },
   {
     "run_id": "compliance",
     "seq": 29,
-    "ts": "2026-10-26T03:02:38.837794Z",
+    "ts": "2026-10-28T04:07:03.566544Z",
     "type": "citation_check",
     "node": "synthesizer",
     "payload": {
       "ok": true,
       "cited": [
-        "AI Act Annex III(4)(a)"
+        "AI Act Annex III(4)(a)",
+        "AI Act Art. 6(2)"
       ],
       "unresolved": [],
       "unretrieved": [],
@@ -563,18 +564,18 @@
   {
     "run_id": "compliance",
     "seq": 30,
-    "ts": "2026-10-26T03:02:38.837794Z",
+    "ts": "2026-10-28T04:07:03.566544Z",
     "type": "node_completed",
     "node": "synthesizer",
     "payload": {
       "subtask_id": null,
-      "span_id": "4be1b1bfab7a"
+      "span_id": "e7dc6594b4f5"
     }
   },
   {
     "run_id": "compliance",
     "seq": 31,
-    "ts": "2026-10-26T03:02:38.837794Z",
+    "ts": "2026-10-28T04:07:03.568543Z",
     "type": "iteration_started",
     "node": "critic",
     "payload": {
@@ -584,27 +585,27 @@
   {
     "run_id": "compliance",
     "seq": 32,
-    "ts": "2026-10-26T03:02:38.837794Z",
+    "ts": "2026-10-28T04:07:03.568543Z",
     "type": "node_started",
     "node": "critic",
     "payload": {
       "subtask_id": null,
-      "span_id": "beb6ae7d993e"
+      "span_id": "dbe7093f2347"
     }
   },
   {
     "run_id": "compliance",
     "seq": 33,
-    "ts": "2026-10-26T03:02:38.837794Z",
+    "ts": "2026-10-28T04:07:03.569540Z",
     "type": "agent_call",
     "node": "critic",
     "payload": {
-      "call_id": "cfc0883a024c4aea94e5e614883e089b",
-      "span_id": "beb6ae7d993e",
+      "call_id": "d3e51dbd187b46f880eb39afbd8334ef",
+      "span_id": "dbe7093f2347",
       "subtask_id": null,
       "kind": "model",
       "name": "scripted",
-      "duration_s": 0.0011742999777197838,
+      "duration_s": 0.0008990999995148741,
       "input_tokens": null,
       "output_tokens": null,
       "error": null,
@@ -614,26 +615,26 @@
   {
     "run_id": "compliance",
     "seq": 34,
-    "ts": "2026-10-26T03:02:38.837794Z",
+    "ts": "2026-10-28T04:07:03.569540Z",
     "type": "agent_call",
     "node": "critic",
     "payload": {
-      "call_id": "0175d0f5ae03459d88a44c65b7d54ba3",
-      "span_id": "beb6ae7d993e",
+      "call_id": "cfcc61d3a79841f798a66320027fb197",
+      "span_id": "dbe7093f2347",
       "subtask_id": null,
       "kind": "model",
       "name": "scripted",
-      "duration_s": 0.0009645998943597078,
+      "duration_s": 0.0007396000000881031,
       "input_tokens": null,
       "output_tokens": null,
       "error": null,
-      "preview": "{\"judgements\": [{\"item\": 1, \"supported\": true, \"quote\": \"to analyse and filter job applications\", \"reason\": \"\"}]}"
+      "preview": "{\"judgements\": [{\"item\": 1, \"supported\": true, \"quote\": \"to analyse and filter job applications\", \"reason\": \"\"}, {\"item\": 2, \"supported\": true, \"quote\": \"AI systems referred to in Annex III shall be considered to be high-risk\", \"reason\": \"\"}]}"
     }
   },
   {
     "run_id": "compliance",
     "seq": 35,
-    "ts": "2026-10-26T03:02:38.837794Z",
+    "ts": "2026-10-28T04:07:03.569540Z",
     "type": "citation_support",
     "node": "critic",
     "payload": {
@@ -641,8 +642,14 @@
       "supported": [
         {
           "label": "AI Act Annex III(4)(a)",
-          "sentence": "Yes: a tool that analyses and filters job applications is high-risk [AI Act Annex III(4)(a)].",
+          "sentence": "Yes: a tool that analyses and filters job applications is high-risk [AI Act Annex III(4)(a)] [AI Act Art. 6(2)].",
           "quote": "to analyse and filter job applications",
+          "reason": ""
+        },
+        {
+          "label": "AI Act Art. 6(2)",
+          "sentence": "Yes: a tool that analyses and filters job applications is high-risk [AI Act Annex III(4)(a)] [AI Act Art. 6(2)].",
+          "quote": "AI systems referred to in Annex III shall be considered to be high-risk",
           "reason": ""
         }
       ],
@@ -654,18 +661,18 @@
   {
     "run_id": "compliance",
     "seq": 36,
-    "ts": "2026-10-26T03:02:38.837794Z",
+    "ts": "2026-10-28T04:07:03.569540Z",
     "type": "node_completed",
     "node": "critic",
     "payload": {
       "subtask_id": null,
-      "span_id": "beb6ae7d993e"
+      "span_id": "dbe7093f2347"
     }
   },
   {
     "run_id": "compliance",
     "seq": 37,
-    "ts": "2026-10-26T03:02:38.837794Z",
+    "ts": "2026-10-28T04:07:03.569540Z",
     "type": "critic_verdict",
     "node": "critic",
     "payload": {
@@ -680,15 +687,15 @@
   {
     "run_id": "compliance",
     "seq": 38,
-    "ts": "2026-10-26T03:02:38.837794Z",
+    "ts": "2026-10-28T04:07:03.570541Z",
     "type": "run_completed",
     "node": null,
     "payload": {
-      "answer": "## Answer\n\nYes: a tool that analyses and filters job applications is high-risk [AI Act Annex III(4)(a)].",
+      "answer": "## Answer\n\nYes: a tool that analyses and filters job applications is high-risk [AI Act Annex III(4)(a)] [AI Act Art. 6(2)].",
       "thread_id": "thread",
       "iterations": 2,
       "subtask_count": 2,
-      "source_count": 15,
+      "source_count": 13,
       "degraded": [],
       "total_tokens": 0
     }

@@ -67,9 +67,10 @@ async def test_a_question_is_answered_end_to_end_with_no_key() -> None:
     research = QueryResponse.model_validate(record.result).research_results
     report = check_citations(answer, research, load_library())
     assert (report.ok, len(report.cited) > 0) == (True, True)
-    # And the support check read every one.
+    # The support check judges nothing offline: a scripted "yes" would be a
+    # judgement nobody made. Every citation is left unchecked.
     [support, *_] = [e for e in events if e.type == CITATION_SUPPORT]
-    assert sorted(s["label"] for s in support.payload["supported"]) == sorted(report.cited)
+    assert (support.payload["supported"], support.payload["unchecked"]) == ([], len(report.cited))
 
 
 async def test_every_call_says_it_was_scripted() -> None:
