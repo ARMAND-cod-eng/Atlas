@@ -123,7 +123,7 @@ pretend to be a model, so this shows the machinery, not the quality.
 |---|---|
 | Library retrieval, one search per question | recall@10 **0.900** over the 40 compliance questions, every required provision found for 32 of 40 (`atlas_eval retrieval`). On the held-out half, measured once after the last change: **0.875**, up from 0.800 |
 | Engine regression gate, 50 general questions | completion 0.995, grounding 0.955, tool use 0.963; run-to-run noise measured, gate thresholds set from it (5 / 4 / 3 pp) |
-| Tests | **556** backend (plus 13 against Postgres) · **139** frontend, no network calls, no spend |
+| Tests | **563** backend (plus 13 against Postgres) · **140** frontend, no network calls, no spend |
 
 **Not measured yet: the headline.** The domain eval compares three systems on 40 questions:
 
@@ -631,8 +631,16 @@ dataset) run in the same session.
 
 - Most remaining retrieval misses need reasoning, not vocabulary: knowing that screening
   applicants is "evaluation of personal aspects", or that a transfer needs "appropriate safeguards".
-  The next step to try is one cheap model call that rewrites the question into the act's terms,
-  measured on the same held-out half. Embeddings come only if that falls short.
+  A query rewrite is built for them (`atlas/library/rewrite.py`): one cheap model call names the
+  legal concepts a question turns on, in the acts' words, and adds them to the search. It is off
+  until measured:
+
+  ```powershell
+  uv run python -m atlas_eval retrieval --rewrite --split test
+  ```
+
+  That reports recall on the held-out half with and without it, item by item. Embeddings come only
+  if it falls short.
 - Calibrate the judge against the human labels already collected.
 - Add a third act. That is an ingest command, a golden-count test and labels; the engine does not
   change.

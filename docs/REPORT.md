@@ -122,9 +122,19 @@ expose. One caveat: the list of missed labels across all 40 had been seen before
 though not the held-out questions themselves.
 
 The remaining misses mostly need reasoning rather than vocabulary: that screening applicants is
-"evaluation of personal aspects", or that a transfer needs "appropriate safeguards". The next step to
-try is one model call that rewrites the question into the act's terms, measured on the same held-out
-half.
+"evaluation of personal aspects", or that a transfer needs "appropriate safeguards". For those, a
+query rewrite is built and switched off (`QUERY_REWRITE`, `atlas/library/rewrite.py`). One model
+call names the legal concepts a question turns on, in the acts' words, and they are added to the
+search.
+
+**The rewrite is held to vocabulary.** Article numbers and act names the model writes are dropped:
+- which provision a question is about comes from the question, so a rewrite naming "Article 52",
+  the proposal's numbering, cannot steer the lookup;
+- which act it is about also comes from the question, so a rewrite naming the GDPR cannot widen an
+  AI Act question.
+
+It is adopted only if `atlas_eval retrieval --rewrite --split test` shows it does better on the
+held-out half. That needs credit.
 
 One caveat: this is one search per question. A full run searches once per planned branch, and its
 retrieval has not been measured separately.
@@ -301,7 +311,7 @@ wrong thing, while everything looks fine. These were found during this work:
 |---|---|
 | Library retrieval, one search per question | recall@10 0.900 (held-out half 0.875, measured once), recall@5 0.713, all must-cites for 32 of 40 |
 | Engine regression gate, 50 general questions | completion 0.995, grounding 0.955, tool use 0.963; thresholds 5 / 4 / 3 pp from a measured noise floor |
-| Tests | 556 backend, 13 more against Postgres, 139 frontend; no network, no spend |
+| Tests | 563 backend, 13 more against Postgres, 140 frontend; no network, no spend |
 | **Not measured: the domain eval** | Built and tested; needs about $12–15 of model calls (estimated) |
 | **Not measured: Atlas's own retrieval** | One search per branch, rather than per question |
 | **Not measured: the support check's accuracy** | `atlas_eval support` measures it on 24 labelled cases (12 supported, 12 near misses), each "supports" label proved by the provision's own words; needs credit |
