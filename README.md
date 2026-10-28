@@ -15,10 +15,10 @@ the research and re-run only that branch.
 </picture>
 
 *The recorded demo, with the synthesizer's drafts open. The first draft cited an article that does
-not exist ("AI Act Art. 114"; the act has 113). It also cited two real, retrieved provisions for
-something they do not say: Art. 16(b) is about the provider's contact details, not about what is
-high-risk. Both checks sent it back. The rewrite keeps the one citation that holds, read against its
-provision.*
+not exist ("AI Act Art. 114"; the act has 113). It also cited a real, retrieved provision for
+something it does not say: Art. 6(1) makes high-risk the AI that is a safety component of a
+regulated product, which a recruitment tool is not. Both checks sent the draft back. The rewrite
+keeps the two citations that hold: Annex III(4)(a), and Art. 6(2), the rule that makes it high-risk.*
 
 > A research aid, not legal advice. The law's text is EUR-Lex's, reused under Commission Decision
 > 2011/833/EU; see [NOTICE](NOTICE).
@@ -88,8 +88,8 @@ npm run dev
 Open <http://127.0.0.1:3000/demo>. It shows a recorded run replayed through the real workspace:
 
 - researchers reading the regulation library;
-- the first draft caught twice: once citing an invented article, and once citing two real provisions
-  for what they do not say;
+- the first draft caught twice: once citing an invented article, and once citing a real provision
+  for what it does not say;
 - the rewrite that fixes both.
 
 Click any agent to read the prompt it was actually sent. The open agent and tab live in the URL, so
@@ -121,9 +121,9 @@ pretend to be a model, so this shows the machinery, not the quality.
 
 | | |
 |---|---|
-| Library retrieval, one search per question | recall@10 **0.750** over the 40 compliance questions; every required provision found for 26 of 40 (`atlas_eval retrieval`) |
+| Library retrieval, one search per question | recall@10 **0.900** over the 40 compliance questions, every required provision found for 32 of 40 (`atlas_eval retrieval`). On the held-out half, measured once after the last change: **0.875**, up from 0.800 |
 | Engine regression gate, 50 general questions | completion 0.995, grounding 0.955, tool use 0.963; run-to-run noise measured, gate thresholds set from it (5 / 4 / 3 pp) |
-| Tests | **547** backend (plus 13 against Postgres) · **136** frontend, no network calls, no spend |
+| Tests | **556** backend (plus 13 against Postgres) · **139** frontend, no network calls, no spend |
 
 **Not measured yet: the headline.** The domain eval compares three systems on 40 questions:
 
@@ -629,9 +629,10 @@ dataset) run in the same session.
 
 **Then, in order of what the measurements say:**
 
-- Paraphrase is most of the retrieval misses ("chatbot" for an AI system interacting with people).
-  The first fix to try is one cheap model call that rewrites the question into the act's vocabulary.
-  Embeddings come only if that falls short.
+- Most remaining retrieval misses need reasoning, not vocabulary: knowing that screening
+  applicants is "evaluation of personal aspects", or that a transfer needs "appropriate safeguards".
+  The next step to try is one cheap model call that rewrites the question into the act's terms,
+  measured on the same held-out half. Embeddings come only if that falls short.
 - Calibrate the judge against the human labels already collected.
 - Add a third act. That is an ingest command, a golden-count test and labels; the engine does not
   change.

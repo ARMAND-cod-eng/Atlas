@@ -98,14 +98,33 @@ retrieval`, recorded in commit `dafb3ca`):
 | Rank a paragraph on its own words, not its points' | 0.662 |
 | Index every point and sub-point as its own passage | 0.688 |
 | Read "EU" as "Union", the acts' own word | 0.700 |
-| Definitions for questions that ask what a term means | **0.750** |
+| Definitions for questions that ask what a term means | 0.750 |
+| A glossary of everyday words for the acts' own (below) | **0.900** |
 
-At that point every must-cite provision is found for 26 of 40 questions; recall@5 is 0.625.
 Down-weighting recitals was tried and left out: no change at two weights and a loss at a third.
 
-The remaining misses are mostly paraphrase, a "chatbot" for an AI system that interacts with
-people. The next fix to try is one model call that rewrites the question into the act's vocabulary,
-measured the same way.
+**The glossary was measured on questions it was not shaped on.** By 0.750, the misses were mostly
+vocabulary: a question says "chatbot", and the AI Act says "AI systems intended to interact directly
+with natural persons". `atlas/library/glossary.py` maps eight such phrases to the acts' words and adds
+them to the query, never in place of it. Before building it, the 40 questions were split by id and
+the split committed:
+- odd ids, to develop on;
+- even ids, held out and measured once at the end.
+
+| | Before | After |
+|---|---|---|
+| Dev half, the 20 it was shaped on | 0.700 | 0.925 |
+| **Held-out half, measured once** | 0.800 | **0.875** |
+| All 40 | 0.750 | 0.900; recall@5 0.625 → 0.713 |
+
+The held-out gain is a third of the dev gain. That gap is the overfitting the split exists to
+expose. One caveat: the list of missed labels across all 40 had been seen before the split,
+though not the held-out questions themselves.
+
+The remaining misses mostly need reasoning rather than vocabulary: that screening applicants is
+"evaluation of personal aspects", or that a transfer needs "appropriate safeguards". The next step to
+try is one model call that rewrites the question into the act's terms, measured on the same held-out
+half.
 
 One caveat: this is one search per question. A full run searches once per planned branch, and its
 retrieval has not been measured separately.
@@ -272,6 +291,7 @@ wrong thing, while everything looks fine. These were found during this work:
 | The demo showed agents | Its recording bypassed the model layer, so it held no prompts to show | Opening the Prompt tab on the demo |
 | A compliance baseline could be scored | The judge charged `plain` for tool use and grounding it cannot have | A test, failing first, at 0.67 |
 | A live answer's citations all passed | One cited the national-security exclusion, Art. 2(3), for extraterritorial reach, Art. 2(1)(c); real, retrieved, and wrong | Reading the provision a chip linked to. That reading is now the support check |
+| The demo's citations were "supported" | The demo's scripted judge said "supported" for any provision it had no script for. After the glossary improved retrieval, it passed Art. 6(1) for a CV tool | Re-recording after the search change and reading the new first draft. An unscripted provision now stops the recording, and offline mode judges nothing |
 | A deleted run's stream was gone | The Redis test double's DEL ignored streams, so the tests could not tell | Making the double behave like Redis |
 | `DELETE /threads/{id}` was queued | A renamed worker function would have left every deletion queued for nobody | A test pinning the job's registered name |
 
@@ -279,9 +299,9 @@ wrong thing, while everything looks fine. These were found during this work:
 
 | | |
 |---|---|
-| Library retrieval, one search per question | recall@10 0.750, recall@5 0.625, all must-cites for 26 of 40 |
+| Library retrieval, one search per question | recall@10 0.900 (held-out half 0.875, measured once), recall@5 0.713, all must-cites for 32 of 40 |
 | Engine regression gate, 50 general questions | completion 0.995, grounding 0.955, tool use 0.963; thresholds 5 / 4 / 3 pp from a measured noise floor |
-| Tests | 547 backend, 13 more against Postgres, 136 frontend; no network, no spend |
+| Tests | 556 backend, 13 more against Postgres, 139 frontend; no network, no spend |
 | **Not measured: the domain eval** | Built and tested; needs about $12–15 of model calls (estimated) |
 | **Not measured: Atlas's own retrieval** | One search per branch, rather than per question |
 | **Not measured: the support check's accuracy** | `atlas_eval support` measures it on 24 labelled cases (12 supported, 12 near misses), each "supports" label proved by the provision's own words; needs credit |
