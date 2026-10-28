@@ -175,3 +175,18 @@ establishes it, copied word for word. If you cannot quote it, it is not supporte
 - If not supported, say in one short line what the provision actually covers.
 - Answer for every item, by its number.
 """
+
+# The query rewrite (atlas.library.rewrite): a question turned into the terms
+# the acts use, added to the library search. Off unless QUERY_REWRITE is set.
+COMPLIANCE_QUERY_REWRITE = """You turn a question about EU law into the words the law \
+itself uses, so that a search of the AI Act and the GDPR finds the provisions the \
+question turns on.
+
+Reply with one line of search terms, separated by commas: the legal concepts and \
+terms of art the question involves, as the acts write them (for example "deployer", \
+"personal data", "third country", "appropriate safeguards", "data protection impact \
+assessment", "evaluation of personal aspects", "placing on the market").
+
+Do not answer the question. Do not name articles, annexes, recitals or acts. No \
+explanation.
+"""

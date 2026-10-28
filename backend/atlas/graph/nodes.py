@@ -47,6 +47,7 @@ from atlas.graph.state import (
 )
 from atlas.library import load_library
 from atlas.library.citations import CitationReport, check_citations
+from atlas.library.rewrite import statutory_terms
 from atlas.library.sources import law_sources, with_authority
 from atlas.library.support import SupportJudgements, SupportReport, check_support
 from atlas.metrics import (
@@ -292,10 +293,14 @@ async def _law_then_guidance(subtask: Subtask, metrics: RunMetrics) -> list[Sour
     the failure is the branch's, as in the general domain.
     """
     settings = get_settings()
+    query = subtask.question
+    if settings.query_rewrite:
+        # The question as asked, and the acts' words for what it turns on.
+        query = f"{query} {await statutory_terms(query, metrics, call_model)}".strip()
     law = await _searched(
         "library",
-        subtask.question,
-        lambda: _now(law_sources(subtask.question, settings.library_results)),
+        query,
+        lambda: _now(law_sources(query, settings.library_results)),
     )
     if settings.compliance_web_results <= 0:
         return law

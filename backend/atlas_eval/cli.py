@@ -33,10 +33,10 @@ from langchain_core.callbacks import get_usage_metadata_callback
 
 from atlas.domains import DomainName
 from atlas.graph.nodes import CRITIC
-from atlas.library import Unit, load_library
+from atlas.library import Library, Unit, load_library
 from atlas.library.support import Judge, SupportJudgements
 from atlas.metrics import RunMetrics
-from atlas.models import call_structured, primary_provider
+from atlas.models import call_model, call_structured, primary_provider
 from atlas.runtime import configure_logging
 from atlas_eval.baselines import run_plain, run_single_call
 from atlas_eval.citation_metrics import citation_table, score_run, summarize_citations
@@ -57,6 +57,7 @@ from atlas_eval.gate import (
     load_baseline,
     noise_floor,
 )
+from atlas_eval.retrieval import ItemRecall, Searcher
 from atlas_eval.runner import RunRecord, Variant, run_item, run_items
 from atlas_eval.score import SuiteScore, score_all
 from atlas_eval.support_eval import load_support_cases, run_support, score_support
@@ -179,8 +180,79 @@ def cmd_claim(args: argparse.Namespace) -> int:
 # --- retrieval -----------------------------------------------------------------
 
 
+def rewrite_call() -> Callable[..., Awaitable[Any]]:
+    """The model the query rewrite calls, as the researcher calls it."""
+    return call_model
+
+
+def _rewrite_measurement(
+    args: argparse.Namespace, items: list[EvalItem], library: Library, search: Searcher
+) -> int:
+    """Recall with and without the query rewrite, item by item. Calls the model."""
+    from atlas.library.rewrite import statutory_terms
+    from atlas_eval.retrieval import Rewritten, recall_at_k
+
+    print(f"{len(items)} questions rewritten, one model call each")
+    metrics = RunMetrics()
+    call = rewrite_call()
+
+    async def rewrite_all() -> dict[str, str]:
+        return {item.query: await statutory_terms(item.query, metrics, call) for item in items}
+
+    with measured_spend() as spend:
+        rewrites = asyncio.run(rewrite_all())
+    plain = recall_at_k(items, library, search, k=args.k)
+    rewritten = recall_at_k(items, library, Rewritten(search, rewrites), k=args.k)
+
+    def mean(results: Sequence[ItemRecall]) -> float:
+        return sum(r.recall for r in results) / len(results)
+
+    print(
+        f"recall@{args.k} ({args.split}) as asked: {mean(plain):.3f}; "
+        f"rewritten: {mean(rewritten):.3f}"
+    )
+    for before, after in zip(plain, rewritten, strict=True):
+        if before.recall != after.recall:
+            print(f"  {before.item_id}  {before.recall:.2f} -> {after.recall:.2f}")
+
+    primary = primary_provider()
+    on_fallback, calls = _off_primary([c.provider for c in metrics.llm_calls], primary)
+    RUNS_DIR.mkdir(parents=True, exist_ok=True)
+    path = RUNS_DIR / f"retrieval-rewrite-{args.split}.json"
+    payload = {
+        "split": args.split,
+        "k": args.k,
+        "created": _now(),
+        "commit": _git_commit(),
+        "primary_provider": primary,
+        "models": sorted({c.model for c in metrics.llm_calls}),
+        "spend": spend,
+        "as_asked": mean(plain),
+        "rewritten": mean(rewritten),
+        "items": [
+            {
+                "item_id": before.item_id,
+                "rewrite": rewrites[item.query],
+                "as_asked": before.recall,
+                "rewritten": after.recall,
+            }
+            for item, before, after in zip(items, plain, rewritten, strict=True)
+        ],
+    }
+    path.write_text(json.dumps(payload, indent=2) + "\n", encoding="utf-8", newline="\n")
+    print(f"\nwrote {path}")
+    if calls and on_fallback / calls > FALLBACK_LIMIT:
+        print(
+            f"\nFAIL: {on_fallback} of {calls} rewrites came from the fallback, not {primary}."
+            " This measures the fallback's rewrites, not the system's."
+        )
+        return 1
+    return 0
+
+
 def cmd_retrieval(args: argparse.Namespace) -> int:
-    """Recall@k of the library search over the compliance dataset. Offline, free."""
+    """Recall@k of the library search over the compliance dataset. Offline and
+    free, unless --rewrite, which asks the model to rewrite each question."""
     from atlas.library.search import LibrarySearch
     from atlas_eval.retrieval import recall_at_k, split_of
 
@@ -190,6 +262,8 @@ def cmd_retrieval(args: argparse.Namespace) -> int:
         for item in load_dataset(*DATASETS["compliance"]).items
         if args.split == "all" or split_of(item.id) == args.split
     ]
+    if args.rewrite:
+        return _rewrite_measurement(args, items, library, LibrarySearch(library))
     results = recall_at_k(items, library, LibrarySearch(library), k=args.k)
     mean = sum(r.recall for r in results) / len(results)
     complete = sum(1 for r in results if not r.missed)
@@ -809,6 +883,11 @@ def build_parser() -> argparse.ArgumentParser:
         choices=["all", "dev", "test"],
         default="all",
         help="dev (odd ids) to develop search changes on; test (even ids) to measure them once",
+    )
+    retrieval.add_argument(
+        "--rewrite",
+        action="store_true",
+        help="also measure the query rewrite: one model call per question (costs)",
     )
     retrieval.set_defaults(func=cmd_retrieval)
 

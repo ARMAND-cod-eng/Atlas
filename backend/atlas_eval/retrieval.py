@@ -14,7 +14,7 @@ not the agent's.
 
 from __future__ import annotations
 
-from collections.abc import Sequence
+from collections.abc import Mapping, Sequence
 from typing import Literal, Protocol
 
 from pydantic import BaseModel
@@ -39,6 +39,18 @@ def split_of(item_id: str) -> Split:
 
 class Searcher(Protocol):
     def search(self, query: str, limit: int = 8) -> list[Hit]: ...
+
+
+class Rewritten:
+    """A search run on each question with its rewrite added, as the researcher
+    runs it when QUERY_REWRITE is on."""
+
+    def __init__(self, search: Searcher, rewrites: Mapping[str, str]) -> None:
+        self._search = search
+        self._rewrites = rewrites
+
+    def search(self, query: str, limit: int = 8) -> list[Hit]:
+        return self._search.search(f"{query} {self._rewrites.get(query, '')}".strip(), limit)
 
 
 class ItemRecall(BaseModel):

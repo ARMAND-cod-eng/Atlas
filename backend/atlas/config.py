@@ -84,6 +84,10 @@ class Settings(BaseSettings):
     # Whether the compliance critic also asks a model if each cited provision says
     # what its sentence says (atlas.library.support). One structured call a round.
     citation_support_check: bool = True
+    # Whether a compliance researcher first asks a model for the acts' terms for
+    # its question and adds them to the library search (atlas.library.rewrite).
+    # Off until it measures better on the held-out half of the compliance eval.
+    query_rewrite: bool = False
 
     # Days a conversation is kept after its last question; then the nightly purge
     # deletes it everywhere (atlas.retention). 0 keeps everything.
