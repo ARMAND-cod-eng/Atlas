@@ -9,8 +9,15 @@ from __future__ import annotations
 
 from atlas.library import Library, Unit
 from atlas.library.search import Hit
-from atlas_eval.dataset import EvalItem, ExpectedCitations, ExpectedSubtasks, RubricEntry
-from atlas_eval.retrieval import recall_at_k
+from atlas_eval.dataset import (
+    DATASETS,
+    EvalItem,
+    ExpectedCitations,
+    ExpectedSubtasks,
+    RubricEntry,
+    load_dataset,
+)
+from atlas_eval.retrieval import recall_at_k, split_of
 
 
 def _unit(unit_id: str, label: str, parent: str | None = None) -> Unit:
@@ -81,3 +88,13 @@ def test_recall_is_the_share_of_must_cites_found() -> None:
     )
 
     assert result.recall == 0.5
+
+
+def test_the_split_is_fixed_by_id_and_halves_the_dataset() -> None:
+    items = load_dataset(*DATASETS["compliance"]).items
+
+    dev = [i.id for i in items if split_of(i.id) == "dev"]
+    test = [i.id for i in items if split_of(i.id) == "test"]
+
+    assert (len(dev), len(test)) == (20, 20)
+    assert (dev[:3], test[:3]) == (["c01", "c03", "c05"], ["c02", "c04", "c06"])

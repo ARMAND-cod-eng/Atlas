@@ -15,13 +15,26 @@ not the agent's.
 from __future__ import annotations
 
 from collections.abc import Sequence
-from typing import Protocol
+from typing import Literal, Protocol
 
 from pydantic import BaseModel
 
 from atlas.library import Library
 from atlas.library.search import Hit
 from atlas_eval.dataset import EvalItem
+
+Split = Literal["dev", "test"]
+
+
+def split_of(item_id: str) -> Split:
+    """Which half of the dataset an item is in, fixed by its id: odd ids develop,
+    even ids test.
+
+    Search changes are tried and kept on the dev half only, and the test half
+    is measured once they are done. A change shaped on the questions it is then
+    scored on reports how well it fits them, not how well it generalises.
+    """
+    return "dev" if int(item_id.lstrip("c")) % 2 == 1 else "test"
 
 
 class Searcher(Protocol):

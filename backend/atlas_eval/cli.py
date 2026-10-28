@@ -182,15 +182,19 @@ def cmd_claim(args: argparse.Namespace) -> int:
 def cmd_retrieval(args: argparse.Namespace) -> int:
     """Recall@k of the library search over the compliance dataset. Offline, free."""
     from atlas.library.search import LibrarySearch
-    from atlas_eval.retrieval import recall_at_k
+    from atlas_eval.retrieval import recall_at_k, split_of
 
     library = load_library()
-    items = load_dataset(*DATASETS["compliance"]).items
+    items = [
+        item
+        for item in load_dataset(*DATASETS["compliance"]).items
+        if args.split == "all" or split_of(item.id) == args.split
+    ]
     results = recall_at_k(items, library, LibrarySearch(library), k=args.k)
     mean = sum(r.recall for r in results) / len(results)
     complete = sum(1 for r in results if not r.missed)
     print(
-        f"recall@{args.k}: {mean:.3f} over {len(results)} items; "
+        f"recall@{args.k} ({args.split}): {mean:.3f} over {len(results)} items; "
         f"every must-cite found in {complete} of {len(results)}\n"
     )
     for result in results:
@@ -800,6 +804,12 @@ def build_parser() -> argparse.ArgumentParser:
     )
     retrieval.add_argument("--k", type=int, default=10)
     retrieval.add_argument("--verbose", action="store_true", help="show what was returned")
+    retrieval.add_argument(
+        "--split",
+        choices=["all", "dev", "test"],
+        default="all",
+        help="dev (odd ids) to develop search changes on; test (even ids) to measure them once",
+    )
     retrieval.set_defaults(func=cmd_retrieval)
 
     record = sub.add_parser("record", help="hit live Tavily and write the frozen corpus")
