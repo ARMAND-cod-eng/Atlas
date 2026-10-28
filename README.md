@@ -123,7 +123,7 @@ pretend to be a model, so this shows the machinery, not the quality.
 |---|---|
 | Library retrieval, one search per question | recall@10 **0.900** over the 40 compliance questions, every required provision found for 32 of 40 (`atlas_eval retrieval`). On the held-out half, measured once after the last change: **0.875**, up from 0.800 |
 | Engine regression gate, 50 general questions | completion 0.995, grounding 0.955, tool use 0.963; run-to-run noise measured, gate thresholds set from it (5 / 4 / 3 pp) |
-| Tests | **563** backend (plus 13 against Postgres) · **140** frontend, no network calls, no spend |
+| Tests | **563** backend (plus 13 against Postgres) · **144** frontend, no network calls, no spend |
 
 **Not measured yet: the headline.** The domain eval compares three systems on 40 questions:
 
@@ -186,7 +186,7 @@ graph LR
 | Pane | What it shows |
 |---|---|
 | **Evolution** | Every version of the answer on this conversation, and a timeline of the run on screen: the plan, each branch, each critic verdict with its reason, each edit. |
-| **Agents** | The live graph, and under it an inspector for the agent you select. |
+| **Agents** | The live graph, and under it an inspector for the agent you select. Keys: `j` / `k` step through the agents in the order they ran, `e` edits the selected branch's question, `Esc` closes. |
 | **Result** | The answer with its citation chips, the sources grouped by authority, and a word-level comparison with any other version. |
 
 **Editing a branch forks the run; it does not restart it.** A revision writes through a dedicated

@@ -61,7 +61,9 @@ export function Inspector({
     return (
       <p className="p-3 text-xs text-ink-faint">
         Select an agent, here or in the timeline, to see its task, the exact prompt it was sent and
-        what it produced.
+        what it produced. Keys: <kbd className="font-mono">j</kbd> / <kbd className="font-mono">k</kbd>{' '}
+        step through the agents, <kbd className="font-mono">e</kbd> edits a branch,{' '}
+        <kbd className="font-mono">Esc</kbd> closes.
       </p>
     );
   }

@@ -15,6 +15,7 @@ import { type PaneSpec, Workspace } from './Workspace';
 import type { RunResult, Topology } from '@/lib/events';
 import type { RunState } from '@/lib/reducer';
 import { useInspectorLink } from '@/lib/inspectorLink';
+import { agentOrder, useShortcuts } from '@/lib/shortcuts';
 import type { Connection } from '@/lib/useRunStream';
 import { useVersions } from '@/lib/useVersions';
 import { versionRows } from '@/lib/versions';
@@ -65,6 +66,18 @@ export function RunWorkspace({
   // In the URL, so a link can open one agent's prompt and a reload keeps it.
   const [link, setSelected, setTab] = useInspectorLink();
   const selected = link.node;
+  useShortcuts({
+    order: agentOrder(state),
+    selected,
+    onSelect: setSelected,
+    // e: to the selected branch's question, where the run can be revised.
+    onEdit: () => {
+      const branch = state.branches.find((b) => b.id === selected);
+      if (branch === undefined) return;
+      setTab('task');
+      window.setTimeout(() => document.getElementById(`edit-${branch.subtaskId}`)?.focus(), 0);
+    },
+  });
   // Asked again when the run's phase changes: finishing changes its own row.
   const runs = useVersions(state.threadId, runId, state.phase);
   const rows = runs === null || runId === null ? [] : versionRows(runs, runId);
