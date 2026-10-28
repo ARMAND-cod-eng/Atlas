@@ -12,6 +12,8 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import failed from '../fixtures/run-failed.json';
 import retry from '../fixtures/retry.json';
+import calls from '../../src/demo/calls.json';
+import compliance from '../fixtures/compliance.json';
 
 import { Inspector } from '../../src/components/Inspector';
 import { API_BASE, type AgentCall, fetchCall } from '../../src/lib/api';
@@ -235,5 +237,29 @@ describe("the synthesizer's drafts", () => {
     expect(screen.getByText(/does not say what it is cited for/).textContent).toBe(
       'AI Act Art. 2(3) does not say what it is cited for: national security',
     );
+  });
+});
+
+describe('an attempt that made more than one model call', () => {
+  // The recorded demo: each critic round makes two calls in one span, its
+  // review and the citation support check.
+  const state = stateOf(compliance);
+  const recorded = new Map((calls as readonly AgentCall[]).map((call) => [call.call_id, call]));
+  const loadCall = (id: string): Promise<AgentCall | null> => Promise.resolve(recorded.get(id) ?? null);
+
+  it('can open each of them, the review and the support check', async () => {
+    render(<Inspector runId={null} loadCall={loadCall} state={state} result={null} selected={CRITIC} />);
+    fireEvent.click(screen.getByRole('tab', { name: 'Prompt' }));
+
+    expect(screen.getAllByRole('button', { name: /^Call \d of 2$/ }).map((b) => b.textContent)).toEqual([
+      'Call 1',
+      'Call 2',
+    ]);
+    expect(await screen.findByText(/^You are reviewing the research/)).toBeDefined();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Call 2 of 2' }));
+
+    expect(await screen.findByText(/^You check whether provisions of EU law/)).toBeDefined();
+    expect(screen.queryByText(/^You are reviewing the research/)).toBeNull();
   });
 });

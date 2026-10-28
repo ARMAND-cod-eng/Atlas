@@ -6,7 +6,7 @@ import { type AgentCall, reviseRun } from '@/lib/api';
 import type { RunResult, SourceRef } from '@/lib/events';
 import { type Agent, type Attempt, agentOf, byAuthority, reviewsOf } from '@/lib/inspector';
 import type { InspectorTab } from '@/lib/inspectorLink';
-import { type RunState, isFinished } from '@/lib/reducer';
+import { type CallEntry, type RunState, isFinished } from '@/lib/reducer';
 
 type Tab = InspectorTab;
 
@@ -91,7 +91,8 @@ export function Inspector({
         {tab === 'task' && (
           <TaskTab agent={agent} state={state} runId={runId} onRevised={onRevised} />
         )}
-        {tab === 'prompt' && <CallTab agent={agent} loadCall={loadCall} show="request" />}
+        {/* Keyed by agent: the call picked for one agent means nothing for the next. */}
+        {tab === 'prompt' && <CallTab key={agent.id} agent={agent} loadCall={loadCall} show="request" />}
         {tab === 'output' && <OutputTab agent={agent} state={state} loadCall={loadCall} />}
         {tab === 'attempts' && <AttemptsTab attempts={agent.attempts} />}
       </div>
@@ -258,13 +259,32 @@ function Reviews({
 // --- the calls ----------------------------------------------------------------------------
 
 /** The latest attempt's model call (or its first call), fetched in full when shown. */
-function useCall(agent: Agent, loadCall: CallSource | null): {
+/**
+ * The calls of the latest attempt worth opening: its model calls, in the order
+ * they were reported, or its first search when it made none. The critic makes
+ * two in a round (its review and the citation support check); a structured
+ * call retried on the fallback makes two as well.
+ */
+function openable(attempt: Attempt | null): readonly CallEntry[] {
+  if (attempt === null) return [];
+  const models = attempt.calls.filter((call) => call.kind === 'model');
+  return models.length > 0 ? models : attempt.calls.slice(0, 1);
+}
+
+/** One of the latest attempt's calls, fetched in full when shown. */
+function useCall(
+  agent: Agent,
+  loadCall: CallSource | null,
+  choice: number,
+): {
   readonly attempt: Attempt | null;
+  readonly choices: readonly CallEntry[];
   readonly call: AgentCall | null;
   readonly state: 'none' | 'replay' | 'loading' | 'ready' | 'unavailable';
 } {
   const attempt = agent.attempts.at(-1) ?? null;
-  const summary = attempt?.calls.find((call) => call.kind === 'model') ?? attempt?.calls[0] ?? null;
+  const choices = openable(attempt);
+  const summary = choices[Math.min(choice, choices.length - 1)] ?? null;
   const callId = summary?.call_id ?? null;
   const [fetched, setFetched] = useState<{ readonly id: string; readonly call: AgentCall | null } | null>(null);
 
@@ -279,10 +299,47 @@ function useCall(agent: Agent, loadCall: CallSource | null): {
     };
   }, [loadCall, callId]);
 
-  if (callId === null) return { attempt, call: null, state: 'none' };
-  if (loadCall === null) return { attempt, call: null, state: 'replay' };
-  if (fetched?.id !== callId) return { attempt, call: null, state: 'loading' };
-  return { attempt, call: fetched.call, state: fetched.call === null ? 'unavailable' : 'ready' };
+  if (callId === null) return { attempt, choices, call: null, state: 'none' };
+  if (loadCall === null) return { attempt, choices, call: null, state: 'replay' };
+  if (fetched === null || fetched.id !== callId) {
+    return { attempt, choices, call: null, state: 'loading' };
+  }
+  return {
+    attempt,
+    choices,
+    call: fetched.call,
+    state: fetched.call === null ? 'unavailable' : 'ready',
+  };
+}
+
+function CallPicker({
+  count,
+  choice,
+  onChoose,
+}: {
+  readonly count: number;
+  readonly choice: number;
+  readonly onChoose: (choice: number) => void;
+}): React.JSX.Element | null {
+  if (count < 2) return null;
+  return (
+    <div className="mb-2 flex gap-1">
+      {Array.from({ length: count }, (_, index) => (
+        <button
+          key={index}
+          type="button"
+          aria-label={`Call ${index + 1} of ${count}`}
+          aria-pressed={choice === index}
+          onClick={() => onChoose(index)}
+          className={`rounded border px-1.5 py-0.5 text-2xs ${
+            choice === index ? 'border-accent text-ink' : 'border-line text-ink-faint hover:text-ink'
+          }`}
+        >
+          Call {index + 1}
+        </button>
+      ))}
+    </div>
+  );
 }
 
 function CallTab({
@@ -294,7 +351,9 @@ function CallTab({
   readonly loadCall: CallSource | null;
   readonly show: 'request' | 'response';
 }): React.JSX.Element {
-  const { attempt, call, state } = useCall(agent, loadCall);
+  const [choice, setChoice] = useState(0);
+  const { attempt, choices, call, state } = useCall(agent, loadCall, choice);
+  const picker = <CallPicker count={choices.length} choice={choice} onChoose={setChoice} />;
   if (state === 'none') {
     return (
       <p className="text-xs text-ink-faint">
@@ -312,16 +371,26 @@ function CallTab({
       </p>
     );
   }
-  if (state === 'loading') return <p className="text-xs text-ink-faint">Loading the call…</p>;
+  if (state === 'loading') {
+    return (
+      <div>
+        {picker}
+        <p className="text-xs text-ink-faint">Loading the call…</p>
+      </div>
+    );
+  }
   if (call === null) return <p className="text-xs text-failed">The API could not return this call.</p>;
 
   const header = (
-    <p className="mb-2 text-2xs text-ink-faint">
-      Attempt {attempt?.number} · {call.kind === 'model' ? call.name : `${call.name} search`} ·{' '}
-      {call.duration_s.toFixed(1)}s
-      {call.input_tokens !== null && ` · ${call.input_tokens.toLocaleString()} in`}
-      {call.output_tokens !== null && ` / ${call.output_tokens.toLocaleString()} out`}
-    </p>
+    <>
+      {picker}
+      <p className="mb-2 text-2xs text-ink-faint">
+        Attempt {attempt?.number} · {call.kind === 'model' ? call.name : `${call.name} search`} ·{' '}
+        {call.duration_s.toFixed(1)}s
+        {call.input_tokens !== null && ` · ${call.input_tokens.toLocaleString()} in`}
+        {call.output_tokens !== null && ` / ${call.output_tokens.toLocaleString()} out`}
+      </p>
+    </>
   );
 
   if (show === 'response') {
@@ -437,7 +506,7 @@ function OutputTab({
       </Labelled>
     );
   }
-  return <CallTab agent={agent} loadCall={loadCall} show="response" />;
+  return <CallTab key={agent.id} agent={agent} loadCall={loadCall} show="response" />;
 }
 
 function SourceList({
