@@ -324,6 +324,12 @@ wrong thing, while everything looks fine. These were found during this work:
   Journal is authentic.
 - **The dataset is unreviewed.** Its expected citations are checked against the library, but the
   questions and rubrics are a model's drafts until a person reviews them, and the README says so.
+  A second read by the drafting model checked every rubric line against the text of the provisions
+  it cites, and 15 of its numbers and phrasings word for word, and found nothing to correct. That
+  is a model checking its own work, not a review. Three lines rest on interpretation rather than
+  the text, and a reviewer should look at them first:
+  - c06 and c40 assume the company built its chatbot, so the disclosure duty falls on it as provider;
+  - c33 says payroll is not occasional processing, which comes from regulators' guidance.
 - **The eval measures citing the law, not guidance.** With the web off, it does not measure how
   well Atlas uses official guidance.
 - **Whether a provision supports its sentence is a judgement.** The deterministic check stops at
