@@ -24,6 +24,7 @@ from typing import Literal
 import snowballstemmer
 
 from atlas.library import ACTS, Library, Unit
+from atlas.library.glossary import expand
 from atlas.tools.rank import BM25, tokenize
 
 # Words that say nothing about which provision a question is about. "Shall",
@@ -119,10 +120,12 @@ def references(library: Library, query: str) -> list[Unit]:
 
 # A definition opens with its term in the OJ's typographic quotes (U+2018, U+2019).
 _DEFINED_TERM = re.compile("^\u2018([^\u2019]+)\u2019")
-# The question asks what something is, or quotes a term. Without a cue like this,
-# every question that mentions a provider would spend a slot on what one is.
+# The question asks what something is, whether something counts as it, or quotes
+# a term. Without a cue like this, every question that mentions a provider would
+# spend a slot on what one is.
 _ASKS_MEANING = re.compile(
-    r"\b(define[sd]?|definitions?|meaning|mean|means|what is an?|differen\w*)\b"
+    r"\b(define[sd]?|definitions?|meaning|mean|means|what is an?|differen\w*"
+    r"|valid|validity|counts? as|qualif\w* as|amounts? to)\b"
     "|['\"\u2018\u201c][^'\"\u2019\u201d]{2,60}['\"\u2019\u201d]",
     re.IGNORECASE,
 )
@@ -266,7 +269,8 @@ class LibrarySearch:
             if not self._covered(unit, chosen):
                 chosen.append(Hit(unit=unit, reason="definition"))
 
-        terms = legal_terms(query)
+        # Ranked on the question's words and the acts' words for its everyday ones.
+        terms = legal_terms(expand(query))
         scored = sorted(
             (
                 (-self._index.score(i, terms), self._ids[i], i)
