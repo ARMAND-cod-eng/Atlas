@@ -305,7 +305,9 @@ def _app_with_inline_worker() -> TestClient:
     compiled = build_state_graph().compile(checkpointer=MemorySaver())
     app = create_app()
     app.state.arq = FakeArq(
-        lambda run_id, query, thread_id: execute_run(run_id, query, thread_id, compiled)
+        lambda run_id, query, thread_id, domain=None: execute_run(
+            run_id, query, thread_id, compiled, domain=domain
+        )
     )
     return TestClient(app)
 

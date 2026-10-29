@@ -23,7 +23,9 @@ from redis.asyncio import Redis
 from sqlalchemy import text
 
 from atlas import eventlog
+from atlas.config import get_settings
 from atlas.db.session import get_engine
+from atlas.domains import DomainName
 from atlas.events import RUN_FAILED
 from atlas.graph.state import Revision
 from atlas.result import QueryResponse
@@ -57,6 +59,14 @@ class QueryRequest(BaseModel):
             "reading the original means the original. Implies its thread."
         ),
     )
+    domain: DomainName | None = Field(
+        default=None,
+        description=(
+            "compliance: the AI Act and the GDPR, every citation checked against them. "
+            "general: research from the web. Chosen by a conversation's first question "
+            "(the configured domain when omitted) and kept by every run on it."
+        ),
+    )
 
 
 class RevisionRequest(BaseModel):
@@ -77,6 +87,7 @@ class RunSummary(BaseModel):
     status: RunStatusName
     created_at: datetime
     finished_at: datetime | None
+    domain: DomainName | None = None
 
 
 class CallSummary(BaseModel):
@@ -215,7 +226,9 @@ async def _finished_run(request: Request, run_id: str, purpose: str) -> RunRecor
     return run
 
 
-async def _enqueue(request: Request, thread_id: str, function: str, *args: str) -> tuple[Job, str]:
+async def _enqueue(
+    request: Request, thread_id: str, function: str, *args: str, domain: DomainName
+) -> tuple[Job, str]:
     """Claim the thread, then queue one job for a fresh run. Returns ``(job, run_id)``."""
     arq: ArqRedis = request.app.state.arq
     run_id = str(uuid4())
@@ -235,7 +248,7 @@ async def _enqueue(request: Request, thread_id: str, function: str, *args: str) 
         await eventlog.register(run_id)
         # _job_id ties the arq job to the run, so the job's result and the run's
         # event stream are addressable by the same identifier.
-        job = await arq.enqueue_job(function, run_id, *args, _job_id=run_id)
+        job = await arq.enqueue_job(function, run_id, *args, _job_id=run_id, domain=domain)
     except BaseException:
         await eventlog.release_thread(thread_id, run_id)
         raise
@@ -251,10 +264,35 @@ async def _enqueue(request: Request, thread_id: str, function: str, *args: str) 
     return job, run_id
 
 
+async def _thread_domain(request: Request, thread_id: str) -> DomainName | None:
+    """The domain a conversation researches in: its first run's. None for a new thread."""
+    store: RunStore | None = getattr(request.app.state, "store", None)
+    if store is None:
+        return None
+    runs = await store.thread(thread_id)
+    return runs[0].domain if runs else None
+
+
+def _domain_for(thread_id: str, kept: DomainName | None, asked: DomainName | None) -> DomainName:
+    """The domain a run on this thread runs in: the conversation's, which a run cannot switch."""
+    if kept is None:
+        return asked or get_settings().atlas_domain
+    if asked is not None and asked != kept:
+        raise HTTPException(
+            status_code=422,
+            detail=(
+                f"thread {thread_id} researches in the {kept} domain; "
+                f"start a new conversation to ask in the {asked} one"
+            ),
+        )
+    return kept
+
+
 async def enqueue_run(request: Request, payload: QueryRequest) -> tuple[Job, str, str]:
     """Put one question on the queue. Returns ``(job, run_id, thread_id)``."""
     thread_id = payload.thread_id
     parent_run_id: tuple[str, ...] = ()
+    kept: DomainName | None = None
     if payload.parent_run_id is not None:
         parent = await _finished_run(request, payload.parent_run_id, "continue from")
         if thread_id is not None and thread_id != parent.thread_id:
@@ -264,9 +302,13 @@ async def enqueue_run(request: Request, payload: QueryRequest) -> tuple[Job, str
             )
         thread_id = parent.thread_id
         parent_run_id = (parent.run_id,)
+        kept = parent.domain
+    elif thread_id is not None:
+        kept = await _thread_domain(request, thread_id)
     thread_id = thread_id or str(uuid4())
+    domain = _domain_for(thread_id, kept, payload.domain)
     job, run_id = await _enqueue(
-        request, thread_id, RUN_RESEARCH, payload.query, thread_id, *parent_run_id
+        request, thread_id, RUN_RESEARCH, payload.query, thread_id, *parent_run_id, domain=domain
     )
     return job, run_id, thread_id
 
@@ -320,6 +362,8 @@ async def revise_run(request: Request, run_id: str, payload: RevisionRequest) ->
         parent.run_id,
         payload.subtask_id,
         question,
+        # A revision re-researches under the rules its parent was researched by.
+        domain=parent.domain or get_settings().atlas_domain,
     )
     return RunAccepted(
         run_id=revision_id, thread_id=parent.thread_id, events_url=f"/runs/{revision_id}/events"

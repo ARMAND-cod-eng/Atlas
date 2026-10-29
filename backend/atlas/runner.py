@@ -29,6 +29,8 @@ from langchain_core.runnables import RunnableConfig
 from langgraph.graph.state import CompiledStateGraph
 
 from atlas import eventlog
+from atlas.config import get_settings
+from atlas.domains import DomainName
 from atlas.events import (
     AGENT_CALL,
     REVISION_STARTED,
@@ -122,6 +124,7 @@ async def execute_run(
     *,
     parent_run_id: str | None = None,
     store: RunStore | None = None,
+    domain: DomainName | None = None,
 ) -> dict[str, Any]:
     """A question on the thread — the first one, or a follow-up.
 
@@ -137,6 +140,9 @@ async def execute_run(
 
     async def start() -> _Start:
         configurable: dict[str, Any] = {"thread_id": thread_id, "run_id": run_id}
+        if domain is not None:
+            # Every node reads it through atlas.domains.current_domain.
+            configurable["domain"] = domain
         if parent_run_id is not None:
             parent = await final_checkpoint(graph, thread_id, parent_run_id)
             configurable["checkpoint_id"] = parent["configurable"]["checkpoint_id"]
@@ -146,10 +152,10 @@ async def execute_run(
             # thread_id keys the checkpointer (the conversation); run_id keys the
             # token budget (this one question). See atlas.budget.
             config={"configurable": configurable, "recursion_limit": recursion_limit()},
-            record=_record(run_id, thread_id, "question", query, parent_run_id),
+            record=_record(run_id, thread_id, "question", query, parent_run_id, domain),
         )
 
-    fallback = _record(run_id, thread_id, "question", query, parent_run_id)
+    fallback = _record(run_id, thread_id, "question", query, parent_run_id, domain)
     return await _execute(run_id, thread_id, graph, start, fallback, store)
 
 
@@ -162,6 +168,7 @@ async def execute_revision(
     subtask_id: str,
     question: str,
     store: RunStore | None = None,
+    domain: DomainName | None = None,
 ) -> dict[str, Any]:
     """Re-run one edited branch of a finished run. See :mod:`atlas.revision`."""
 
@@ -175,22 +182,28 @@ async def execute_revision(
             question=question,
         )
         values = (await graph.aget_state(fork)).values
-        record = _record(run_id, thread_id, "revision", values["query"], parent_run_id)
+        record = _record(run_id, thread_id, "revision", values["query"], parent_run_id, domain)
+        configurable = {**fork["configurable"], **({"domain": domain} if domain else {})}
         return _Start(
             graph_input=None,
-            config={**fork, "recursion_limit": recursion_limit()},
+            config={"configurable": configurable, "recursion_limit": recursion_limit()},
             record=record.model_copy(update={"revision": values["revision"]}),
             opening=((REVISION_STARTED, revision_started_payload(values)),),
         )
 
     # The question is the parent's, and is not known until its state is read. A
     # revision refused before then is recorded without one.
-    fallback = _record(run_id, thread_id, "revision", "", parent_run_id)
+    fallback = _record(run_id, thread_id, "revision", "", parent_run_id, domain)
     return await _execute(run_id, thread_id, graph, start, fallback, store)
 
 
 def _record(
-    run_id: str, thread_id: str, kind: RunKind, query: str, parent_run_id: str | None
+    run_id: str,
+    thread_id: str,
+    kind: RunKind,
+    query: str,
+    parent_run_id: str | None,
+    domain: DomainName | None,
 ) -> RunRecord:
     return RunRecord(
         run_id=run_id,
@@ -199,6 +212,8 @@ def _record(
         query=query,
         parent_run_id=parent_run_id,
         created_at=datetime.now(UTC),
+        # Recorded as it ran: the configured domain when the job named none.
+        domain=domain or get_settings().atlas_domain,
     )
 
 
@@ -252,7 +267,13 @@ async def _execute(
         start = await begin()
         if store is not None:
             recorded = audit_complete = await _audited(store.started(start.record), run_id)
-        await events.write(RUN_STARTED, query=start.record.query, thread_id=thread_id)
+        await events.write(
+            RUN_STARTED,
+            query=start.record.query,
+            thread_id=thread_id,
+            # Which kind of run this is: the law, checked, or general research.
+            domain=start.record.domain,
+        )
         for event_type, payload in start.opening:
             await events.write(event_type, **payload)
         logger.info("run started", extra={"run_id": run_id, "thread_id": thread_id})

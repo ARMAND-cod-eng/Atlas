@@ -117,7 +117,8 @@ async def test_a_revision_streams_the_edited_branch_alone(
         (CRITIC_VERDICT, nodes.CRITIC),
         (RUN_COMPLETED, None),
     ]
-    assert events[0][2] == {"query": "first question", "thread_id": THREAD}
+    # The domain is the configured one, since the job named none.
+    assert events[0][2] == {"query": "first question", "thread_id": THREAD, "domain": "general"}
     assert events[2][2]["subtask_id"] == "s1"
 
 

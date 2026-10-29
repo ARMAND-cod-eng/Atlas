@@ -66,6 +66,15 @@ async def test_a_started_run_reads_back_as_running(store: RunStore) -> None:
     assert record.status == "running"
 
 
+async def test_a_run_keeps_the_domain_it_researched_in(store: RunStore) -> None:
+    record = _record(f"t-{uuid4()}", domain="compliance")
+
+    await store.started(record)
+
+    assert (await store.get(record.run_id)) == record
+    assert [run.domain for run in await store.thread(record.thread_id)] == ["compliance"]
+
+
 async def test_a_completed_run_keeps_its_result(store: RunStore) -> None:
     record = _record(f"t-{uuid4()}")
     result = {"answer": "RAG retrieves, then generates.", "thread_id": record.thread_id}

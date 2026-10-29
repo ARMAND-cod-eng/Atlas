@@ -18,6 +18,7 @@ from fastapi.testclient import TestClient
 from langgraph.checkpoint.memory import MemorySaver
 
 from atlas.api.main import create_app
+from atlas.domains import DomainName
 from atlas.graph import nodes
 from atlas.graph.builder import build_state_graph, checkpoint_serde
 from atlas.graph.state import Source
@@ -45,14 +46,31 @@ class Harness:
         self.store = InMemoryRunStore()
 
         async def research(
-            run_id: str, query: str, thread_id: str, parent_run_id: str | None = None
+            run_id: str,
+            query: str,
+            thread_id: str,
+            parent_run_id: str | None = None,
+            *,
+            domain: DomainName | None = None,
         ) -> dict[str, Any]:
             return await execute_run(
-                run_id, query, thread_id, graph, parent_run_id=parent_run_id, store=self.store
+                run_id,
+                query,
+                thread_id,
+                graph,
+                parent_run_id=parent_run_id,
+                store=self.store,
+                domain=domain,
             )
 
         async def revise(
-            run_id: str, thread_id: str, parent_run_id: str, subtask_id: str, question: str
+            run_id: str,
+            thread_id: str,
+            parent_run_id: str,
+            subtask_id: str,
+            question: str,
+            *,
+            domain: DomainName | None = None,
         ) -> dict[str, Any]:
             return await execute_revision(
                 run_id,
@@ -62,6 +80,7 @@ class Harness:
                 subtask_id=subtask_id,
                 question=question,
                 store=self.store,
+                domain=domain,
             )
 
         async def forget(thread_id: str) -> list[str]:

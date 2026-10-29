@@ -22,6 +22,7 @@ from sqlalchemy import text
 from sqlalchemy.engine import RowMapping
 from sqlalchemy.ext.asyncio import AsyncEngine
 
+from atlas.domains import DomainName
 from atlas.events import AgentEvent
 from atlas.graph.state import Revision
 from atlas.trace import AgentCall
@@ -47,6 +48,9 @@ class RunRecord(BaseModel):
     error: str | None = None
     created_at: datetime
     finished_at: datetime | None = None
+    # The domain the run researched in: chosen when its conversation started, and
+    # kept by every run on it. None on rows written before it was recorded.
+    domain: DomainName | None = None
 
 
 class RunStore(Protocol):
@@ -182,6 +186,8 @@ _SCHEMA = (
     )
     """,
     "CREATE INDEX IF NOT EXISTS atlas_runs_thread ON atlas_runs (thread_id, created_at)",
+    # Added after the table: a database created before keeps its rows, which read as None.
+    "ALTER TABLE atlas_runs ADD COLUMN IF NOT EXISTS domain TEXT",
     """
     CREATE TABLE IF NOT EXISTS atlas_calls (
         call_id       TEXT PRIMARY KEY,
@@ -226,7 +232,7 @@ _SCHEMA_LOCK = 0x41544C53  # "ATLS"
 
 _COLUMNS = (
     "run_id, thread_id, kind, query, parent_run_id, revision, status, result, error, "
-    "created_at, finished_at"
+    "created_at, finished_at, domain"
 )
 
 
@@ -259,7 +265,7 @@ class PostgresRunStore:
                 text(
                     f"INSERT INTO atlas_runs ({_COLUMNS}) VALUES (:run_id, :thread_id, :kind, "
                     ":query, :parent_run_id, CAST(:revision AS JSONB), :status, "
-                    "CAST(:result AS JSONB), :error, :created_at, :finished_at)"
+                    "CAST(:result AS JSONB), :error, :created_at, :finished_at, :domain)"
                 ),
                 {
                     **record.model_dump(exclude={"revision", "result"}),

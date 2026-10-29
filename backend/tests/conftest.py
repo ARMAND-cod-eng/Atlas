@@ -241,7 +241,8 @@ class FakeArq:
     The queue itself is arq's to test, not ours.
 
     ``handler`` runs research jobs; ``handlers`` maps any other job name to its
-    own. Each call is recorded in ``calls`` as ``(function, *args)``.
+    own. Each call is recorded in ``calls`` as ``(function, *args)``, and its
+    keyword arguments, which arq passes to the job as such, in ``kwargs``.
     """
 
     def __init__(
@@ -252,14 +253,16 @@ class FakeArq:
         self.handler = handler
         self.handlers = handlers or {}
         self.calls: list[tuple[object, ...]] = []
+        self.kwargs: list[dict[str, object]] = []
 
     async def enqueue_job(
-        self, function: str, *args: object, _job_id: str | None = None
+        self, function: str, *args: object, _job_id: str | None = None, **kwargs: object
     ) -> FakeJob:
         self.calls.append((function, *args))
+        self.kwargs.append(kwargs)
         handler = self.handlers.get(function, self.handler)
         try:
-            payload = await handler(*args)
+            payload = await handler(*args, **kwargs)
         except BaseException as exc:
             # Mirrors arq, which stores a failed job's exception rather than
             # letting it escape the enqueue call.

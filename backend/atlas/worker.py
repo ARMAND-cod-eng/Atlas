@@ -30,6 +30,7 @@ from arq.worker import Worker, create_worker, func
 from atlas import eventlog
 from atlas.config import get_settings
 from atlas.db.session import dispose_engine, get_engine
+from atlas.domains import DomainName
 from atlas.graph.builder import build_graph
 from atlas.offline import install_offline
 from atlas.retention import forget_thread, purge_expired
@@ -67,6 +68,8 @@ async def run_research(
     query: str,
     thread_id: str,
     parent_run_id: str | None = None,
+    *,
+    domain: DomainName | None = None,
 ) -> dict[str, Any]:
     """Execute one research run, streaming its events to the log."""
     return await execute_run(
@@ -76,6 +79,7 @@ async def run_research(
         ctx["graph"].graph,
         parent_run_id=parent_run_id,
         store=ctx["store"],
+        domain=domain,
     )
 
 
@@ -86,6 +90,8 @@ async def run_revision(
     parent_run_id: str,
     subtask_id: str,
     question: str,
+    *,
+    domain: DomainName | None = None,
 ) -> dict[str, Any]:
     """Re-run one edited branch of a finished run. See atlas.revision."""
     return await execute_revision(
@@ -96,6 +102,7 @@ async def run_revision(
         subtask_id=subtask_id,
         question=question,
         store=ctx["store"],
+        domain=domain,
     )
 
 

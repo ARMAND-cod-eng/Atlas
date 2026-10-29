@@ -23,6 +23,7 @@ from langgraph.checkpoint.memory import MemorySaver
 from atlas import budget
 from atlas.api.main import create_app
 from atlas.config import get_settings
+from atlas.domains import DomainName
 from atlas.graph import nodes
 from atlas.graph.builder import build_state_graph
 from atlas.graph.state import AtlasState, CriticVerdict, ResearchResult, Source, Subtask
@@ -262,10 +263,12 @@ def test_a_breach_returns_200_not_an_error(budget_graph: None, fake_redis: FakeR
     """
     compiled = build_state_graph().compile(checkpointer=MemorySaver())
 
-    async def over_budget_run(run_id: str, query: str, thread_id: str) -> dict[str, Any]:
+    async def over_budget_run(
+        run_id: str, query: str, thread_id: str, *, domain: DomainName | None = None
+    ) -> dict[str, Any]:
         # The route mints the run id, so the breach is planted once it exists.
         fake_redis.values[f"atlas:budget:{run_id}"] = get_settings().max_tokens_per_query + 1
-        return await execute_run(run_id, query, thread_id, compiled)
+        return await execute_run(run_id, query, thread_id, compiled, domain=domain)
 
     app = create_app()
     app.state.arq = FakeArq(over_budget_run)
