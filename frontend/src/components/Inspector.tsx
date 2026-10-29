@@ -1,7 +1,9 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 
+import { Button, EmptyState, Kbd } from './ui';
+import { CopyButton } from './ui/CopyButton';
 import { type AgentCall, reviseRun } from '@/lib/api';
 import type { RunResult, SourceRef } from '@/lib/events';
 import { type Agent, type Attempt, agentOf, byAuthority, reviewsOf } from '@/lib/inspector';
@@ -59,37 +61,38 @@ export function Inspector({
 
   if (agent === null) {
     return (
-      <p className="p-3 text-xs text-ink-faint">
-        Select an agent, here or in the timeline, to see its task, the exact prompt it was sent and
-        what it produced. Keys: <kbd className="font-mono">j</kbd> / <kbd className="font-mono">k</kbd>{' '}
-        step through the agents, <kbd className="font-mono">e</kbd> edits a branch,{' '}
-        <kbd className="font-mono">Esc</kbd> closes.
-      </p>
+      <EmptyState title="Select an agent to open it">
+        <p>
+          Click a card above, or an entry in the timeline, to see what it was asked, the exact prompt
+          it was sent and what it produced.
+        </p>
+        <p className="mt-3 flex flex-wrap justify-center gap-x-4 gap-y-1.5">
+          <span>
+            <Kbd>j</Kbd> <Kbd>k</Kbd> step through
+          </span>
+          <span>
+            <Kbd>e</Kbd> edit a branch
+          </span>
+          <span>
+            <Kbd>Esc</Kbd> close
+          </span>
+        </p>
+      </EmptyState>
     );
   }
 
   return (
     <div className="flex h-full min-h-0 flex-col">
-      <div className="flex shrink-0 items-center gap-3 border-b border-line px-3">
-        <h3 className="py-1.5 text-xs font-medium text-ink">{agent.title}</h3>
-        <div role="tablist" aria-label={`${agent.title} details`} className="flex gap-1">
-          {TABS.map((item) => (
-            <button
-              key={item.id}
-              type="button"
-              role="tab"
-              aria-selected={tab === item.id}
-              onClick={() => setTab(item.id)}
-              className={`px-2 py-1.5 text-2xs ${
-                tab === item.id ? 'border-b-2 border-accent text-ink' : 'text-ink-faint hover:text-ink'
-              }`}
-            >
-              {item.label}
-            </button>
-          ))}
-        </div>
+      <div className="flex shrink-0 flex-wrap items-center gap-x-3 gap-y-1.5 border-b border-line px-3 py-2">
+        <h3 className="text-xs font-semibold text-ink">{agent.title}</h3>
+        <Tabs label={`${agent.title} details`} tab={tab} onTab={setTab} />
       </div>
-      <div role="tabpanel" className="min-h-0 flex-1 overflow-y-auto p-3">
+      <div
+        role="tabpanel"
+        id="inspector-panel"
+        aria-labelledby={`inspector-tab-${tab}`}
+        className="min-h-0 flex-1 overflow-y-auto p-3"
+      >
         {tab === 'task' && (
           <TaskTab agent={agent} state={state} runId={runId} onRevised={onRevised} />
         )}
@@ -98,6 +101,64 @@ export function Inspector({
         {tab === 'output' && <OutputTab agent={agent} state={state} loadCall={loadCall} />}
         {tab === 'attempts' && <AttemptsTab attempts={agent.attempts} />}
       </div>
+    </div>
+  );
+}
+
+/**
+ * The tabs as a segmented control, with the arrow keys moving between them as
+ * a tab list's should; Tab itself goes on to the open panel.
+ */
+function Tabs({
+  label,
+  tab,
+  onTab,
+}: {
+  readonly label: string;
+  readonly tab: Tab;
+  readonly onTab: (tab: Tab) => void;
+}): React.JSX.Element {
+  const list = useRef<HTMLDivElement>(null);
+
+  function onKeyDown(event: React.KeyboardEvent): void {
+    const step = event.key === 'ArrowRight' ? 1 : event.key === 'ArrowLeft' ? -1 : 0;
+    if (step === 0) return;
+    event.preventDefault();
+    const index = TABS.findIndex((item) => item.id === tab);
+    const next = TABS[(index + step + TABS.length) % TABS.length];
+    if (next === undefined) return;
+    onTab(next.id);
+    list.current?.querySelector<HTMLElement>(`#inspector-tab-${next.id}`)?.focus();
+  }
+
+  return (
+    <div
+      ref={list}
+      role="tablist"
+      aria-label={label}
+      onKeyDown={onKeyDown}
+      className="ml-auto inline-flex rounded-md bg-raised p-0.5"
+    >
+      {TABS.map((item) => {
+        const active = tab === item.id;
+        return (
+          <button
+            key={item.id}
+            id={`inspector-tab-${item.id}`}
+            type="button"
+            role="tab"
+            aria-selected={active}
+            aria-controls="inspector-panel"
+            tabIndex={active ? 0 : -1}
+            onClick={() => onTab(item.id)}
+            className={`rounded px-2.5 py-1 text-2xs font-medium transition-colors ${
+              active ? 'bg-surface text-ink shadow-sm' : 'text-ink-muted hover:text-ink'
+            }`}
+          >
+            {item.label}
+          </button>
+        );
+      })}
     </div>
   );
 }
@@ -137,11 +198,24 @@ function TaskTab({
   }
 
   const { branch } = agent;
+  // A finished run's branch can be rewritten: the question is then the form
+  // itself, so the one thing to do here is the first thing seen.
+  const editable = runId !== null && isFinished(state) && state.phase === 'completed';
   return (
     <div className="space-y-3">
-      <Labelled label="Asked">
-        <p className="text-xs text-ink">{branch.question}</p>
-      </Labelled>
+      {editable ? (
+        <EditBranch
+          key={`${branch.subtaskId}:${branch.question}`}
+          runId={runId}
+          subtaskId={branch.subtaskId}
+          question={branch.question}
+          onRevised={onRevised}
+        />
+      ) : (
+        <Labelled label="Asked">
+          <p className="text-xs text-ink">{branch.question}</p>
+        </Labelled>
+      )}
       {agent.before !== null && (
         <p className="rounded border border-edited/40 bg-edited/10 px-2 py-1 text-2xs text-ink">
           Rewritten by you. It asked: <span className="text-ink-muted">{agent.before}</span>
@@ -153,15 +227,6 @@ function TaskTab({
         </p>
       )}
       <Reviews reviews={reviewsOf(state.criticRounds, branch.subtaskId)} />
-      {runId !== null && isFinished(state) && state.phase === 'completed' && (
-        <EditBranch
-          key={`${branch.subtaskId}:${branch.question}`}
-          runId={runId}
-          subtaskId={branch.subtaskId}
-          question={branch.question}
-          onRevised={onRevised}
-        />
-      )}
     </div>
   );
 }
@@ -200,35 +265,37 @@ function EditBranch({
 
   const id = `edit-${subtaskId}`;
   return (
-    <form onSubmit={(event) => void submit(event)} className="space-y-2 border-t border-line pt-3">
-      <label htmlFor={id} className="block text-2xs uppercase tracking-wide text-ink-faint">
-        Rewrite this branch&apos;s question
-      </label>
+    <form
+      onSubmit={(event) => void submit(event)}
+      className="space-y-2 rounded-lg border border-line bg-canvas p-3"
+    >
+      <div>
+        <label htmlFor={id} className="block text-xs font-semibold text-ink">
+          Rewrite this branch&apos;s question
+        </label>
+        <p id={`${id}-help`} className="text-2xs text-ink-muted">
+          Only this branch searches again; the others are carried over, and the answer is rewritten.
+        </p>
+      </div>
       <textarea
         id={id}
         value={draft}
         onChange={(event) => setDraft(event.target.value)}
+        aria-describedby={`${id}-help`}
         rows={3}
         maxLength={2000}
-        className="w-full resize-y rounded border border-line bg-canvas px-2 py-1.5 text-xs text-ink focus:border-accent"
+        className="w-full resize-y rounded-md border border-line-strong bg-surface px-2.5 py-2 text-xs text-ink focus:border-accent"
       />
       <div className="flex items-center gap-3">
-        <button
-          type="submit"
-          disabled={!changed || sending}
-          className="rounded bg-accent px-2.5 py-1 text-2xs font-medium text-accent-ink disabled:opacity-40"
-        >
+        {message !== null && (
+          <p role="alert" className="text-2xs text-failed">
+            {message}
+          </p>
+        )}
+        <Button type="submit" variant="primary" size="sm" disabled={!changed || sending} className="ml-auto">
           {sending ? 'Starting…' : 'Re-run this branch'}
-        </button>
-        <span className="text-2xs text-ink-faint">
-          Only this branch searches again; the others are carried over, and the answer is rewritten.
-        </span>
+        </Button>
       </div>
-      {message !== null && (
-        <p role="alert" className="text-2xs text-failed">
-          {message}
-        </p>
-      )}
     </form>
   );
 }
@@ -325,7 +392,7 @@ function CallPicker({
 }): React.JSX.Element | null {
   if (count < 2) return null;
   return (
-    <div className="mb-2 flex gap-1">
+    <div className="mb-2 inline-flex rounded-md bg-raised p-0.5">
       {Array.from({ length: count }, (_, index) => (
         <button
           key={index}
@@ -333,8 +400,8 @@ function CallPicker({
           aria-label={`Call ${index + 1} of ${count}`}
           aria-pressed={choice === index}
           onClick={() => onChoose(index)}
-          className={`rounded border px-1.5 py-0.5 text-2xs ${
-            choice === index ? 'border-accent text-ink' : 'border-line text-ink-faint hover:text-ink'
+          className={`rounded px-2 py-0.5 text-2xs font-medium ${
+            choice === index ? 'bg-surface text-ink shadow-sm' : 'text-ink-muted hover:text-ink'
           }`}
         >
           Call {index + 1}
@@ -400,7 +467,7 @@ function CallTab({
       <div>
         {header}
         {call.error !== null && <p className="mb-2 text-2xs text-failed">{call.error}</p>}
-        <Pre>{typeof call.response === 'string' ? call.response : JSON.stringify(call.response, null, 2)}</Pre>
+        <Pre text={typeof call.response === 'string' ? call.response : JSON.stringify(call.response, null, 2)} />
       </div>
     );
   }
@@ -417,15 +484,15 @@ function CallTab({
           <details
             key={index}
             open={message.role !== 'system'}
-            className="rounded border border-line bg-canvas"
+            className="rounded-md border border-line bg-canvas"
           >
-            <summary className="cursor-pointer px-2 py-1 text-2xs uppercase tracking-wide text-ink-muted">
+            <summary className="cursor-pointer px-2.5 py-1.5 text-2xs font-semibold text-ink-muted">
               {message.role === 'system' ? 'System prompt' : message.role === 'human' ? 'Sent' : message.role}
-              <span className="ml-2 normal-case tracking-normal text-ink-faint">
+              <span className="ml-2 font-normal text-ink-faint">
                 {message.content.length.toLocaleString()} characters
               </span>
             </summary>
-            <Pre>{message.content}</Pre>
+            <Pre text={message.content} />
           </details>
         ))
       )}
@@ -433,11 +500,15 @@ function CallTab({
   );
 }
 
-function Pre({ children }: { readonly children: React.ReactNode }): React.JSX.Element {
+/** A prompt or a response, verbatim, with a way to take it elsewhere. */
+function Pre({ text }: { readonly text: string }): React.JSX.Element {
   return (
-    <pre className="max-h-80 overflow-auto whitespace-pre-wrap break-words px-2 py-1.5 font-mono text-2xs leading-relaxed text-ink">
-      {children}
-    </pre>
+    <div className="relative">
+      <CopyButton text={text} className="absolute right-1 top-1 bg-canvas/90" />
+      <pre className="max-h-80 overflow-auto whitespace-pre-wrap break-words px-2.5 py-2 pr-20 font-mono text-2xs leading-relaxed text-ink">
+        {text}
+      </pre>
+    </div>
   );
 }
 
@@ -549,13 +620,13 @@ function AttemptsTab({ attempts }: { readonly attempts: readonly Attempt[] }): R
     <ol className="space-y-3">
       {attempts.map((attempt) => (
         <li key={attempt.spanId}>
-          <p className="text-2xs uppercase tracking-wide text-ink-faint">
+          <p className="text-2xs font-semibold text-ink-muted">
             Attempt {attempt.number}
-            <span className="ml-2 font-mono normal-case tracking-normal">{attempt.spanId}</span>
+            <span className="ml-2 font-mono font-normal text-ink-faint">{attempt.spanId}</span>
           </p>
           <ul className="mt-1 space-y-1">
             {attempt.calls.map((call) => (
-              <li key={call.call_id} className="rounded border border-line bg-canvas px-2 py-1 text-2xs">
+              <li key={call.call_id} className="rounded-md border border-line bg-canvas px-2.5 py-1.5 text-2xs">
                 <span className="text-ink">
                   {call.kind === 'model' ? call.name : `searched ${call.name === 'library' ? 'the law' : 'the web'}`}
                 </span>
@@ -583,7 +654,7 @@ function Labelled({
 }): React.JSX.Element {
   return (
     <section>
-      <h4 className="mb-1 text-2xs uppercase tracking-wide text-ink-faint">{label}</h4>
+      <h4 className="mb-1 text-2xs font-semibold text-ink-muted">{label}</h4>
       {children}
     </section>
   );

@@ -214,6 +214,21 @@ body {
   display: none;
 }
 
+/* The graph's zoom controls, in the workspace's colours in either theme. */
+.react-flow {
+  --xy-controls-button-background-color: var(--surface);
+  --xy-controls-button-background-color-hover: var(--raised);
+  --xy-controls-button-color: var(--ink-muted);
+  --xy-controls-button-color-hover: var(--ink);
+  --xy-controls-button-border-color: var(--line);
+  --xy-controls-box-shadow: 0 0 0 1px var(--line);
+}
+
+.react-flow__controls {
+  border-radius: 6px;
+  overflow: hidden;
+}
+
 /* Focus that shows for keyboard users, not for every click. */
 :focus-visible {
   outline: 2px solid var(--accent);

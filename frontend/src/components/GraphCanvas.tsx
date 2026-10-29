@@ -2,6 +2,7 @@
 
 import {
   Background,
+  Controls,
   ReactFlow,
   type Edge,
   type NodeChange,
@@ -20,13 +21,21 @@ import { RESEARCHER, type RunState, type NodeStatus } from '@/lib/reducer';
 
 const NODE_TYPES: NodeTypes = { agent: AgentNode };
 
-const LABELS: Record<string, string> = {
-  planner: 'Planner',
-  researcher: 'Researchers',
-  synthesizer: 'Synthesizer',
-  critic: 'Critic',
-  human_edit: 'Your edit',
+/** Each stage's name, and what it does in a few words: the graph is also how a newcomer learns the pipeline. */
+const STAGES: Readonly<Record<string, { readonly label: string; readonly caption: string }>> = {
+  planner: { label: 'Planner', caption: 'splits the question' },
+  researcher: { label: 'Researchers', caption: 'awaiting the plan' },
+  synthesizer: { label: 'Synthesizer', caption: 'writes the answer' },
+  critic: { label: 'Critic', caption: 'checks it against the sources' },
+  human_edit: { label: 'Your edit', caption: 'one branch, rewritten' },
 };
+
+/**
+ * The fit stops at a zoom where a node's text can still be read; past it the
+ * graph pans instead. Fitting a five-branch run into a third of a laptop screen
+ * otherwise drew 6px text. Never enlarged past its natural size either.
+ */
+const FIT = { padding: 0.12, minZoom: 0.6, maxZoom: 1 } as const;
 
 interface Props {
   readonly topology: Topology;
@@ -88,8 +97,8 @@ export function GraphCanvas({ topology, state, now, selected = null, onSelect }:
               now,
             }
           : {
-              label: LABELS[id] ?? id,
-              caption: id === RESEARCHER && !state.fannedOut ? 'awaiting the plan' : null,
+              label: STAGES[id]?.label ?? id,
+              caption: id === RESEARCHER && state.fannedOut ? null : (STAGES[id]?.caption ?? null),
               status: state.nodes[id]?.status ?? ('idle' satisfies NodeStatus),
               startedAt: state.nodes[id]?.startedAt ?? null,
               finishedAt: state.nodes[id]?.finishedAt ?? null,
@@ -126,6 +135,9 @@ export function GraphCanvas({ topology, state, now, selected = null, onSelect }:
           id: edge.id,
           source: edge.source,
           target: edge.target,
+          // A loop drawn as a curve from the critic's foot to a lane's head
+          // cut straight through the cards between; stepped, it goes round them.
+          ...(edge.feedback ? { type: 'smoothstep', pathOptions: { offset: 20, borderRadius: 10 } } : {}),
           animated: firing || isCarryingFlow(edge.source, edge.target, state),
           style: {
             stroke: firing ? 'var(--retry)' : fired ? 'var(--retry)' : edge.feedback ? 'var(--line-strong)' : 'var(--ink-faint)',
@@ -146,8 +158,9 @@ export function GraphCanvas({ topology, state, now, selected = null, onSelect }:
       onNodeClick={(_, node) => onSelect?.(node.id)}
       nodeTypes={NODE_TYPES}
       fitView
-      // React Flow's default floor (0.5) cannot fit four columns of nodes into a
-      // pane a third of a laptop screen wide: the graph stayed cropped.
+      fitViewOptions={FIT}
+      // Below the fit's floor only by choice: the controls can still zoom out to
+      // the whole graph.
       minZoom={0.2}
       proOptions={{ hideAttribution: true }}
       nodesDraggable={false}
@@ -156,6 +169,7 @@ export function GraphCanvas({ topology, state, now, selected = null, onSelect }:
       className="bg-canvas"
     >
       <Background color="var(--line)" gap={18} />
+      <Controls showInteractive={false} fitViewOptions={FIT} position="bottom-right" />
       <FitWhenTheGraphChanges
         signature={shape.nodeIds.join(',')}
         ready={shape.nodeIds.every((id) => measured.has(id))}
@@ -184,7 +198,7 @@ function FitWhenTheGraphChanges({
     if (!ready) return;
     // After this render commits the sizes; a timer, not a frame, so a tab in the
     // background (where frames are paused) still fits.
-    const timer = window.setTimeout(() => void fitView({ padding: 0.12 }), 0);
+    const timer = window.setTimeout(() => void fitView(FIT), 0);
     return () => window.clearTimeout(timer);
   }, [signature, ready, fitView]);
   return null;

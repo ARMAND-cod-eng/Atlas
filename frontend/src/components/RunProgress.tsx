@@ -19,10 +19,12 @@ const MARK: Readonly<Record<StepStatus, { readonly dot: string; readonly label: 
 export function RunProgress({ state }: { readonly state: RunState }): React.JSX.Element {
   const steps = runSteps(state);
   return (
-    <section aria-label="Progress" className="border-b border-line p-3">
+    // A container, so a step's detail goes under it when the pane is too narrow
+    // for both on one line, rather than being cut off.
+    <section aria-label="Progress" className="@container border-b border-line p-3">
       <ol className="space-y-1.5">
         {steps.map((step) => (
-          <li key={step.key} className="flex items-center gap-2.5 text-xs">
+          <li key={step.key} className="flex flex-wrap items-center gap-x-2.5 text-xs">
             <span
               role="img"
               aria-label={MARK[step.status].label}
@@ -30,7 +32,11 @@ export function RunProgress({ state }: { readonly state: RunState }): React.JSX.
             />
             <span className={step.status === 'idle' ? 'text-ink-faint' : 'font-medium text-ink'}>{step.label}</span>
             {step.detail !== null && (
-              <span className={`ml-auto truncate text-2xs ${step.status === 'failed' ? 'text-failed' : 'text-ink-muted'}`}>
+              <span
+                className={`w-full pl-5 text-2xs @[15rem]:ml-auto @[15rem]:w-auto @[15rem]:pl-0 ${
+                  step.status === 'failed' ? 'text-failed' : 'text-ink-muted'
+                }`}
+              >
                 {step.detail}
               </span>
             )}

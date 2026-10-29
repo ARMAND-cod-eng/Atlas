@@ -11,6 +11,7 @@ import { describe, expect, it } from 'vitest';
 
 import accepted from './fixtures/accepted.json';
 import retry from './fixtures/retry.json';
+import revision from './fixtures/revision.json';
 import demoTopology from '../src/demo/topology.json';
 
 import type { AgentEvent, Topology } from '../src/lib/events';
@@ -27,6 +28,7 @@ import {
 
 const ACCEPTED = accepted as readonly AgentEvent[];
 const RETRY = retry as readonly AgentEvent[];
+const REVISION = revision as readonly AgentEvent[];
 
 // The nodes and edges GET /graph/topology returns (pinned by backend/tests/test_topology.py),
 // listed in flow order. The API's own order is in src/demo/topology.json.
@@ -63,7 +65,7 @@ describe('the drawable shape', () => {
   it('drops LangGraph plumbing', () => {
     const shape = shapeAfter([]);
 
-    expect(shape.nodeIds).toEqual([PLANNER, RESEARCHER, SYNTHESIZER, CRITIC, HUMAN_EDIT]);
+    expect(shape.nodeIds).toEqual([PLANNER, RESEARCHER, SYNTHESIZER, CRITIC]);
     expect(shape.edges.map((e) => e.id)).not.toContain('__start__->planner');
     expect(shape.edges.map((e) => e.id)).not.toContain('critic->__end__');
   });
@@ -71,7 +73,7 @@ describe('the drawable shape', () => {
   it('shows one researcher placeholder before fan_out', () => {
     const shape = shapeAfter(ACCEPTED.slice(0, 3));
 
-    expect(shape.nodeIds).toEqual([PLANNER, RESEARCHER, SYNTHESIZER, CRITIC, HUMAN_EDIT]);
+    expect(shape.nodeIds).toEqual([PLANNER, RESEARCHER, SYNTHESIZER, CRITIC]);
   });
 
   it('expands into one lane per subtask after fan_out', () => {
@@ -86,7 +88,6 @@ describe('the drawable shape', () => {
       'researcher:s4',
       SYNTHESIZER,
       CRITIC,
-      HUMAN_EDIT,
     ]);
   });
 
@@ -105,10 +106,14 @@ describe('the drawable shape', () => {
     ]);
   });
 
-  it('fans the edit edge out to every lane, since any branch can be edited', () => {
-    const shape = shapeAfter(ACCEPTED);
+  it('draws the edit only on a revision, an idle box on every other run', () => {
+    expect(shapeAfter(ACCEPTED).edges.some((e) => e.source === HUMAN_EDIT)).toBe(false);
+
+    const shape = shapeAfter(REVISION);
     const editEdges = shape.edges.filter((e) => e.source === HUMAN_EDIT);
 
+    expect(shape.nodeIds).toContain(HUMAN_EDIT);
+    // Fanned out to every lane, since any branch can be edited.
     expect(editEdges.map((e) => [e.id, e.feedback])).toEqual([
       ['human_edit->researcher:s0', false],
       ['human_edit->researcher:s1', false],
@@ -214,21 +219,26 @@ describe('positions', () => {
     expect(positions.map((p) => p.id)).toEqual(shape.nodeIds);
   });
 
-  it('lay the pipeline out left to right with the lanes stacked', () => {
+  it('lay the pipeline out top to bottom with the lanes side by side', () => {
     clearLayoutCache();
     const positions = layout(shapeAfter(ACCEPTED));
     const byId = Object.fromEntries(positions.map((p) => [p.id, p]));
 
     const planner = byId[PLANNER];
     const synthesizer = byId[SYNTHESIZER];
+    const critic = byId[CRITIC];
     const lanes = positions.filter((p) => p.id.startsWith('researcher:'));
 
     expect(planner).toBeDefined();
     expect(synthesizer).toBeDefined();
-    expect(planner!.x).toBeLessThan(synthesizer!.x);
-    // Lanes share a column and differ vertically — that shape is what makes
+    expect(critic).toBeDefined();
+    // Read the way the timeline beside it reads, down the pane.
+    expect(planner!.y).toBeLessThan(lanes[0]!.y);
+    expect(lanes[0]!.y).toBeLessThan(synthesizer!.y);
+    expect(synthesizer!.y).toBeLessThan(critic!.y);
+    // Lanes share a row and differ across it — that shape is what makes
     // five concurrent branches readable at a glance.
-    expect(new Set(lanes.map((l) => l.x)).size).toBe(1);
-    expect(new Set(lanes.map((l) => l.y)).size).toBe(lanes.length);
+    expect(new Set(lanes.map((l) => l.y)).size).toBe(1);
+    expect(new Set(lanes.map((l) => l.x)).size).toBe(lanes.length);
   });
 });

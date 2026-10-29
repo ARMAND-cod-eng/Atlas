@@ -20,9 +20,9 @@
 import dagre from 'dagre';
 
 import type { Topology } from './events';
-import { RESEARCHER, type RunState } from './reducer';
+import { HUMAN_EDIT, RESEARCHER, type RunState } from './reducer';
 
-export const NODE_WIDTH = 210;
+export const NODE_WIDTH = 184;
 export const NODE_HEIGHT = 72;
 
 export interface Positioned {
@@ -61,9 +61,15 @@ export interface GraphShape {
  * agents, and drawing them spends the viewer's attention on nothing. They are
  * still *reported* by the backend, because that endpoint describes the graph as
  * it is — what to draw is this layer's decision.
+ *
+ * The human edit is drawn only on a revision. On every other run it is a box
+ * that never lights up, and a reader cannot tell it from a stage that failed to
+ * start.
  */
 export function shapeFor(topology: Topology, state: RunState): GraphShape {
-  const drawable = topology.nodes.filter((node) => !node.terminal).map((node) => node.id);
+  const drawable = topology.nodes
+    .filter((node) => !node.terminal && (node.id !== HUMAN_EDIT || state.revision !== null))
+    .map((node) => node.id);
   const branchIds = state.branches.map((branch) => branch.id);
 
   // Before fan_out the count is genuinely unknown — the planner has not decided
@@ -179,8 +185,10 @@ const cache = new Map<string, readonly Positioned[]>();
 /**
  * Positions for a shape, computed at most once per distinct topology.
  *
- * Left-to-right, so the pipeline reads the way it runs and the fan-out spreads
- * vertically into a band the eye can scan.
+ * Top to bottom, the way the timeline beside it reads, with the fan-out spread
+ * across into a row the eye can scan. The pane is taller than it is wide on a
+ * laptop and on a phone: laid out left to right, four stages in a row had to
+ * shrink until their text was unreadable.
  */
 export function layout(shape: GraphShape): readonly Positioned[] {
   const key = signatureOf(shape);
@@ -188,7 +196,7 @@ export function layout(shape: GraphShape): readonly Positioned[] {
   if (cached !== undefined) return cached;
 
   const graph = new dagre.graphlib.Graph();
-  graph.setGraph({ rankdir: 'LR', nodesep: 26, ranksep: 96, marginx: 16, marginy: 16 });
+  graph.setGraph({ rankdir: 'TB', nodesep: 16, ranksep: 44, marginx: 16, marginy: 16 });
   graph.setDefaultEdgeLabel(() => ({}));
 
   for (const id of shape.nodeIds) {

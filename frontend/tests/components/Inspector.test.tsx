@@ -137,6 +137,49 @@ describe('rewriting a branch', () => {
   });
 });
 
+describe('the task tab', () => {
+  const state = stateOf(retry);
+
+  it("of a finished run's branch leads with its rewrite, the question already in it", () => {
+    render(<Inspector runId="run-1" loadCall={null} state={state} result={null} selected="researcher:s2" />);
+
+    const rewrite = screen.getByLabelText("Rewrite this branch's question");
+    const reviews = screen.getByText('Reviews');
+
+    // Before the critic's reviews of it, not under them.
+    expect(rewrite.compareDocumentPosition(reviews) & Node.DOCUMENT_POSITION_FOLLOWING).toBe(
+      Node.DOCUMENT_POSITION_FOLLOWING,
+    );
+    // The question is in the form; it is not said twice.
+    expect(screen.queryByText('Asked')).toBeNull();
+  });
+});
+
+describe('the tabs', () => {
+  const state = stateOf(retry);
+  const open = () =>
+    screen
+      .getAllByRole('tab')
+      .filter((tab) => tab.getAttribute('aria-selected') === 'true')
+      .map((tab) => tab.textContent);
+
+  it('move with the arrow keys, wrapping at the ends, with only the open one in the tab order', () => {
+    render(<Inspector runId={null} loadCall={null} state={state} result={null} selected="researcher:s2" />);
+    const list = screen.getByRole('tablist');
+
+    expect(screen.getAllByRole('tab').map((tab) => tab.tabIndex)).toEqual([0, -1, -1, -1]);
+
+    fireEvent.keyDown(list, { key: 'ArrowRight' });
+    expect(open()).toEqual(['Prompt']);
+    expect(document.activeElement?.textContent).toBe('Prompt');
+
+    fireEvent.keyDown(list, { key: 'ArrowLeft' });
+    fireEvent.keyDown(list, { key: 'ArrowLeft' });
+    expect(open()).toEqual(['Attempts']);
+    expect(screen.getAllByRole('tab').map((tab) => tab.tabIndex)).toEqual([-1, -1, -1, 0]);
+  });
+});
+
 describe('the prompt tab', () => {
   const state = stateOf(retry);
   const latest = state.branches.find((b) => b.subtaskId === 's2')?.spans.at(-1);
@@ -197,6 +240,72 @@ describe('the prompt tab', () => {
 
     expect((await screen.findByText(/^Subtask s2/)).textContent).toBe('Subtask s2\nQuestion: which models…');
     expect(sent).toEqual([]);
+  });
+
+  describe('copying a prompt', () => {
+    const recorded = new Map([[record.call_id, record]]);
+
+    /** A clipboard whose write resolves or fails only when the test says so. */
+    function clipboard() {
+      let settle: { resolve: () => void; reject: (error: Error) => void } | null = null;
+      const writeText = vi.fn(
+        () => new Promise<void>((resolve, reject) => void (settle = { resolve, reject })),
+      );
+      Object.defineProperty(navigator, 'clipboard', { value: { writeText }, configurable: true });
+      return {
+        writeText,
+        resolve: () => settle?.resolve(),
+        reject: () => settle?.reject(new Error('denied')),
+      };
+    }
+
+    async function openPrompt() {
+      render(
+        <Inspector
+          runId={null}
+          loadCall={(id) => Promise.resolve(recorded.get(id) ?? null)}
+          state={state}
+          result={null}
+          selected="researcher:s2"
+        />,
+      );
+      fireEvent.click(screen.getByRole('tab', { name: 'Prompt' }));
+      await screen.findByText(/^Subtask s2/);
+      // The system prompt's, then the message sent.
+      return screen.getAllByRole('button', { name: 'Copy' });
+    }
+
+    afterEach(() => {
+      Reflect.deleteProperty(navigator, 'clipboard');
+    });
+
+    it('puts the message on the clipboard verbatim, and says so once it is there', async () => {
+      const board = clipboard();
+      const buttons = await openPrompt();
+
+      fireEvent.click(buttons[1]!);
+
+      expect(board.writeText.mock.calls).toEqual([['Subtask s2\nQuestion: which models…']]);
+      // Not yet: the write has not resolved.
+      await Promise.resolve();
+      expect(screen.queryByRole('button', { name: 'Copied' })).toBeNull();
+
+      board.resolve();
+
+      expect((await screen.findByRole('button', { name: 'Copied' })).textContent).toBe('Copied');
+    });
+
+    it('says it could not copy when the clipboard refuses', async () => {
+      const board = clipboard();
+      const buttons = await openPrompt();
+
+      fireEvent.click(buttons[0]!);
+      board.reject();
+
+      expect(board.writeText.mock.calls).toEqual([['You are a researcher.']]);
+      expect((await screen.findByRole('button', { name: 'Could not copy' })).textContent).toBe('Could not copy');
+      expect(screen.queryByRole('button', { name: 'Copied' })).toBeNull();
+    });
   });
 
   it('with no record of calls, says prompts are kept on live runs', () => {
