@@ -248,9 +248,9 @@ practise it.
 
 | Pane | Contents |
 |---|---|
-| **Evolution** | The versions of the answer, and the run's timeline. |
+| **Timeline** | The versions of the answer, the run as four steps, and its timeline by step. |
 | **Agents** | The graph, with an inspector under it: task, prompt, output, attempts. |
-| **Result** | The answer with its citation chips, sources by authority, and a word-level diff against any other version. |
+| **Answer** | The answer with its citation chips and verdict, copy as Markdown, a word-level diff against any other version; sources, research by branch and run details folded beneath. |
 
 **Prompts load only when opened.** On a live run they come from the API. The `/demo` replay ships its
 recorded calls instead, so it shows real prompts with no backend.
@@ -311,7 +311,7 @@ wrong thing, while everything looks fine. These were found during this work:
 |---|---|
 | Library retrieval, one search per question | recall@10 0.900 (held-out half 0.875, measured once), recall@5 0.713, all must-cites for 32 of 40 |
 | Engine regression gate, 50 general questions | completion 0.995, grounding 0.955, tool use 0.963; thresholds 5 / 4 / 3 pp from a measured noise floor |
-| Tests | 563 backend, 13 more against Postgres, 144 frontend; no network, no spend |
+| Tests | 563 backend, 13 more against Postgres, 196 frontend; no network, no spend |
 | **Not measured: the domain eval** | Built and tested; needs about $12–15 of model calls (estimated) |
 | **Not measured: Atlas's own retrieval** | One search per branch, rather than per question |
 | **Not measured: the support check's accuracy** | `atlas_eval support` measures it on 24 labelled cases (12 supported, 12 near misses), each "supports" label proved by the provision's own words; needs credit |
@@ -343,7 +343,7 @@ wrong thing, while everything looks fine. These were found during this work:
 From `backend/`:
 
 ```powershell
-uv run pytest -q                                          # 515 tests, offline
+uv run pytest -q                                          # 563 tests, offline
 uv run pytest -q -m postgres                              # with ATLAS_TEST_DATABASE_URL set
 uv run python -m atlas_eval retrieval                     # recall@10, free
 uv run python -m atlas_eval claim --dataset compliance    # what the dataset supports claiming

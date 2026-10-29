@@ -11,7 +11,7 @@ the research and re-run only that branch.
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="docs/img/workspace-dark.png">
-  <img alt="The Atlas workspace: the run's timeline on the left, the agent graph with one researcher's exact prompt open in the middle, and the answer with its checked citation chips on the right" src="docs/img/workspace-light.png">
+  <img alt="The Atlas workspace: the run's timeline, step by step, on the left; the agent graph in the middle, with the synthesizer open on its citation checks (draft 1 cited an article that does not exist and one that does not say what it was cited for; draft 2 passed); and on the right the answer, its citation chips verified" src="docs/img/workspace-light.png">
 </picture>
 
 *The recorded demo, with the synthesizer's drafts open. The first draft cited an article that does
@@ -181,13 +181,14 @@ graph LR
     end
 ```
 
-**The workspace has three panes.**
+**The workspace has three panes, the answer given the most room.** On a phone they are tabs, and
+the Answer tab opens once there is one.
 
 | Pane | What it shows |
 |---|---|
-| **Evolution** | Every version of the answer on this conversation, and a timeline of the run on screen: the plan, each branch, each critic verdict with its reason, each edit. |
-| **Agents** | The live graph, and under it an inspector for the agent you select. Keys: `j` / `k` step through the agents in the order they ran, `e` edits the selected branch's question, `Esc` closes. |
-| **Result** | The answer with its citation chips, the sources grouped by authority, and a word-level comparison with any other version. |
+| **Timeline** | Every version of the answer on this conversation; where the run is, as four steps (plan, research, write, review); and the run's timeline cut into those steps: each branch, each critic verdict with its reason, each edit. Each search and model call is folded away until asked for. |
+| **Agents** | The live graph, top to bottom, and under it an inspector for the agent you select: its task, the exact prompt it was sent, what it produced, every attempt. Keys: `j` / `k` step through the agents in the order they ran, `e` edits the selected branch's question, `Esc` closes. |
+| **Answer** | The answer with its citation chips and the checks' verdict. Copy puts it on the clipboard as Markdown with its citations linked; Compare swaps it for a word-level diff against another version. Below, folded: the sources by authority, the research by branch (each with Edit & re-run), and the run's details. |
 
 **Editing a branch forks the run; it does not restart it.** A revision writes through a dedicated
 `human_edit` node with LangGraph's `aupdate_state`, from the finished run's checkpoint. Only the
