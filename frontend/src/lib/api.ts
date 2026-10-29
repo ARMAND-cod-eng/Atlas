@@ -1,3 +1,5 @@
+import type { Domain } from './events';
+
 /**
  * 127.0.0.1, not localhost — and this is worth two seconds per request.
  *
@@ -30,6 +32,8 @@ export async function startRun(
   query: string,
   threadId?: string,
   parentRunId?: string,
+  /** A new conversation's; a follow-up runs in its conversation's. */
+  domain?: Domain,
 ): Promise<StartOutcome> {
   let response: Response;
   try {
@@ -42,6 +46,7 @@ export async function startRun(
         query,
         ...(threadId === undefined ? {} : { thread_id: threadId }),
         ...(parentRunId === undefined ? {} : { parent_run_id: parentRunId }),
+        ...(domain === undefined ? {} : { domain }),
       }),
     });
   } catch {

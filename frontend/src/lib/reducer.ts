@@ -38,6 +38,7 @@ import {
   REVISION_STARTED,
   SCOPE_DECLINED,
   type AgentEvent,
+  type Domain,
   type CallSummary,
   type SourceRef,
   type SubtaskVerdict,
@@ -120,6 +121,8 @@ export type RunPhase = 'connecting' | 'running' | 'completed' | 'failed';
 export interface RunState {
   readonly phase: RunPhase;
   readonly query: string | null;
+  /** Which kind of run: the law, checked, or general research. Null until it starts. */
+  readonly domain: Domain | null;
   readonly threadId: string | null;
   readonly startedAt: string | null;
   readonly finishedAt: string | null;
@@ -177,6 +180,7 @@ export function initialState(nodeIds: readonly string[]): RunState {
   return {
     phase: 'connecting',
     query: null,
+    domain: null,
     threadId: null,
     startedAt: null,
     finishedAt: null,
@@ -235,6 +239,7 @@ function apply(state: RunState, event: AgentEvent): RunState {
         ...state,
         phase: 'running',
         query: event.payload.query,
+        domain: event.payload.domain ?? null,
         threadId: event.payload.thread_id,
         startedAt: event.ts,
       };

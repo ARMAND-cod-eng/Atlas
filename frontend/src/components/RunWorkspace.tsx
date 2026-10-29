@@ -55,6 +55,7 @@ export function RunWorkspace({
   followUp = null,
   onRevised,
   onResearchAnyway,
+  onAskGeneral,
 }: {
   /** The run's id, or null for a replay: nothing behind it to fetch or revise. */
   readonly runId: string | null;
@@ -69,6 +70,8 @@ export function RunWorkspace({
   readonly onRevised?: (runId: string) => void;
   /** Research a question judged out of scope after all; resolves to why it could not, or null. */
   readonly onResearchAnyway?: () => Promise<string | null>;
+  /** Ask a question judged out of scope as a general one; same contract. */
+  readonly onAskGeneral?: () => Promise<string | null>;
 }): React.JSX.Element {
   // In the URL, so a link can open one agent's prompt and a reload keeps it.
   const [link, setSelected, setTab] = useInspectorLink();
@@ -157,7 +160,13 @@ export function RunWorkspace({
       content: (
         // Answer first; then what supports it, folded; then what to do next.
         <div className="mx-auto max-w-3xl space-y-3 p-4 sm:p-5">
-          <AnswerCard state={state} result={result} rows={rows} onResearchAnyway={onResearchAnyway} />
+          <AnswerCard
+            state={state}
+            result={result}
+            rows={rows}
+            onResearchAnyway={onResearchAnyway}
+            onAskGeneral={onAskGeneral}
+          />
           <Sources result={result} />
           <Findings state={state} open={state.answer === null} onEdit={editable ? editBranch : undefined} />
           {followUp}

@@ -31,6 +31,9 @@ export const CITATION_SUPPORT = 'citation_support';
 /** A stream ends deliberately with one of these, or it broke. */
 export const TERMINAL_TYPES = [RUN_COMPLETED, RUN_FAILED] as const;
 
+/** What a run researches: the AI Act and the GDPR, its citations checked; or anything, from the web. */
+export type Domain = 'compliance' | 'general';
+
 export type TerminalType = (typeof TERMINAL_TYPES)[number];
 
 export function isTerminal(type: string): type is TerminalType {
@@ -99,7 +102,15 @@ interface Base<T extends string, P> {
 }
 
 export type AgentEvent =
-  | Base<typeof RUN_STARTED, { readonly query: string; readonly thread_id: string }>
+  | Base<
+      typeof RUN_STARTED,
+      {
+        readonly query: string;
+        readonly thread_id: string;
+        /** Absent from streams recorded before runs carried it. */
+        readonly domain?: Domain;
+      }
+    >
   | Base<
       typeof NODE_STARTED,
       { readonly subtask_id: string | null; readonly span_id?: string }

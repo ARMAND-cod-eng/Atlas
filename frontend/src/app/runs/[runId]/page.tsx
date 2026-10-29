@@ -74,6 +74,19 @@ export default function RunPage({
         }
       : undefined;
 
+  // A new conversation in the general domain: the question was not about the law.
+  const askGeneral =
+    finished && state.declined !== null && state.query !== null
+      ? async (): Promise<string | null> => {
+          const outcome = await startRun(state.query ?? '', undefined, undefined, 'general');
+          if (outcome.kind === 'started') {
+            router.push(`/runs/${outcome.runId}`);
+            return null;
+          }
+          return outcome.kind === 'busy' ? 'Atlas is busy. Try again in a moment.' : outcome.message;
+        }
+      : undefined;
+
   const followUp =
     finished && state.threadId !== null ? (
       <section className="rounded-xl border border-line bg-surface p-4">
@@ -122,6 +135,7 @@ export default function RunPage({
         connection={connection}
         followUp={state.declined === null ? followUp : null}
         onResearchAnyway={researchAnyway}
+        onAskGeneral={askGeneral}
         onRevised={(next) => router.push(`/runs/${next}`)}
       />
     </main>

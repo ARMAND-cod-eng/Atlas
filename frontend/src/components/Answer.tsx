@@ -36,6 +36,7 @@ export function AnswerCard({
   result,
   rows,
   onResearchAnyway,
+  onAskGeneral,
 }: Props & {
   readonly rows: readonly VersionRow[];
   /**
@@ -43,12 +44,16 @@ export function AnswerCard({
    * or null. Absent on a replay, which has nothing to research it with.
    */
   readonly onResearchAnyway?: () => Promise<string | null>;
+  /** Ask a declined question as a general one, in a new conversation; same contract. */
+  readonly onAskGeneral?: () => Promise<string | null>;
 }): React.JSX.Element {
   const [against, setAgainst] = useState<string | null>(null);
   const options = comparable(rows);
   const chosen = options.find((row) => row.runId === against) ?? null;
 
-  if (state.declined !== null) return <Declined reason={state.declined} onResearchAnyway={onResearchAnyway} />;
+  if (state.declined !== null) {
+    return <Declined reason={state.declined} onResearchAnyway={onResearchAnyway} onAskGeneral={onAskGeneral} />;
+  }
   if (state.answer === null) return <Pending state={state} />;
   const answer = state.answer;
   // Every source the run had: the result's once it has one, the branches' as they land.
@@ -91,21 +96,24 @@ export function AnswerCard({
 function Declined({
   reason,
   onResearchAnyway,
+  onAskGeneral,
 }: {
   readonly reason: string;
   readonly onResearchAnyway?: () => Promise<string | null>;
+  readonly onAskGeneral?: () => Promise<string | null>;
 }): React.JSX.Element {
-  const [starting, setStarting] = useState(false);
+  // Which of the two is starting, so each says so on its own button.
+  const [starting, setStarting] = useState<'anyway' | 'general' | null>(null);
   const [failure, setFailure] = useState<string | null>(null);
 
-  async function research(): Promise<void> {
-    if (onResearchAnyway === undefined || starting) return;
-    setStarting(true);
+  async function start(which: 'anyway' | 'general', action?: () => Promise<string | null>): Promise<void> {
+    if (action === undefined || starting !== null) return;
+    setStarting(which);
     setFailure(null);
-    const why = await onResearchAnyway();
+    const why = await action();
     if (why !== null) {
       setFailure(why);
-      setStarting(false);
+      setStarting(null);
     }
   }
 
@@ -123,9 +131,25 @@ function Declined({
         <Link href="/" className={buttonClass('primary', 'sm')}>
           Ask another question
         </Link>
+        {onAskGeneral !== undefined && (
+          <Button
+            variant="secondary"
+            size="sm"
+            disabled={starting !== null}
+            title="A new conversation, researched from the web; its citations are not checked against the law"
+            onClick={() => void start('general', onAskGeneral)}
+          >
+            {starting === 'general' ? 'Starting…' : 'Ask as a general question'}
+          </Button>
+        )}
         {onResearchAnyway !== undefined && (
-          <Button variant="secondary" size="sm" disabled={starting} onClick={() => void research()}>
-            {starting ? 'Starting…' : 'Research anyway'}
+          <Button
+            variant="ghost"
+            size="sm"
+            disabled={starting !== null}
+            onClick={() => void start('anyway', onResearchAnyway)}
+          >
+            {starting === 'anyway' ? 'Starting…' : 'Research anyway'}
           </Button>
         )}
         {failure !== null && (
@@ -232,6 +256,13 @@ export function Answer({ state }: Props): React.JSX.Element | null {
       </article>
 
       {check !== null && <Verdict check={check} support={support} />}
+      {state.domain === 'general' && (
+        // No law to check a general answer against: said where the verdict would be.
+        <div className="flex items-center gap-2 border-t border-line pt-3">
+          <Badge>General research</Badge>
+          <p className="text-2xs text-ink-muted">Sources from the web, not checked against the law</p>
+        </div>
+      )}
     </div>
   );
 }

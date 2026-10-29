@@ -2,17 +2,48 @@
 
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
+import { useState } from 'react';
 
 import { Disclaimer } from '@/components/Disclaimer';
 import { QuestionForm } from '@/components/QuestionForm';
 import { ThemeToggle } from '@/components/ThemeToggle';
 import { Badge, buttonClass } from '@/components/ui';
+import type { Domain } from '@/lib/events';
 
 const EXAMPLES = [
   'Is a CV-screening tool high-risk under the AI Act, and what must its provider do?',
   'Do we need a DPIA before using emotion recognition on call-centre recordings?',
   'Which AI Act obligations apply to a provider of a general-purpose AI model, and from when?',
 ];
+
+/** What to ask, and how: the law with its citations checked, or anything from the web. */
+const MODES: Readonly<
+  Record<
+    Domain,
+    {
+      readonly label: string;
+      readonly placeholder: string;
+      readonly hint: string;
+      readonly examples: readonly string[];
+    }
+  >
+> = {
+  compliance: {
+    label: 'Ask about EU law',
+    placeholder: "Ask about the AI Act or the GDPR, from a provider's or a deployer's side.",
+    hint: 'Ctrl + Enter to send · a run takes about a minute',
+    examples: EXAMPLES,
+  },
+  general: {
+    label: 'Ask anything',
+    placeholder: 'Ask anything. Atlas researches it from the web, in parallel branches.',
+    hint: 'Ctrl + Enter to send · from the web, not checked against the law',
+    examples: [
+      'How does retrieval-augmented generation work, and where does it fail?',
+      'Compare PostgreSQL and MongoDB for an analytics workload.',
+    ],
+  },
+};
 
 /** What sets the answers apart, each in a line: the three things a reader can check or do. */
 const POINTS: readonly { readonly title: string; readonly text: string; readonly icon: React.JSX.Element }[] = [
@@ -49,6 +80,8 @@ const POINTS: readonly { readonly title: string; readonly text: string; readonly
 
 export default function Home(): React.JSX.Element {
   const router = useRouter();
+  const [mode, setMode] = useState<Domain>('compliance');
+  const shown = MODES[mode];
 
   return (
     <div className="flex min-h-screen flex-col">
@@ -73,11 +106,27 @@ export default function Home(): React.JSX.Element {
         </p>
 
         <div className="mt-8">
+          <div role="group" aria-label="What to ask" className="mb-3 inline-flex rounded-lg bg-raised p-1">
+            {(Object.keys(MODES) as Domain[]).map((id) => (
+              <button
+                key={id}
+                type="button"
+                aria-pressed={mode === id}
+                onClick={() => setMode(id)}
+                className={`rounded-md px-3 py-1.5 text-xs font-medium transition-colors ${
+                  mode === id ? 'bg-surface text-ink shadow-sm' : 'text-ink-muted hover:text-ink'
+                }`}
+              >
+                {MODES[id].label}
+              </button>
+            ))}
+          </div>
           <QuestionForm
             size="lg"
-            placeholder="Ask about the AI Act or the GDPR, from a provider's or a deployer's side."
-            examples={EXAMPLES}
-            hint="Ctrl + Enter to send · a run takes about a minute"
+            domain={mode}
+            placeholder={shown.placeholder}
+            examples={shown.examples}
+            hint={shown.hint}
             submitLabel="Research"
             onStarted={(runId) => router.push(`/runs/${runId}`)}
           />

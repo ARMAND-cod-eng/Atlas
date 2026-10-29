@@ -4,6 +4,7 @@ import { useRef, useState } from 'react';
 
 import { Button } from './ui';
 import { startRun } from '@/lib/api';
+import type { Domain } from '@/lib/events';
 
 interface Props {
   /** Continue this conversation. Omitted, the question starts a new one. */
@@ -13,6 +14,8 @@ interface Props {
    * state is the revision's, which may not be the answer on screen.
    */
   readonly parentRunId?: string;
+  /** A new conversation's domain; omitted, the API's configured one. */
+  readonly domain?: Domain;
   readonly placeholder: string;
   /** Questions a click puts in the box, to edit or send as they are. */
   readonly examples?: readonly string[];
@@ -33,6 +36,7 @@ interface Props {
 export function QuestionForm({
   threadId,
   parentRunId,
+  domain,
   placeholder,
   examples = [],
   hint,
@@ -51,7 +55,7 @@ export function QuestionForm({
 
     setSubmitting(true);
     setNotice(null);
-    const outcome = await startRun(query, threadId, parentRunId);
+    const outcome = await startRun(query, threadId, parentRunId, domain);
     if (outcome.kind === 'started') {
       // Routing rather than holding the run in memory: the run belongs to the
       // worker, so its URL should outlive this tab.

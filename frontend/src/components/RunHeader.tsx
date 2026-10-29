@@ -44,6 +44,11 @@ export function RunHeader({
         </h1>
         <span className="flex-1 sm:hidden" />
         {badges}
+        {state.domain === 'general' && (
+          <Badge title="Researched from the web; its citations are not checked against the law">
+            General research
+          </Badge>
+        )}
         <Badge tone={status.tone}>
           {status.tone === 'running' && (
             <span aria-hidden="true" className="h-1.5 w-1.5 animate-pulse rounded-full bg-running" />
