@@ -22,10 +22,11 @@ import { versionRows } from '@/lib/versions';
 
 function evolutionLine(state: RunState): string {
   const reviews = state.criticRounds.length;
-  const parts = [`${state.timeline.length} events`];
-  if (reviews > 0) parts.push(`${reviews} review${reviews === 1 ? '' : 's'}`);
+  const parts: string[] = [];
   if (state.revision !== null) parts.push(`revises ${state.revision.subtaskId}`);
-  return parts.join(' · ');
+  if (state.fannedOut) parts.push(`${state.branches.length} branch${state.branches.length === 1 ? '' : 'es'}`);
+  if (reviews > 0) parts.push(`${reviews} review${reviews === 1 ? '' : 's'}`);
+  return parts.length > 0 ? parts.join(' · ') : 'planning';
 }
 
 function agentsLine(state: RunState): string {
@@ -85,7 +86,7 @@ export function RunWorkspace({
   const panes: PaneSpec[] = [
     {
       id: 'evolution',
-      title: 'Evolution',
+      title: 'Timeline',
       subtitle: evolutionLine(state),
       content: (
         <>
@@ -128,8 +129,13 @@ export function RunWorkspace({
     },
     {
       id: 'result',
-      title: 'Result',
-      subtitle: state.answer === null ? 'not written yet' : 'answer ready',
+      title: 'Answer',
+      subtitle:
+        state.phase === 'failed'
+          ? 'the run failed'
+          : state.answer === null
+            ? 'being written'
+            : 'ready',
       content: (
         <div className="space-y-6 p-4">
           <Compare rows={rows} answer={state.answer} />
@@ -143,5 +149,5 @@ export function RunWorkspace({
     },
   ];
 
-  return <Workspace panes={panes} />;
+  return <Workspace panes={panes} preferredTab={state.answer === null ? 'graph' : 'result'} />;
 }

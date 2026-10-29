@@ -20,7 +20,9 @@ export interface PaneSpec {
   readonly content: React.ReactNode;
 }
 
-const LAYOUT: Readonly<Record<PaneId, number>> = { evolution: 22, graph: 46, result: 32 };
+// Answer-first: the answer is what a reader came for; the timeline and the
+// agents explain how it was reached.
+const LAYOUT: Readonly<Record<PaneId, number>> = { evolution: 20, graph: 35, result: 45 };
 const ORDER: readonly PaneId[] = ['evolution', 'graph', 'result'];
 
 /**
@@ -32,13 +34,18 @@ const ORDER: readonly PaneId[] = ['evolution', 'graph', 'result'];
  */
 export function Workspace({
   panes,
-  initialTab = 'graph',
+  preferredTab = 'graph',
 }: {
   readonly panes: readonly PaneSpec[];
-  readonly initialTab?: PaneId;
+  /**
+   * The tab a phone shows until the reader picks one: the agents while the run
+   * works, the answer once there is one.
+   */
+  readonly preferredTab?: PaneId;
 }): React.JSX.Element {
   const wide = useMediaQuery('(min-width: 1024px)', true);
-  const [tab, setTab] = useState<PaneId>(initialTab);
+  const [picked, setTab] = useState<PaneId | null>(null);
+  const tab = picked ?? preferredTab;
   const group = useRef<ImperativePanelGroupHandle>(null);
   const [maximised, setMaximised] = useState<PaneId | null>(null);
   const restore = useRef<number[] | null>(null);
@@ -100,7 +107,8 @@ export function Workspace({
     <PanelGroup
       ref={group}
       direction="horizontal"
-      autoSaveId="atlas-workspace"
+      // v2: sizes saved under the old layout would otherwise keep it.
+      autoSaveId="atlas-workspace-v2"
       className="min-h-0 flex-1"
     >
       {panes.map((pane, index) => (
@@ -109,9 +117,7 @@ export function Workspace({
             <section aria-label={pane.title} className="flex h-full min-w-0 flex-col bg-surface">
               <header className="flex shrink-0 items-center gap-2 border-b border-line px-3 py-1.5">
                 <div className="min-w-0 flex-1">
-                  <h2 className="text-2xs font-medium uppercase tracking-wide text-ink-muted">
-                    {pane.title}
-                  </h2>
+                  <h2 className="text-xs font-semibold text-ink">{pane.title}</h2>
                   {pane.subtitle !== undefined && (
                     <p className="truncate text-2xs text-ink-faint">{pane.subtitle}</p>
                   )}

@@ -1,9 +1,8 @@
 'use client';
 
-import Link from 'next/link';
-
+import { RunHeader } from '@/components/RunHeader';
 import { RunWorkspace } from '@/components/RunWorkspace';
-import { ThemeToggle } from '@/components/ThemeToggle';
+import { Badge, Button } from '@/components/ui';
 import calls from '@/demo/calls.json';
 import compliance from '@/demo/compliance.json';
 import topology from '@/demo/topology.json';
@@ -34,22 +33,16 @@ export default function DemoPage(): React.JSX.Element {
 
   return (
     <main className="flex h-screen flex-col bg-canvas text-ink">
-      <header className="flex shrink-0 items-center gap-3 border-b border-line bg-surface px-4 py-2">
-        <Link href="/" className="text-sm font-medium text-ink hover:text-accent">
-          Atlas
-        </Link>
-        <span className="rounded bg-raised px-1.5 py-0.5 text-2xs text-ink-muted">demo replay</span>
-        <p className="min-w-0 flex-1 truncate text-xs text-ink-muted">{state.query ?? 'starting…'}</p>
-        <button
-          type="button"
-          onClick={restart}
-          disabled={!done}
-          className="rounded border border-line px-2 py-0.5 text-2xs text-ink-muted hover:border-ink-faint hover:text-ink disabled:opacity-40"
-        >
-          Replay
-        </button>
-        <ThemeToggle />
-      </header>
+      <RunHeader
+        state={state}
+        now={now}
+        badges={<Badge title="A recorded run, replayed: no backend, models scripted">Demo replay</Badge>}
+        actions={
+          <Button size="sm" variant="ghost" onClick={restart} disabled={!done}>
+            Replay
+          </Button>
+        }
+      />
       <RunWorkspace
         runId={null}
         loadCall={recordedCall}

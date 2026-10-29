@@ -6,7 +6,8 @@ import { use, useCallback } from 'react';
 
 import { QuestionForm } from '@/components/QuestionForm';
 import { RunWorkspace } from '@/components/RunWorkspace';
-import { ThemeToggle } from '@/components/ThemeToggle';
+import { RunHeader } from '@/components/RunHeader';
+import { Badge } from '@/components/ui';
 import { fetchCall } from '@/lib/api';
 import { isFinished, isScripted } from '@/lib/reducer';
 import { useNow, useRunStream, useTopology } from '@/lib/useRunStream';
@@ -75,27 +76,27 @@ export default function RunPage({
 
   return (
     <main className="flex h-screen flex-col bg-canvas text-ink">
-      <header className="flex shrink-0 items-center gap-3 border-b border-line bg-surface px-4 py-2">
-        <Link href="/" className="text-sm font-medium text-ink hover:text-accent">
-          Atlas
-        </Link>
-        {previous !== null && (
-          <Link href={`/runs/${previous}`} className="shrink-0 text-xs text-ink-faint hover:text-ink">
-            ← previous question
-          </Link>
-        )}
-        {isScripted(state) && (
-          <span
-            className="shrink-0 rounded bg-retry/15 px-1.5 py-0.5 text-2xs text-retry"
-            title="ATLAS_OFFLINE is on: every model and the web are scripted, so no answer here was written by a model."
-          >
-            offline mode · scripted models
-          </span>
-        )}
-        <p className="min-w-0 flex-1 truncate text-xs text-ink-muted">{state.query ?? 'loading run…'}</p>
-        <span className="hidden shrink-0 font-mono text-2xs text-ink-faint sm:inline">{runId}</span>
-        <ThemeToggle />
-      </header>
+      <RunHeader
+        state={state}
+        now={now}
+        badges={
+          isScripted(state) && (
+            <Badge
+              tone="retry"
+              title="ATLAS_OFFLINE is on: every model and the web are scripted, so no answer here was written by a model."
+            >
+              Offline mode · scripted models
+            </Badge>
+          )
+        }
+        breadcrumb={
+          previous !== null && (
+            <Link href={`/runs/${previous}`} className="hover:text-ink">
+              ← Previous question
+            </Link>
+          )
+        }
+      />
       <RunWorkspace
         runId={runId}
         loadCall={loadCall}
