@@ -318,6 +318,48 @@ The measurement also found a retrieval gap: "what is a DPIA" matched nothing at 
 now knows DPIA and FRIA. No eval question uses either abbreviation, so the measured retrieval
 numbers are unchanged, and the held-out half is still measured once.
 
+### 3.11 Reviewing a contract against the law
+
+The same bet as the citation check, pointed at a document the user brings. GDPR Art. 28(3) lists the
+terms a processor contract must stipulate; legal teams check vendor contracts against it by hand,
+and DORA Art. 30 asks the same of every ICT service contract a bank signs.
+
+**The law is the checklist.** Each of the nine requirements names its provision by label, and its
+text comes from the library: what a contract is held to is the law as published, never a prompt's
+paraphrase.
+
+**A model reads; the contract's words decide.** The contract is cut into clauses at its own
+numbered headings, each with a label a reviewer can find. Each requirement is judged in its own
+call against the clauses ranked most like it (BM25, as the library ranks the law). A "met" or
+"partial" must quote the contract, and the quote is looked for in the clause it cites with the same
+test the law's quotations get. One that is not there is **unverified**, never met. A requirement no
+clause shares a word with is missing, without a model call.
+
+**A review is a run.** It is a small graph of its own, run by the same runner: its events stream
+and replay, every judgment's prompt is kept under its requirement for the inspector, and the run is
+kept in the record as a review.
+
+**A person signs it off.** Each finding can be agreed or disagreed with, with a note and the
+reviewer's name. A changed decision is a new row, never an overwrite, so the record says who
+decided what, and when. Atlas has no sign-in, so the name is kept as given.
+
+**Measured, free:** for 56 of 56 terms met or partly met in eight contracts with known gaps, the
+clause that meets it is among those the model is shown. It was 54: "keep the data safe" and
+"subcontractors" shared no word with the law, so each requirement now carries the words contracts
+use for it. That fix was made on these contracts, so the number is in-sample. **Not measured:** the
+review's own accuracy, which `atlas_eval contracts --model` measures in 72 calls.
+
+Looking at the first sample in the browser found two reading bugs, both now tested: a wrapped line
+starting "Article 32 of the GDPR" was taken for a clause heading, and a wrapped first sentence for a
+clause's title.
+
+### 3.12 A general question, said to be one
+
+A question about neither act can still be asked: "Ask anything" researches it from the web, in the
+general domain. The domain is chosen when a conversation starts and kept by every run on it: a
+follow-up or a revision cannot switch it, since the answer it builds on was researched under the
+other's rules. A general answer is marked as such, its citations not checked against the law.
+
 ## 4. Failures that looked like success
 
 The class of bug this project keeps producing is the component that silently does nothing, or the
@@ -339,6 +381,8 @@ wrong thing, while everything looks fine. These were found during this work:
 | A deleted run's stream was gone | The Redis test double's DEL ignored streams, so the tests could not tell | Making the double behave like Redis |
 | `DELETE /threads/{id}` was queued | A renamed worker function would have left every deletion queued for nobody | A test pinning the job's registered name |
 | An off-topic question got a verified answer | "history of cameroon" was researched, and GDPR Recital 35 cited and marked verified: real, retrieved, and about health data | A person asking it in the app. The planner now judges scope (§3.10) |
+| A finished review served by `GET /runs/{id}` | It read every stored result as a research answer: a review's crashed it with a 500 | A test, failing first, before the run page's stream could hit it |
+| A contract's clauses were read | Clause 4 wrapped onto "Article 32 of the GDPR", which became a clause of its own | Looking at the first sample's clauses before recording its review |
 | "What is a DPIA" was a short question | It matched no provision: the abbreviation is practice's, not the GDPR's | Measuring the scope check, which needed every in-scope question's best match |
 
 ## 5. Measured and not measured
@@ -347,9 +391,11 @@ wrong thing, while everything looks fine. These were found during this work:
 |---|---|
 | Library retrieval, one search per question | recall@10 0.900 (held-out half 0.875, measured once), recall@5 0.713, all must-cites for 32 of 40 |
 | Engine regression gate, 50 general questions | completion 0.995, grounding 0.955, tool use 0.963; thresholds 5 / 4 / 3 pp from a measured noise floor |
-| Tests | 581 backend, 13 more against Postgres, 203 frontend; no network, no spend |
+| Contract review, candidate search | 56 of 56 terms met or partly met have their clause among those the model is shown, in eight contracts with known gaps (in-sample) |
+| Tests | 642 backend, 16 more against Postgres, 219 frontend; no network, no spend |
 | **Not measured: the domain eval** | Built and tested; needs about $12–15 of model calls (estimated) |
 | **Not measured: Atlas's own retrieval** | One search per branch, rather than per question |
+| **Not measured: the contract review's accuracy** | `atlas_eval contracts --model`, 72 calls: gaps caught, missing terms passed as met, false alarms |
 | **Not measured: the planner's scope judgment** | `atlas_eval scope --planner` on 144 labelled questions, one planner call each: about 150k tokens, roughly $1 (estimated) |
 | **Not measured: the support check's accuracy** | `atlas_eval support` measures it on 24 labelled cases (12 supported, 12 near misses), each "supports" label proved by the provision's own words; needs credit |
 | **Not done: dataset review** | The 40 compliance questions were drafted by a model; none has been reviewed by a person |
@@ -380,7 +426,7 @@ wrong thing, while everything looks fine. These were found during this work:
 From `backend/`:
 
 ```powershell
-uv run pytest -q                                          # 581 tests, offline
+uv run pytest -q                                          # 642 tests, offline
 uv run pytest -q -m postgres                              # with ATLAS_TEST_DATABASE_URL set
 uv run python -m atlas_eval retrieval                     # recall@10, free
 uv run python -m atlas_eval claim --dataset compliance    # what the dataset supports claiming

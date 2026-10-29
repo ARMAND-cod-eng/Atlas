@@ -77,6 +77,20 @@ that. A check that knows the law does.
 
   Each edit becomes a new version, and any two versions can be compared word by word. A person
   overseeing the AI and redirecting it is the workflow, not an afterthought.
+- **It reviews a contract against the law, and a person signs it off.** Upload a processor contract
+  (PDF, .docx or text) and Atlas checks it against the nine terms GDPR Art. 28(3) says it must
+  contain:
+  - each term judged in its own call, against the clauses most like it;
+  - a "met" or "partial" must quote the contract, and the quote is looked for in the clause it
+    cites: one that is not there is **unverified**, never met;
+  - a reviewer agrees or disagrees with each finding, with a note, and every decision is kept;
+  - the report copies as Markdown, decisions and caveat included.
+
+  Legal teams check such contracts by the thousand; this is the first of the checklists, and DORA
+  Art. 30, for ICT service contracts, is the next.
+- **It also answers general questions, and says which kind of answer it is.** "Ask anything"
+  researches a question from the web. Such an answer is marked as general research, its citations
+  not checked against the law.
 - **It keeps an audit trail, and deletes on request.**
   - Postgres keeps every run, every agent call and every event stream past the live stream's hour.
   - `DELETE /threads/{id}` removes a conversation from every place it is stored.
@@ -98,6 +112,9 @@ Open <http://127.0.0.1:3000/demo>. It shows a recorded run replayed through the 
 - the first draft caught twice: once citing an invented article, and once citing a real provision
   for what it does not say;
 - the rewrite that fixes both.
+
+A recorded contract review is at <http://127.0.0.1:3000/demo/review>: five terms met, two partial,
+one missing, and one whose quote the contract does not have, reported as unverified.
 
 Click any agent to read the prompt it was actually sent. The open agent and tab live in the URL, so
 <http://127.0.0.1:3000/demo?node=researcher:s1&tab=prompt> goes straight to one researcher's prompt. The recording ran through the real graph and
@@ -130,7 +147,8 @@ pretend to be a model, so this shows the machinery, not the quality.
 |---|---|
 | Library retrieval, one search per question | recall@10 **0.900** over the 40 compliance questions, every required provision found for 32 of 40 (`atlas_eval retrieval`). On the held-out half, measured once after the last change: **0.875**, up from 0.800 |
 | Engine regression gate, 50 general questions | completion 0.995, grounding 0.955, tool use 0.963; run-to-run noise measured, gate thresholds set from it (5 / 4 / 3 pp) |
-| Tests | **563** backend (plus 13 against Postgres) · **144** frontend, no network calls, no spend |
+| Contract review, candidate search | for 56 of 56 terms met or partly met in eight contracts with known gaps, the clause that meets it is among those the model is shown (`atlas_eval contracts`). In-sample: two vocabulary misses were fixed on these contracts |
+| Tests | **642** backend (plus 16 against Postgres) · **219** frontend, no network calls, no spend |
 
 **Not measured yet: the headline.** The domain eval compares three systems on 40 questions:
 
@@ -557,6 +575,15 @@ uv run python -m atlas_eval citations --runs atlas-v1 plain-v1 single-v1 --refer
 
 `citations` costs nothing. It re-scores saved answers with today's scorer and pairs each system with
 the reference item by item. `retrieval` measures the library search alone, also for free.
+
+**The contract review is measured on its own.** `atlas_eval contracts` reviews eight processor
+contracts written for it, each with a key: every Art. 28(3) term's status, and the clauses that meet
+it. They test a complete contract (false alarms), missing and vague terms, unnumbered paragraphs, a
+software licence with no data protection terms, and a supplier's own vocabulary. Free by default:
+whether the clause that meets a term is among those the model is shown. With `--model` (72 calls)
+it runs the review itself and counts gaps caught, missing terms passed as met (the worst error,
+counted alone), false alarms, and findings left unverified. The contracts and key were drafted by a
+model and are not yet reviewed by a lawyer.
 
 **The scope check is measured on its own.** `atlas_eval scope` runs it on 64 questions about the
 law (the 40 compliance questions, and 24 casual ones such as "right to be forgotten") and 80 that
