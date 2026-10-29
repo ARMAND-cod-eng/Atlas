@@ -36,6 +36,7 @@ import {
   CITATION_CHECK,
   CITATION_SUPPORT,
   REVISION_STARTED,
+  SCOPE_DECLINED,
   type AgentEvent,
   type CallSummary,
   type SourceRef,
@@ -133,6 +134,8 @@ export interface RunState {
   readonly retryTargets: readonly string[];
   readonly retryFired: boolean;
   readonly answer: string | null;
+  /** Why the question was not researched: judged to be about neither act. */
+  readonly declined: string | null;
   readonly error: string | null;
   readonly degraded: readonly string[];
   readonly totalTokens: number | null;
@@ -185,6 +188,7 @@ export function initialState(nodeIds: readonly string[]): RunState {
     retryTargets: [],
     retryFired: false,
     answer: null,
+    declined: null,
     error: null,
     degraded: [],
     totalTokens: null,
@@ -234,6 +238,9 @@ function apply(state: RunState, event: AgentEvent): RunState {
         threadId: event.payload.thread_id,
         startedAt: event.ts,
       };
+
+    case SCOPE_DECLINED:
+      return { ...state, declined: event.payload.reason };
 
     case FAN_OUT: {
       const questions = event.payload.questions ?? {};

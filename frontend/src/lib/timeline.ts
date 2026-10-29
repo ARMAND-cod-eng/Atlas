@@ -20,6 +20,7 @@ import {
   RUN_COMPLETED,
   RUN_FAILED,
   RUN_STARTED,
+  SCOPE_DECLINED,
   type AgentEvent,
 } from './events';
 import { CRITIC, PLANNER, RESEARCHER, SYNTHESIZER, type RunState } from './reducer';
@@ -67,6 +68,8 @@ function describe(event: AgentEvent): Omit<TimelineEntry, 'seq' | 'at' | 'nodeId
         detail: `${event.payload.before} → ${event.payload.after}`,
       };
     }
+    case SCOPE_DECLINED:
+      return { tone: 'retry', text: 'Not about the AI Act or the GDPR', detail: event.payload.reason };
     case FAN_OUT:
       return {
         tone: 'neutral',
@@ -270,6 +273,11 @@ export function runSteps(state: RunState): readonly Step[] {
             ? `not accepted after ${plural(rounds.length, 'round')}`
             : `round ${last.iteration}: sent back`,
   };
+  if (state.declined !== null) {
+    // Planned, judged to be about neither act, and stopped: nothing after it ran.
+    const skipped = (step: Step): Step => ({ ...step, status: 'idle', detail: 'not run' });
+    return [{ ...plan, status: 'done', detail: 'about neither act' }, skipped(research), skipped(write), skipped(review)];
+  }
   return [plan, research, write, review];
 }
 
@@ -289,6 +297,7 @@ function stepOf(entry: TimelineEntry, revising: boolean): StepKey {
     case REVISION_STARTED:
       return 'edit';
     case FAN_OUT:
+    case SCOPE_DECLINED:
       return 'plan';
     case RUN_COMPLETED:
     case RUN_FAILED:

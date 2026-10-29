@@ -8,7 +8,7 @@ import { QuestionForm } from '@/components/QuestionForm';
 import { RunWorkspace } from '@/components/RunWorkspace';
 import { RunHeader } from '@/components/RunHeader';
 import { Badge } from '@/components/ui';
-import { fetchCall } from '@/lib/api';
+import { fetchCall, startRun } from '@/lib/api';
 import { isFinished, isScripted } from '@/lib/reducer';
 import { useNow, useRunStream, useTopology } from '@/lib/useRunStream';
 
@@ -59,6 +59,21 @@ export default function RunPage({
     );
   }
 
+  // Asked again in its own conversation: a follow-up, which is never judged for scope.
+  const researchAnyway =
+    finished && state.declined !== null && state.query !== null && state.threadId !== null
+      ? async (): Promise<string | null> => {
+          const outcome = await startRun(state.query ?? '', state.threadId ?? undefined, runId);
+          if (outcome.kind === 'started') {
+            router.push(`/runs/${outcome.runId}`);
+            return null;
+          }
+          return outcome.kind === 'busy'
+            ? 'This conversation is still answering. Try again once it finishes.'
+            : outcome.message;
+        }
+      : undefined;
+
   const followUp =
     finished && state.threadId !== null ? (
       <section className="rounded-xl border border-line bg-surface p-4">
@@ -105,7 +120,8 @@ export default function RunPage({
         topology={topology}
         now={now}
         connection={connection}
-        followUp={followUp}
+        followUp={state.declined === null ? followUp : null}
+        onResearchAnyway={researchAnyway}
         onRevised={(next) => router.push(`/runs/${next}`)}
       />
     </main>

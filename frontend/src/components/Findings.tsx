@@ -74,7 +74,7 @@ export function Findings({ state, open = false, onEdit }: Props): React.JSX.Elem
                       {source.label !== null && source.label !== undefined && (
                         <span className="mr-1.5 font-medium text-law">{source.label}</span>
                       )}
-                      {source.title}
+                      {source.title !== source.label && source.title}
                     </a>
                     {(source.label === null || source.label === undefined) && (
                       <span className="ml-1.5 text-ink-faint">{hostOf(source.url)}</span>

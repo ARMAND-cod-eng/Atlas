@@ -42,7 +42,9 @@ export function answerMarkdown({
       lines.push(
         source === undefined
           ? `- ${label} — not among the sources this run retrieved`
-          : `- [${label}] — ${source.title}`,
+          : source.title === label
+            ? `- [${label}]`
+            : `- [${label}] — ${source.title}`,
       );
     }
     lines.push('');

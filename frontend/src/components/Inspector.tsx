@@ -601,7 +601,7 @@ function SourceList({
               {source.label !== null && source.label !== undefined && (
                 <span className={`mr-1.5 font-medium ${tone}`}>{source.label}</span>
               )}
-              <span className="text-ink-muted">{source.title}</span>
+              {source.title !== source.label && <span className="text-ink-muted">{source.title}</span>}
             </a>
           </li>
         ))}

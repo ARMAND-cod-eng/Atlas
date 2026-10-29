@@ -67,6 +67,24 @@ describe('the answer as Markdown', () => {
     expect(markdown).not.toContain(']: <');
   });
 
+  it('names a provision with no title of its own once, a recital', () => {
+    const recital = 'http://data.europa.eu/eli/reg/2016/679/oj#rct_35';
+    const markdown = answerMarkdown({
+      question: null,
+      answer: 'Health data [GDPR Recital 35].',
+      sources: [{ url: recital, title: 'GDPR Recital 35', label: 'GDPR Recital 35' }],
+      lawAsOf: '23 October 2026',
+    });
+
+    expect(markdown.split('\n').slice(2, 7)).toEqual([
+      'Provisions cited:',
+      '',
+      '- [GDPR Recital 35]',
+      '',
+      `[GDPR Recital 35]: <${recital}>`,
+    ]);
+  });
+
   it('says nothing of provisions when the answer cites none', () => {
     const markdown = answerMarkdown({ question: null, answer: 'No.', sources: SOURCES, lawAsOf: '23 October 2026' });
 

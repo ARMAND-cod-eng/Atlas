@@ -13,6 +13,8 @@ export const NODE_STARTED = 'node_started';
 export const NODE_COMPLETED = 'node_completed';
 export const NODE_FAILED = 'node_failed';
 export const FAN_OUT = 'fan_out';
+/** A compliance question judged to be about neither act: the run ends at the plan. */
+export const SCOPE_DECLINED = 'scope_declined';
 export const ITERATION_STARTED = 'iteration_started';
 export const CRITIC_VERDICT = 'critic_verdict';
 export const RUN_COMPLETED = 'run_completed';
@@ -131,6 +133,7 @@ export type AgentEvent =
         readonly questions?: Readonly<Record<string, string>>;
       }
     >
+  | Base<typeof SCOPE_DECLINED, { readonly reason: string }>
   | Base<typeof ITERATION_STARTED, { readonly iteration: number }>
   | Base<
       typeof CRITIC_VERDICT,
@@ -206,6 +209,7 @@ export const EVENT_TYPES = [
   NODE_COMPLETED,
   NODE_FAILED,
   FAN_OUT,
+  SCOPE_DECLINED,
   ITERATION_STARTED,
   CRITIC_VERDICT,
   AGENT_CALL,

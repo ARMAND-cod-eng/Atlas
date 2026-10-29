@@ -1,0 +1,80 @@
+[
+  {
+    "run_id": "declined",
+    "seq": 1,
+    "ts": "2026-10-29T04:43:34.184734Z",
+    "type": "run_started",
+    "node": null,
+    "payload": {
+      "query": "What is the history of Cameroon?",
+      "thread_id": "thread"
+    }
+  },
+  {
+    "run_id": "declined",
+    "seq": 2,
+    "ts": "2026-10-29T04:43:34.200441Z",
+    "type": "node_started",
+    "node": "planner",
+    "payload": {
+      "subtask_id": null,
+      "span_id": "47eecee701a8"
+    }
+  },
+  {
+    "run_id": "declined",
+    "seq": 3,
+    "ts": "2026-10-29T04:43:39.599050Z",
+    "type": "agent_call",
+    "node": "planner",
+    "payload": {
+      "call_id": "06a1120a71ca4f3e80a42f091e2ad7c1",
+      "span_id": "47eecee701a8",
+      "subtask_id": null,
+      "kind": "model",
+      "name": "scripted",
+      "duration_s": 0.0007396999862976372,
+      "input_tokens": null,
+      "output_tokens": null,
+      "error": null,
+      "preview": "{\"subtasks\": [], \"out_of_scope\": \"The question is about the history of Cameroon.\"}"
+    }
+  },
+  {
+    "run_id": "declined",
+    "seq": 4,
+    "ts": "2026-10-29T04:43:39.599050Z",
+    "type": "node_completed",
+    "node": "planner",
+    "payload": {
+      "subtask_id": null,
+      "span_id": "47eecee701a8"
+    }
+  },
+  {
+    "run_id": "declined",
+    "seq": 5,
+    "ts": "2026-10-29T04:43:39.599050Z",
+    "type": "scope_declined",
+    "node": "planner",
+    "payload": {
+      "reason": "The question is about the history of Cameroon."
+    }
+  },
+  {
+    "run_id": "declined",
+    "seq": 6,
+    "ts": "2026-10-29T04:43:39.599050Z",
+    "type": "run_completed",
+    "node": null,
+    "payload": {
+      "answer": "Not researched. Atlas answers questions about the EU AI Act and the GDPR, and this one was judged to be about neither. The question is about the history of Cameroon. To research it anyway, ask it again in this conversation.",
+      "thread_id": "thread",
+      "iterations": 0,
+      "subtask_count": 0,
+      "source_count": 0,
+      "degraded": [],
+      "total_tokens": 0
+    }
+  }
+]

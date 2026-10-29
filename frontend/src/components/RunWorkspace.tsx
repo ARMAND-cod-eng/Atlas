@@ -54,6 +54,7 @@ export function RunWorkspace({
   connection,
   followUp = null,
   onRevised,
+  onResearchAnyway,
 }: {
   /** The run's id, or null for a replay: nothing behind it to fetch or revise. */
   readonly runId: string | null;
@@ -66,6 +67,8 @@ export function RunWorkspace({
   readonly connection: Connection;
   readonly followUp?: React.ReactNode;
   readonly onRevised?: (runId: string) => void;
+  /** Research a question judged out of scope after all; resolves to why it could not, or null. */
+  readonly onResearchAnyway?: () => Promise<string | null>;
 }): React.JSX.Element {
   // In the URL, so a link can open one agent's prompt and a reload keeps it.
   const [link, setSelected, setTab] = useInspectorLink();
@@ -144,7 +147,9 @@ export function RunWorkspace({
       id: 'result',
       title: 'Answer',
       subtitle:
-        state.phase === 'failed'
+        state.declined !== null
+          ? 'not researched'
+          : state.phase === 'failed'
           ? 'the run failed'
           : state.answer === null
             ? 'being written'
@@ -152,7 +157,7 @@ export function RunWorkspace({
       content: (
         // Answer first; then what supports it, folded; then what to do next.
         <div className="mx-auto max-w-3xl space-y-3 p-4 sm:p-5">
-          <AnswerCard state={state} result={result} rows={rows} />
+          <AnswerCard state={state} result={result} rows={rows} onResearchAnyway={onResearchAnyway} />
           <Sources result={result} />
           <Findings state={state} open={state.answer === null} onEdit={editable ? editBranch : undefined} />
           {followUp}

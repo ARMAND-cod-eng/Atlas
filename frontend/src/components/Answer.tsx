@@ -1,12 +1,13 @@
 'use client';
 
+import Link from 'next/link';
 import { useState } from 'react';
 import ReactMarkdown from 'react-markdown';
 
 import { CitationChip } from './CitationChip';
 import { LAW_AS_OF } from './Disclaimer';
 import { CompareControl, Diff } from './Versions';
-import { Badge, Button, Disclosure } from './ui';
+import { Badge, Button, Disclosure, buttonClass } from './ui';
 import { CopyButton } from './ui/CopyButton';
 import { CITE_PREFIX, judgementsOf, markCitations, statusOf, supportFor } from '@/lib/citations';
 import { answerMarkdown } from '@/lib/copy';
@@ -34,11 +35,20 @@ export function AnswerCard({
   state,
   result,
   rows,
-}: Props & { readonly rows: readonly VersionRow[] }): React.JSX.Element {
+  onResearchAnyway,
+}: Props & {
+  readonly rows: readonly VersionRow[];
+  /**
+   * Research a declined question after all; resolves to why it could not start,
+   * or null. Absent on a replay, which has nothing to research it with.
+   */
+  readonly onResearchAnyway?: () => Promise<string | null>;
+}): React.JSX.Element {
   const [against, setAgainst] = useState<string | null>(null);
   const options = comparable(rows);
   const chosen = options.find((row) => row.runId === against) ?? null;
 
+  if (state.declined !== null) return <Declined reason={state.declined} onResearchAnyway={onResearchAnyway} />;
   if (state.answer === null) return <Pending state={state} />;
   const answer = state.answer;
   // Every source the run had: the result's once it has one, the branches' as they land.
@@ -69,6 +79,61 @@ export function AnswerCard({
       ) : (
         <Diff key={chosen.runId} chosen={chosen} answer={answer} />
       )}
+    </section>
+  );
+}
+
+/**
+ * A question judged to be about neither act. Said in place of an answer, since
+ * nothing was searched or cited: an answer here would be the nearest-sounding
+ * law, marked verified because it exists.
+ */
+function Declined({
+  reason,
+  onResearchAnyway,
+}: {
+  readonly reason: string;
+  readonly onResearchAnyway?: () => Promise<string | null>;
+}): React.JSX.Element {
+  const [starting, setStarting] = useState(false);
+  const [failure, setFailure] = useState<string | null>(null);
+
+  async function research(): Promise<void> {
+    if (onResearchAnyway === undefined || starting) return;
+    setStarting(true);
+    setFailure(null);
+    const why = await onResearchAnyway();
+    if (why !== null) {
+      setFailure(why);
+      setStarting(false);
+    }
+  }
+
+  return (
+    <section aria-labelledby="answer-title" className="rounded-xl border border-retry/40 bg-retry/5 p-4 sm:p-5">
+      <h2 id="answer-title" className="text-sm font-semibold text-ink">
+        Not about the AI Act or the GDPR
+      </h2>
+      <p className="mt-2 max-w-[68ch] text-base leading-relaxed text-ink">{reason}</p>
+      <p className="mt-2 max-w-[68ch] text-xs leading-relaxed text-ink-muted">
+        Atlas researches the EU AI Act and the GDPR, so this question was not researched: nothing
+        was searched, and nothing in the law was cited for it.
+      </p>
+      <div className="mt-4 flex flex-wrap items-center gap-2">
+        <Link href="/" className={buttonClass('primary', 'sm')}>
+          Ask another question
+        </Link>
+        {onResearchAnyway !== undefined && (
+          <Button variant="secondary" size="sm" disabled={starting} onClick={() => void research()}>
+            {starting ? 'Starting…' : 'Research anyway'}
+          </Button>
+        )}
+        {failure !== null && (
+          <p role="alert" className="text-2xs text-failed">
+            {failure}
+          </p>
+        )}
+      </div>
     </section>
   );
 }
@@ -257,7 +322,8 @@ function SourceGroup({
               {source.label !== null && source.label !== undefined && (
                 <span className={`mr-1.5 font-medium ${tone}`}>{source.label}</span>
               )}
-              {source.title}
+              {/* A recital's title is its label: said once. */}
+              {source.title !== source.label && source.title}
               {(source.label === null || source.label === undefined) && (
                 <span className="ml-1.5 text-ink-faint">{hostOf(source.url)}</span>
               )}

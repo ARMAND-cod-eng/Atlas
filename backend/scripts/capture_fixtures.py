@@ -147,7 +147,10 @@ def fake_model(answer: str, fail_in: str | None = None) -> ModelFn:
 
 
 def fake_structured(
-    count: int, verdicts: list[CriticVerdict], domain: DomainName = "general"
+    count: int,
+    verdicts: list[CriticVerdict],
+    domain: DomainName = "general",
+    out_of_scope: str | None = None,
 ) -> StructuredFn:
     remaining = list(verdicts)
 
@@ -162,7 +165,7 @@ def fake_structured(
             return remaining.pop(0) if len(remaining) > 1 else remaining[0]
         if schema is SupportJudgements:
             return supporting_judge(messages)
-        return plan(count, domain)
+        return plan(count, domain).model_copy(update={"out_of_scope": out_of_scope})
 
     return call
 
@@ -251,6 +254,8 @@ async def capture(
     domain: DomainName = "general",
     model: ModelFn | None = None,
     revise_branch: tuple[str, str] | None = None,
+    question: str | None = None,
+    out_of_scope: str | None = None,
 ) -> InMemoryRunStore:
     """Run the real graph with controlled inputs and record every event.
 
@@ -284,7 +289,9 @@ async def capture(
     nodes.call_model = models.call_model
     nodes.call_structured = models.call_structured
     models.get_llm = scripted_llm(model or fake_model(ANSWER, fail_in))
-    models.get_structured_llm = scripted_structured(fake_structured(count, verdicts, domain))
+    models.get_structured_llm = scripted_structured(
+        fake_structured(count, verdicts, domain, out_of_scope)
+    )
     # A scripted answer that fails to parse would be retried on the structured
     # fallback, a real provider. A recording must never reach one.
     models.get_structured_fallback = no_fallback
@@ -294,7 +301,9 @@ async def capture(
         graph = build_state_graph().compile(checkpointer=MemorySaver(serde=checkpoint_serde()))
         with using_domain(domain):
             try:
-                await execute_run(name, QUESTION[domain], "thread", graph, store=store)
+                await execute_run(
+                    name, question or QUESTION[domain], "thread", graph, store=store
+                )
                 if revise_branch is not None:
                     collected.clear()
                     subtask_id, question = revise_branch
@@ -394,8 +403,23 @@ async def main() -> None:
         "compliance", count=2, verdicts=[ACCEPT], domain="compliance", model=citing_model()
     )
 
+    await capture_declined()
+
     await write_demo(compliance)
     write_citation_cases()
+
+
+async def capture_declined() -> None:
+    """A compliance question the planner judges to be about neither act: the run
+    ends at the plan, with the reason, and nothing is researched."""
+    await capture(
+        "declined",
+        count=0,
+        verdicts=[ACCEPT],
+        domain="compliance",
+        question="What is the history of Cameroon?",
+        out_of_scope="The question is about the history of Cameroon.",
+    )
 
 
 async def write_demo(store: InMemoryRunStore) -> None:
