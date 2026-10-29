@@ -7,11 +7,13 @@ import { Findings } from './Findings';
 import { GraphCanvas } from './GraphCanvas';
 import { type CallSource, Inspector } from './Inspector';
 import { Metrics } from './Metrics';
-import { RunStatus } from './RunStatus';
+import { RunDetails } from './RunDetails';
+import { RunProgress } from './RunProgress';
 import { Timeline } from './Timeline';
 import { Compare, Versions } from './Versions';
 import { Disclaimer } from './Disclaimer';
 import { type PaneSpec, Workspace } from './Workspace';
+import { Disclosure } from './ui';
 import type { RunResult, Topology } from '@/lib/events';
 import type { RunState } from '@/lib/reducer';
 import { useInspectorLink } from '@/lib/inspectorLink';
@@ -91,9 +93,7 @@ export function RunWorkspace({
       content: (
         <>
           <Versions rows={rows} />
-          <div className="border-b border-line p-3">
-            <RunStatus state={state} connection={connection} now={now} />
-          </div>
+          <RunProgress state={state} />
           <Timeline state={state} selected={selected} onSelect={setSelected} />
         </>
       ),
@@ -142,7 +142,12 @@ export function RunWorkspace({
           <Answer state={state} result={result} />
           <Findings state={state} />
           {followUp}
-          <Metrics result={result} />
+          <Disclosure title="Run details">
+            <div className="space-y-4">
+              <RunDetails runId={runId} state={state} connection={connection} />
+              <Metrics result={result} />
+            </div>
+          </Disclosure>
           <Disclaimer className="border-t border-line pt-3" />
         </div>
       ),

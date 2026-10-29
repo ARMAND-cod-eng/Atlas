@@ -15,6 +15,14 @@ const DOT: Record<VersionRow['status'], string> = {
 /** Every version of the answer on this thread; the one on screen marked. */
 export function Versions({ rows }: { readonly rows: readonly VersionRow[] }): React.JSX.Element | null {
   if (rows.length === 0) return null;
+  if (rows.length === 1) {
+    // One version is not a list: say how to make a second instead.
+    return (
+      <p className="border-b border-line px-3 py-2 text-2xs text-ink-muted">
+        Rewrite a researcher&apos;s question to make a new version and compare the two.
+      </p>
+    );
+  }
   return (
     <section aria-label="Versions" className="border-b border-line p-3">
       <h3 className="mb-1.5 text-2xs uppercase tracking-wide text-ink-faint">Versions · {rows.length}</h3>
@@ -51,11 +59,6 @@ export function Versions({ rows }: { readonly rows: readonly VersionRow[] }): Re
           );
         })}
       </ol>
-      {rows.length === 1 && (
-        <p className="mt-2 text-2xs text-ink-faint">
-          Open a researcher and rewrite its question to make a new version.
-        </p>
-      )}
     </section>
   );
 }
