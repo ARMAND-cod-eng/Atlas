@@ -1,0 +1,121 @@
+{
+  "provenance": {
+    "drafted_by": "model",
+    "reviewed_by": null,
+    "note": "Eight processor contracts written for this eval, each with the status a careful reader would give each GDPR Art. 28(3) term, and the clauses that meet the terms met or partly met. Not yet reviewed by a lawyer: until one has, the results say so."
+  },
+  "contracts": {
+    "dpa-01": {
+      "why": "A typical agreement with gaps: deletion without return, general authorisation without notice of changes, no assistance under Articles 32 to 36, no audits.",
+      "expected": {
+        "details": {"status": "met", "clauses": ["Clause 1", "Clause 1.1", "Clause 1.2"]},
+        "instructions": {"status": "met", "clauses": ["Clause 2"]},
+        "confidentiality": {"status": "met", "clauses": ["Clause 3"]},
+        "security": {"status": "met", "clauses": ["Clause 4"]},
+        "sub-processors": {"status": "partial", "clauses": ["Clause 5"]},
+        "data-subject-rights": {"status": "met", "clauses": ["Clause 6"]},
+        "assistance": {"status": "missing"},
+        "end": {"status": "partial", "clauses": ["Clause 7"]},
+        "audits": {"status": "missing"}
+      }
+    },
+    "dpa-02": {
+      "why": "Complete: every term met, mostly in the GDPR's own words. Measures false alarms.",
+      "expected": {
+        "details": {"status": "met", "clauses": ["Clause 1.1", "Clause 1.2", "Clause 1.3"]},
+        "instructions": {"status": "met", "clauses": ["Clause 2"]},
+        "confidentiality": {"status": "met", "clauses": ["Clause 3"]},
+        "security": {"status": "met", "clauses": ["Clause 4"]},
+        "sub-processors": {"status": "met", "clauses": ["Clause 5.1", "Clause 5.2"]},
+        "data-subject-rights": {"status": "met", "clauses": ["Clause 6"]},
+        "assistance": {"status": "met", "clauses": ["Clause 7"]},
+        "end": {"status": "met", "clauses": ["Clause 8"]},
+        "audits": {"status": "met", "clauses": ["Clause 9"]}
+      }
+    },
+    "dpa-03": {
+      "why": "No instructions term and no confidentiality term; the processing described, but not the controller's obligations and rights.",
+      "expected": {
+        "details": {"status": "partial", "clauses": ["Clause 1"]},
+        "instructions": {"status": "missing"},
+        "confidentiality": {"status": "missing"},
+        "security": {"status": "met", "clauses": ["Clause 2"]},
+        "sub-processors": {"status": "met", "clauses": ["Clause 3"]},
+        "data-subject-rights": {"status": "met", "clauses": ["Clause 4"]},
+        "assistance": {"status": "met", "clauses": ["Clause 4"]},
+        "end": {"status": "met", "clauses": ["Clause 5"]},
+        "audits": {"status": "met", "clauses": ["Clause 6"]}
+      }
+    },
+    "dpa-04": {
+      "why": "Vague where it matters: 'reasonable efforts' for security, answers to questions instead of audits, and nothing on sub-processors.",
+      "expected": {
+        "details": {"status": "partial", "clauses": ["Clause 1"]},
+        "instructions": {"status": "met", "clauses": ["Clause 2"]},
+        "confidentiality": {"status": "met", "clauses": ["Clause 3"]},
+        "security": {"status": "partial", "clauses": ["Clause 4"]},
+        "sub-processors": {"status": "missing"},
+        "data-subject-rights": {"status": "met", "clauses": ["Clause 5"]},
+        "assistance": {"status": "met", "clauses": ["Clause 6"]},
+        "end": {"status": "met", "clauses": ["Clause 7"]},
+        "audits": {"status": "partial", "clauses": ["Clause 8"]}
+      }
+    },
+    "dpa-05": {
+      "why": "Unnumbered paragraphs; every point (a) to (h) met, but the processing itself never described.",
+      "expected": {
+        "details": {"status": "missing"},
+        "instructions": {"status": "met", "clauses": ["¶ 2"]},
+        "confidentiality": {"status": "met", "clauses": ["¶ 3"]},
+        "security": {"status": "met", "clauses": ["¶ 4"]},
+        "sub-processors": {"status": "met", "clauses": ["¶ 5"]},
+        "data-subject-rights": {"status": "met", "clauses": ["¶ 6"]},
+        "assistance": {"status": "met", "clauses": ["¶ 7"]},
+        "end": {"status": "met", "clauses": ["¶ 8"]},
+        "audits": {"status": "met", "clauses": ["¶ 9"]}
+      }
+    },
+    "dpa-06": {
+      "why": "Articles, not clauses; assistance under Articles 32 to 36 but none with data subjects' requests; return without deletion.",
+      "expected": {
+        "details": {"status": "met", "clauses": ["Article 1"]},
+        "instructions": {"status": "met", "clauses": ["Article 2"]},
+        "confidentiality": {"status": "met", "clauses": ["Article 3"]},
+        "security": {"status": "met", "clauses": ["Article 4"]},
+        "sub-processors": {"status": "met", "clauses": ["Article 5"]},
+        "data-subject-rights": {"status": "missing"},
+        "assistance": {"status": "met", "clauses": ["Article 6"]},
+        "end": {"status": "partial", "clauses": ["Article 7"]},
+        "audits": {"status": "met", "clauses": ["Article 8"]}
+      }
+    },
+    "dpa-07": {
+      "why": "A software licence with no data protection terms at all: every term missing.",
+      "expected": {
+        "details": {"status": "missing"},
+        "instructions": {"status": "missing"},
+        "confidentiality": {"status": "missing"},
+        "security": {"status": "missing"},
+        "sub-processors": {"status": "missing"},
+        "data-subject-rights": {"status": "missing"},
+        "assistance": {"status": "missing"},
+        "end": {"status": "missing"},
+        "audits": {"status": "missing"}
+      }
+    },
+    "dpa-08": {
+      "why": "A provider's own terms, in its own words: Customer and Supplier, directions, duty of secrecy, hand back or erase. Measures whether the terms are found when the GDPR's words are not used.",
+      "expected": {
+        "details": {"status": "partial", "clauses": ["Clause 1"]},
+        "instructions": {"status": "met", "clauses": ["Clause 2"]},
+        "confidentiality": {"status": "met", "clauses": ["Clause 3"]},
+        "security": {"status": "met", "clauses": ["Clause 4"]},
+        "sub-processors": {"status": "partial", "clauses": ["Clause 5"]},
+        "data-subject-rights": {"status": "met", "clauses": ["Clause 6"]},
+        "assistance": {"status": "met", "clauses": ["Clause 6"]},
+        "end": {"status": "met", "clauses": ["Clause 7"]},
+        "audits": {"status": "met", "clauses": ["Clause 8"]}
+      }
+    }
+  }
+}

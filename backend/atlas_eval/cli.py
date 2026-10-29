@@ -40,6 +40,12 @@ from atlas.models import call_model, call_structured, primary_provider
 from atlas.runtime import configure_logging
 from atlas_eval.baselines import run_plain, run_single_call
 from atlas_eval.citation_metrics import citation_table, score_run, summarize_citations
+from atlas_eval.contracts_eval import (
+    candidate_recall,
+    load_contract_cases,
+    review_contract,
+    score_contracts,
+)
 from atlas_eval.dataset import (
     DATA_DIR,
     DATASETS,
@@ -774,6 +780,72 @@ def cmd_support(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_contracts(args: argparse.Namespace) -> int:
+    """How the contract review does on contracts whose gaps are known."""
+    cases = load_contract_cases()
+    if args.only:
+        wanted = {i.strip() for i in args.only.split(",") if i.strip()}
+        cases = [case for case in cases if case.id in wanted]
+    print(f"{len(cases)} model-drafted contracts, not yet reviewed by a lawyer")
+    recall = candidate_recall(cases)
+    print(
+        f"candidate recall: the clause that meets a term is among those shown for "
+        f"{recall.found} of {recall.total} terms met or partly met"
+    )
+    for miss in recall.misses:
+        print(f"  not shown: {miss}")
+
+    if not args.model:
+        print("\nthe review itself was not measured: --model calls the model, once per term")
+        return 0
+
+    metrics = RunMetrics()
+    predicted = {}
+    with measured_spend() as spend:
+        for case in cases:
+            findings, run = asyncio.run(review_contract(case))
+            predicted[case.id] = findings
+            metrics.llm_calls.extend(run.llm_calls)
+            print(f"  {case.id}: " + ", ".join(f"{f.requirement_id} {f.status}" for f in findings))
+    score = score_contracts(cases, predicted)
+
+    print(
+        f"\nagreed with the key on {score.agreed} of {score.terms} terms"
+        f"\ngaps caught: {score.gaps_caught} of {score.gaps}"
+        " (a gap passed as met goes into a contract)"
+        f"\nmissing terms passed as met: {score.missing_passed_as_met}"
+        f"\nfalse alarms: {score.false_alarms} of {score.met_terms} terms met"
+        f"\nunverified, for a person to read: {score.unverified}"
+    )
+    for disagreement in score.disagreements:
+        print(f"  {disagreement}")
+
+    primary = primary_provider()
+    on_fallback, calls = _off_primary([c.provider for c in metrics.llm_calls], primary)
+    RUNS_DIR.mkdir(parents=True, exist_ok=True)
+    path = RUNS_DIR / f"contracts-{args.name}.json"
+    payload = {
+        "name": args.name,
+        "created": _now(),
+        "commit": _git_commit(),
+        "primary_provider": primary,
+        "models": sorted({c.model for c in metrics.llm_calls}),
+        "spend": spend,
+        "candidate_recall": recall.model_dump(),
+        "score": score.model_dump(),
+        "findings": {cid: [f.model_dump() for f in found] for cid, found in predicted.items()},
+    }
+    path.write_text(json.dumps(payload, indent=2) + "\n", encoding="utf-8", newline="\n")
+    print(f"\nspend: {spend}\nwrote {path}")
+    if calls and on_fallback / calls > FALLBACK_LIMIT:
+        print(
+            f"\nFAIL: {on_fallback} of {calls} judgments came from the fallback, not {primary}."
+            " This measures the fallback's reading, not the review's."
+        )
+        return 1
+    return 0
+
+
 def cmd_scope(args: argparse.Namespace) -> int:
     """How the scope check decides on labelled in-scope and off-topic questions."""
     cases = load_scope_cases()
@@ -1041,6 +1113,17 @@ def build_parser() -> argparse.ArgumentParser:
     support.add_argument("--only", default=None, help="comma-separated case ids")
     support.set_defaults(func=cmd_support)
 
+    contracts = sub.add_parser(
+        "contracts", help="the contract review on eight contracts whose gaps are known"
+    )
+    contracts.add_argument(
+        "--model",
+        action="store_true",
+        help="also run the review itself: one model call per term, 72 in all (costs)",
+    )
+    contracts.add_argument("--name", default="latest")
+    contracts.add_argument("--only", default=None, help="comma-separated contract ids, e.g. dpa-01")
+    contracts.set_defaults(func=cmd_contracts)
     scope = sub.add_parser(
         "scope", help="how the scope check decides on in-scope and off-topic questions"
     )

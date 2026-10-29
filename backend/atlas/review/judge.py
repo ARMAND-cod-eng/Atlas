@@ -67,7 +67,7 @@ def candidates(requirement: Requirement, provision: str, clauses: Sequence[Claus
     if not clauses:
         return []
     index = BM25([legal_terms(expand(clause.words)) for clause in clauses])
-    terms = legal_terms(expand(f"{requirement.title} {provision}"))
+    terms = legal_terms(expand(f"{requirement.title} {provision} {requirement.words}"))
     scored = [(index.score(position, terms), position) for position in range(len(clauses))]
     ranked = sorted((item for item in scored if item[0] > 0), key=lambda item: (-item[0], item[1]))
     return [clauses[position] for _, position in ranked[:CANDIDATES]]

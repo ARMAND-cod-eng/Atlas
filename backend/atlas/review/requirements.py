@@ -18,6 +18,11 @@ class Requirement(BaseModel):
     id: str
     label: str
     title: str
+    # The words contracts use for the term where the law's are not: a supplier's
+    # "subcontractors", "safeguards", "hand back or erase". Searched with the
+    # law's words, as the library glossary adds everyday words to a question's.
+    # Chosen as a drafter writes them, then measured (atlas_eval contracts).
+    words: str = ""
 
 
 class Framework(BaseModel):
@@ -35,33 +40,60 @@ GDPR_ART_28 = Framework(
             label="GDPR Art. 28(3)",
             title="What is processed: subject-matter, duration, nature and purpose, types of data, "
             "categories of data subjects, the controller's obligations and rights",
+            words="subject matter duration term nature purpose categories types data subjects "
+            "description schedule annex",
         ),
         Requirement(
-            id="instructions", label="GDPR Art. 28(3)(a)", title="Only on documented instructions"
+            id="instructions",
+            label="GDPR Art. 28(3)(a)",
+            title="Only on documented instructions",
+            words="instructions directions documented written instructed directed",
         ),
         Requirement(
-            id="confidentiality", label="GDPR Art. 28(3)(b)", title="Staff bound to confidentiality"
+            id="confidentiality",
+            label="GDPR Art. 28(3)(b)",
+            title="Staff bound to confidentiality",
+            words="confidentiality confidential secrecy staff personnel employees authorised",
         ),
         Requirement(
-            id="security", label="GDPR Art. 28(3)(c)", title="Security measures (Article 32)"
+            id="security",
+            label="GDPR Art. 28(3)(c)",
+            title="Security measures (Article 32)",
+            words="security secure safeguards protect protection technical organisational safe",
         ),
         Requirement(
-            id="sub-processors", label="GDPR Art. 28(3)(d)", title="Conditions for sub-processors"
+            id="sub-processors",
+            label="GDPR Art. 28(3)(d)",
+            title="Conditions for sub-processors",
+            words="sub-processor subprocessor subcontractor subcontract another processor engage "
+            "appoint authorisation consent",
         ),
         Requirement(
             id="data-subject-rights",
             label="GDPR Art. 28(3)(e)",
             title="Help with data subjects' requests",
+            words="data subject requests rights individuals access rectification erasure respond",
         ),
         Requirement(
             id="assistance",
             label="GDPR Art. 28(3)(f)",
             title="Help with security, breaches and impact assessments (Articles 32 to 36)",
+            words="assist breach notification impact assessment prior consultation supervisory "
+            "authority",
         ),
         Requirement(
-            id="end", label="GDPR Art. 28(3)(g)", title="Delete or return the data at the end"
+            id="end",
+            label="GDPR Art. 28(3)(g)",
+            title="Delete or return the data at the end",
+            words="termination expiry end return delete deletion erase destroy hand back copies",
         ),
-        Requirement(id="audits", label="GDPR Art. 28(3)(h)", title="Information and audits"),
+        Requirement(
+            id="audits",
+            label="GDPR Art. 28(3)(h)",
+            title="Information and audits",
+            words="audit audits inspection inspections information demonstrate compliance verify "
+            "verification",
+        ),
     ),
 )
 
