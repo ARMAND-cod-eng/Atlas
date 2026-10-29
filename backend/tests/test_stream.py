@@ -400,6 +400,7 @@ def test_get_run_reports_a_failed_run_as_failed(
         "status": "failed",
         "result": None,
         "error": "ProviderError: all providers failed",
+        "review_url": None,
     }
 
 
@@ -417,7 +418,13 @@ def test_a_completed_run_whose_result_was_lost_is_not_reported_running(
 
     body = client.get(f"/runs/{run_id}").json()
 
-    assert body == {"run_id": run_id, "status": "completed", "result": None, "error": None}
+    assert body == {
+        "run_id": run_id,
+        "status": "completed",
+        "result": None,
+        "error": None,
+        "review_url": None,
+    }
 
 
 def test_a_run_with_no_terminal_event_is_running(fast_graph: None) -> None:
@@ -427,7 +434,13 @@ def test_a_run_with_no_terminal_event_is_running(fast_graph: None) -> None:
 
     body = client.get("/runs/queued-run").json()
 
-    assert body == {"run_id": "queued-run", "status": "running", "result": None, "error": None}
+    assert body == {
+        "run_id": "queued-run",
+        "status": "running",
+        "result": None,
+        "error": None,
+        "review_url": None,
+    }
 
 
 def test_query_still_returns_the_phase_2_shape(fast_graph: None, fake_redis: FakeRedis) -> None:

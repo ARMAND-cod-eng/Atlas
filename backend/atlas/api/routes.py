@@ -152,6 +152,8 @@ class RunStatus(BaseModel):
     result: QueryResponse | None = None
     # The error the run ended on, when status is "failed".
     error: str | None = None
+    # Where a contract review's findings are; a review has no research result.
+    review_url: str | None = None
 
 
 class ReviewRequest(BaseModel):
@@ -484,6 +486,8 @@ async def get_run(request: Request, run_id: str) -> RunStatus:
     them replayed on every reconnect.
     """
     result = await eventlog.load_result(run_id)
+    if result is not None and "findings" in result:
+        return RunStatus(run_id=run_id, status="completed", review_url=f"/reviews/{run_id}")
     if result is not None:
         return RunStatus(run_id=run_id, status="completed", result=QueryResponse(**result))
 
@@ -510,6 +514,10 @@ async def get_run(request: Request, run_id: str) -> RunStatus:
     # is still a run.
     store: RunStore | None = getattr(request.app.state, "store", None)
     record = await store.get(run_id) if store is not None else None
+    if record is not None and record.kind == "review":
+        return RunStatus(
+            run_id=run_id, status=record.status, error=record.error, review_url=f"/reviews/{run_id}"
+        )
     if record is not None:
         return RunStatus(
             run_id=run_id,

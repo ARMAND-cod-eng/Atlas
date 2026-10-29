@@ -152,3 +152,22 @@ async def test_a_research_run_is_not_a_review(fake_redis: FakeRedis) -> None:
     assert harness.client.get("/reviews/research-1").status_code == 404
     assert harness.client.get("/reviews/research-2").status_code == 404
     assert harness.client.get("/reviews/unknown-run").status_code == 404
+
+
+def test_a_review_is_a_run_whose_result_is_served_where_reviews_are(fake_redis: FakeRedis) -> None:
+    """GET /runs/{id} is for research results; a review's status is there, its findings are not."""
+    harness = Harness()
+    run_id = harness.client.post("/reviews", json={"filename": "dpa.txt", "text": CONTRACT}).json()[
+        "run_id"
+    ]
+
+    response = harness.client.get(f"/runs/{run_id}")
+
+    assert response.status_code == 200
+    assert response.json() == {
+        "run_id": run_id,
+        "status": "completed",
+        "result": None,
+        "error": None,
+        "review_url": f"/reviews/{run_id}",
+    }
