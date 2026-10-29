@@ -22,7 +22,7 @@ import pytest
 
 from atlas.events import AgentEvent
 from atlas.graph.state import Revision
-from atlas.store import InMemoryRunStore, PostgresRunStore, RunRecord, RunStore
+from atlas.store import InMemoryRunStore, PostgresRunStore, ReviewDecision, RunRecord, RunStore
 from atlas.trace import AgentCall
 
 T0 = datetime(2026, 10, 23, 12, 0, tzinfo=UTC)
@@ -252,3 +252,48 @@ async def test_a_thread_expires_by_its_most_recent_run(store: RunStore) -> None:
 
     assert stale in expired
     assert active not in expired
+
+
+# --- a reviewer's decisions on a review's findings ------------------------------------------
+
+
+def _decision(
+    run_id: str, requirement: str, decision: str, offset_s: int, note: str = ""
+) -> ReviewDecision:
+    return ReviewDecision.model_validate(
+        {
+            "run_id": run_id,
+            "requirement_id": requirement,
+            "decision": decision,
+            "note": note,
+            "reviewer": "A. Reviewer",
+            "decided_at": T0 + timedelta(seconds=offset_s),
+        }
+    )
+
+
+async def test_a_changed_decision_keeps_the_one_it_replaced(store: RunStore) -> None:
+    """The history is the audit trail: who agreed, then who disagreed, and when."""
+    record = _record(f"t-{uuid4()}", kind="review")
+    await store.started(record)
+    first = _decision(record.run_id, "audits", "agree", 1)
+    second = _decision(record.run_id, "audits", "disagree", 2, note="Clause 9 covers audits only.")
+    other = _decision(record.run_id, "end", "agree", 3)
+
+    for decision in (first, second, other):
+        await store.add_decision(decision)
+
+    assert await store.decisions(record.run_id) == [first, second, other]
+    assert await store.decisions(f"run-{uuid4()}") == []
+
+
+async def test_deleting_a_thread_removes_its_review_decisions(store: RunStore) -> None:
+    doomed, kept = _record(f"t-{uuid4()}", kind="review"), _record(f"t-{uuid4()}", kind="review")
+    for record in (doomed, kept):
+        await store.started(record)
+        await store.add_decision(_decision(record.run_id, "audits", "agree", 1))
+
+    await store.delete_thread(doomed.thread_id)
+
+    assert await store.decisions(doomed.run_id) == []
+    assert [d.run_id for d in await store.decisions(kept.run_id)] == [kept.run_id]

@@ -53,6 +53,22 @@ class RunRecord(BaseModel):
     domain: DomainName | None = None
 
 
+class ReviewDecision(BaseModel):
+    """A reviewer's decision on one finding of a review.
+
+    Kept as made, never overwritten: a changed decision is a new one, and the
+    review's history is every decision in order. The reviewer is named by the
+    reviewer, since Atlas has no sign-in.
+    """
+
+    run_id: str
+    requirement_id: str
+    decision: Literal["agree", "disagree"]
+    note: str = ""
+    reviewer: str
+    decided_at: datetime
+
+
 class RunStore(Protocol):
     """Where runs are recorded. Writes happen in the worker, reads in the API."""
 
@@ -90,8 +106,16 @@ class RunStore(Protocol):
         """An archived run's events, in seq order; empty if none were archived."""
         ...
 
+    async def add_decision(self, decision: ReviewDecision) -> None:
+        """Keep a reviewer's decision, after any it replaces."""
+        ...
+
+    async def decisions(self, run_id: str) -> list[ReviewDecision]:
+        """Every decision on a review, oldest first; the latest per requirement is current."""
+        ...
+
     async def delete_thread(self, thread_id: str) -> list[str]:
-        """Delete the thread's runs, calls and events. Returns the run ids, oldest first."""
+        """Delete the thread's runs, calls, events and decisions. Returns run ids, oldest first."""
         ...
 
     async def expired_threads(self, before: datetime) -> list[str]:
@@ -106,6 +130,7 @@ class InMemoryRunStore:
         self.records: dict[str, RunRecord] = {}
         self._calls: dict[str, list[AgentCall]] = {}
         self._events: dict[str, list[AgentEvent]] = {}
+        self._decisions: dict[str, list[ReviewDecision]] = {}
 
     async def started(self, record: RunRecord) -> None:
         self.records[record.run_id] = record
@@ -151,12 +176,19 @@ class InMemoryRunStore:
     async def events(self, run_id: str) -> list[AgentEvent]:
         return sorted(self._events.get(run_id, []), key=lambda e: e.seq)
 
+    async def add_decision(self, decision: ReviewDecision) -> None:
+        self._decisions.setdefault(decision.run_id, []).append(decision)
+
+    async def decisions(self, run_id: str) -> list[ReviewDecision]:
+        return sorted(self._decisions.get(run_id, []), key=lambda d: d.decided_at)
+
     async def delete_thread(self, thread_id: str) -> list[str]:
         run_ids = [run.run_id for run in await self.thread(thread_id)]
         for run_id in run_ids:
             del self.records[run_id]
             self._calls.pop(run_id, None)
             self._events.pop(run_id, None)
+            self._decisions.pop(run_id, None)
         return run_ids
 
     async def expired_threads(self, before: datetime) -> list[str]:
@@ -188,6 +220,18 @@ _SCHEMA = (
     "CREATE INDEX IF NOT EXISTS atlas_runs_thread ON atlas_runs (thread_id, created_at)",
     # Added after the table: a database created before keeps its rows, which read as None.
     "ALTER TABLE atlas_runs ADD COLUMN IF NOT EXISTS domain TEXT",
+    """
+    CREATE TABLE IF NOT EXISTS atlas_review_decisions (
+        run_id         TEXT NOT NULL,
+        requirement_id TEXT NOT NULL,
+        decision       TEXT NOT NULL,
+        note           TEXT NOT NULL,
+        reviewer       TEXT NOT NULL,
+        decided_at     TIMESTAMPTZ NOT NULL
+    )
+    """,
+    "CREATE INDEX IF NOT EXISTS atlas_review_decisions_run "
+    "ON atlas_review_decisions (run_id, decided_at)",
     """
     CREATE TABLE IF NOT EXISTS atlas_calls (
         call_id       TEXT PRIMARY KEY,
@@ -422,6 +466,35 @@ class PostgresRunStore:
             )
         return [AgentEvent.model_validate(dict(row)) for row in rows]
 
+    async def add_decision(self, decision: ReviewDecision) -> None:
+        async with self._engine.begin() as connection:
+            await connection.execute(
+                text(
+                    "INSERT INTO atlas_review_decisions (run_id, requirement_id, decision, note, "
+                    "reviewer, decided_at) VALUES (:run_id, :requirement_id, :decision, :note, "
+                    ":reviewer, :decided_at)"
+                ),
+                decision.model_dump(),
+            )
+
+    async def decisions(self, run_id: str) -> list[ReviewDecision]:
+        async with self._engine.connect() as connection:
+            rows = (
+                (
+                    await connection.execute(
+                        text(
+                            "SELECT run_id, requirement_id, decision, note, reviewer, decided_at "
+                            "FROM atlas_review_decisions WHERE run_id = :run_id "
+                            "ORDER BY decided_at"
+                        ),
+                        {"run_id": run_id},
+                    )
+                )
+                .mappings()
+                .all()
+            )
+        return [ReviewDecision.model_validate(dict(row)) for row in rows]
+
     async def delete_thread(self, thread_id: str) -> list[str]:
         async with self._engine.begin() as connection:
             run_ids = [
@@ -434,7 +507,7 @@ class PostgresRunStore:
                     {"thread_id": thread_id},
                 )
             ]
-            for table in ("atlas_calls", "atlas_events"):
+            for table in ("atlas_calls", "atlas_events", "atlas_review_decisions"):
                 await connection.execute(
                     text(f"DELETE FROM {table} WHERE run_id = ANY(:run_ids)"),
                     {"run_ids": run_ids},

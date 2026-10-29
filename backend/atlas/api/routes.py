@@ -33,8 +33,9 @@ from atlas.graph.state import Revision
 from atlas.result import QueryResponse
 from atlas.review.contract import MAX_BYTES, UnreadableContract, text_of
 from atlas.review.graph import ReviewResult
-from atlas.store import RunKind, RunRecord, RunStatusName, RunStore
-from atlas.trace import AgentCall
+from atlas.review.requirements import FRAMEWORKS
+from atlas.store import ReviewDecision, RunKind, RunRecord, RunStatusName, RunStore
+from atlas.trace import AgentCall, now
 from atlas.worker import FORGET_THREAD, QUERY_WAIT_SECONDS, RUN_RESEARCH, RUN_REVIEW, RUN_REVISION
 
 logger = logging.getLogger(__name__)
@@ -174,6 +175,21 @@ class ReviewStatus(BaseModel):
     status: Literal["running", "completed", "failed"]
     result: ReviewResult | None = None
     error: str | None = None
+
+
+class DecisionRequest(BaseModel):
+    """A reviewer's decision on one finding."""
+
+    decision: Literal["agree", "disagree"]
+    note: str = Field(default="", max_length=2000)
+    reviewer: str = Field(min_length=1, max_length=100, description="Who decides, as they give it.")
+
+
+class ReviewDecisions(BaseModel):
+    """A review's decisions: the current one per finding, and every one made."""
+
+    current: list[ReviewDecision]
+    history: list[ReviewDecision]
 
 
 class HealthResponse(BaseModel):
@@ -561,6 +577,53 @@ async def get_review(request: Request, run_id: str) -> ReviewStatus:
         result=ReviewResult(**record.result) if record.result is not None else None,
         error=record.error,
     )
+
+
+async def _review_record(request: Request, run_id: str) -> RunRecord:
+    record = await _store(request).get(run_id)
+    if record is None or record.kind != "review":
+        raise HTTPException(status_code=404, detail=f"unknown review: {run_id}")
+    return record
+
+
+@router.put("/reviews/{run_id}/decisions/{requirement_id}", response_model=ReviewDecision)
+async def decide(
+    request: Request, run_id: str, requirement_id: str, payload: DecisionRequest
+) -> ReviewDecision:
+    """Agree or disagree with one finding of a finished review. Kept after any it replaces."""
+    record = await _review_record(request, run_id)
+    if record.status != "completed":
+        raise HTTPException(status_code=409, detail=f"review {run_id} is not finished")
+    framework = FRAMEWORKS[str((record.result or {}).get("framework", "gdpr-art-28"))]
+    if requirement_id not in {requirement.id for requirement in framework.requirements}:
+        raise HTTPException(
+            status_code=404, detail=f"this review has no requirement {requirement_id}"
+        )
+    reviewer = payload.reviewer.strip()
+    if not reviewer:
+        raise HTTPException(status_code=422, detail="a decision needs the reviewer's name")
+    decision = ReviewDecision(
+        run_id=run_id,
+        requirement_id=requirement_id,
+        decision=payload.decision,
+        note=payload.note.strip(),
+        reviewer=reviewer,
+        # Strictly increasing within the process, so two decisions made back to
+        # back keep their order on a clock that ticks coarsely.
+        decided_at=now(),
+    )
+    await _store(request).add_decision(decision)
+    return decision
+
+
+@router.get("/reviews/{run_id}/decisions", response_model=ReviewDecisions)
+async def review_decisions(request: Request, run_id: str) -> ReviewDecisions:
+    """The current decision on each finding, and every decision made, oldest first."""
+    await _review_record(request, run_id)
+    history = await _store(request).decisions(run_id)
+    # The latest per finding wins.
+    current = {decision.requirement_id: decision for decision in history}
+    return ReviewDecisions(current=list(current.values()), history=history)
 
 
 @router.post("/query", response_model=QueryResponse)
