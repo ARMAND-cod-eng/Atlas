@@ -9,7 +9,8 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import compliance from '../fixtures/compliance.json';
 
-import { Answer } from '../../src/components/Answer';
+import { Answer, AnswerCard, Sources } from '../../src/components/Answer';
+import { LAW_AS_OF } from '../../src/components/Disclaimer';
 import { API_BASE } from '../../src/lib/api';
 import type { AgentEvent, RunResult } from '../../src/lib/events';
 import {
@@ -170,10 +171,64 @@ describe('sources', () => {
       ],
     } as unknown as RunResult;
 
-    render(<Answer state={withAnswer('Yes.', null)} result={result} />);
+    render(<Sources result={result} />);
 
     expect(screen.getByText('Primary law · 2')).toBeDefined();
     expect(screen.getByText('Other sources · 1')).toBeDefined();
     expect(errors).not.toHaveBeenCalled();
+  });
+});
+
+describe('the answer card', () => {
+  it('drops a heading that only says "Answer", which the card already does, and keeps any other', () => {
+    render(<AnswerCard state={withAnswer('## Answer\n\nYes.', null)} result={null} rows={[]} />);
+    expect(screen.getAllByRole('heading').map((h) => h.textContent)).toEqual(['Answer']);
+    expect(screen.getByRole('article').textContent).toBe('Yes.');
+    cleanup();
+
+    render(<AnswerCard state={withAnswer('## Scope\n\nYes.', null)} result={null} rows={[]} />);
+    expect(screen.getAllByRole('heading').map((h) => h.textContent)).toEqual(['Answer', 'Scope']);
+  });
+});
+
+describe('copying the answer', () => {
+  it('puts it on the clipboard as Markdown: the question, the answer, and the provisions it cites', async () => {
+    const writeText = vi.fn(() => Promise.resolve());
+    Object.defineProperty(navigator, 'clipboard', { value: { writeText }, configurable: true });
+    const url = 'https://eur-lex.europa.eu/eli/reg/2024/1689/oj#art_6';
+    const result = {
+      sources: [{ url, title: 'Classification rules', snippet: '', label: 'AI Act Art. 6(2)', authority: 'primary_law' }],
+    } as unknown as RunResult;
+    // No branches: the only source is the result's, so the expected text is all here.
+    const state = { ...withAnswer(ANSWER, CHECK), query: 'Is it high-risk?', branches: [] };
+
+    try {
+      render(<AnswerCard state={state} result={result} rows={[]} />);
+      fireEvent.click(screen.getByRole('button', { name: 'Copy' }));
+
+      expect(await screen.findByRole('button', { name: 'Copied' })).toBeDefined();
+      expect(writeText.mock.calls).toEqual([
+        [
+          [
+            '## Is it high-risk?',
+            '',
+            ANSWER,
+            '',
+            'Provisions cited:',
+            '',
+            '- [AI Act Art. 6(2)] — Classification rules',
+            '- AI Act Art. 99(9) — not among the sources this run retrieved',
+            '- GDPR Art. 35(1) — not among the sources this run retrieved',
+            '',
+            `[AI Act Art. 6(2)]: <${url}>`,
+            '',
+            `_A research aid, not legal advice: the law as published in the Official Journal, retrieved ${LAW_AS_OF}._`,
+            '',
+          ].join('\n'),
+        ],
+      ]);
+    } finally {
+      Reflect.deleteProperty(navigator, 'clipboard');
+    }
   });
 });

@@ -1,8 +1,9 @@
 'use client';
 
+import { useState } from 'react';
 import { Panel, PanelGroup, PanelResizeHandle } from 'react-resizable-panels';
 
-import { Answer } from './Answer';
+import { AnswerCard, Sources } from './Answer';
 import { Findings } from './Findings';
 import { GraphCanvas } from './GraphCanvas';
 import { type CallSource, Inspector } from './Inspector';
@@ -10,12 +11,12 @@ import { Metrics } from './Metrics';
 import { RunDetails } from './RunDetails';
 import { RunProgress } from './RunProgress';
 import { Timeline } from './Timeline';
-import { Compare, Versions } from './Versions';
+import { Versions } from './Versions';
 import { Disclaimer } from './Disclaimer';
-import { type PaneSpec, Workspace } from './Workspace';
+import { type PaneId, type PaneSpec, Workspace } from './Workspace';
 import { Disclosure } from './ui';
 import type { RunResult, Topology } from '@/lib/events';
-import type { RunState } from '@/lib/reducer';
+import { type RunState, isFinished } from '@/lib/reducer';
 import { useInspectorLink } from '@/lib/inspectorLink';
 import { agentOrder, useShortcuts } from '@/lib/shortcuts';
 import type { Connection } from '@/lib/useRunStream';
@@ -69,16 +70,28 @@ export function RunWorkspace({
   // In the URL, so a link can open one agent's prompt and a reload keeps it.
   const [link, setSelected, setTab] = useInspectorLink();
   const selected = link.node;
+  // The pane a phone shows, kept here so an action in one pane can open another.
+  const [pane, setPane] = useState<PaneId | null>(null);
+
+  /** To a branch's question, where the run can be revised: from its key, or from the answer. */
+  function editBranch(nodeId: string): void {
+    const branch = state.branches.find((b) => b.id === nodeId);
+    if (branch === undefined) return;
+    setSelected(nodeId);
+    setTab('task');
+    // On a phone the question is in another tab.
+    setPane('graph');
+    window.setTimeout(() => document.getElementById(`edit-${branch.subtaskId}`)?.focus(), 0);
+  }
+  const editable = runId !== null && isFinished(state) && state.phase === 'completed';
+
   useShortcuts({
     order: agentOrder(state),
     selected,
     onSelect: setSelected,
-    // e: to the selected branch's question, where the run can be revised.
+    // e: to the selected branch's question.
     onEdit: () => {
-      const branch = state.branches.find((b) => b.id === selected);
-      if (branch === undefined) return;
-      setTab('task');
-      window.setTimeout(() => document.getElementById(`edit-${branch.subtaskId}`)?.focus(), 0);
+      if (selected !== null) editBranch(selected);
     },
   });
   // Asked again when the run's phase changes: finishing changes its own row.
@@ -137,10 +150,11 @@ export function RunWorkspace({
             ? 'being written'
             : 'ready',
       content: (
-        <div className="space-y-6 p-4">
-          <Compare rows={rows} answer={state.answer} />
-          <Answer state={state} result={result} />
-          <Findings state={state} />
+        // Answer first; then what supports it, folded; then what to do next.
+        <div className="mx-auto max-w-3xl space-y-3 p-4 sm:p-5">
+          <AnswerCard state={state} result={result} rows={rows} />
+          <Sources result={result} />
+          <Findings state={state} open={state.answer === null} onEdit={editable ? editBranch : undefined} />
           {followUp}
           <Disclosure title="Run details">
             <div className="space-y-4">
@@ -148,11 +162,18 @@ export function RunWorkspace({
               <Metrics result={result} />
             </div>
           </Disclosure>
-          <Disclaimer className="border-t border-line pt-3" />
+          <Disclaimer className="pt-3" />
         </div>
       ),
     },
   ];
 
-  return <Workspace panes={panes} preferredTab={state.answer === null ? 'graph' : 'result'} />;
+  return (
+    <Workspace
+      panes={panes}
+      preferredTab={state.answer === null ? 'graph' : 'result'}
+      picked={pane}
+      onPick={setPane}
+    />
+  );
 }

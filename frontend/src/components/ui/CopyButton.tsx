@@ -14,10 +14,13 @@ type Outcome = 'idle' | 'copied' | 'failed';
 export function CopyButton({
   text,
   label = 'Copy',
+  title,
   className = '',
 }: {
+  /** The text, or how to make it: built when clicked, not on every render. */
   readonly text: string | (() => string);
   readonly label?: string;
+  readonly title?: string;
   readonly className?: string;
 }): React.JSX.Element {
   const [outcome, setOutcome] = useState<Outcome>('idle');
@@ -39,7 +42,7 @@ export function CopyButton({
   }
 
   return (
-    <Button variant="ghost" size="sm" onClick={() => void copy()} className={className}>
+    <Button variant="ghost" size="sm" onClick={() => void copy()} title={title} className={className}>
       <svg viewBox="0 0 16 16" aria-hidden="true" className="h-3 w-3">
         <rect x="5" y="5" width="8.5" height="8.5" rx="1.5" fill="none" stroke="currentColor" strokeWidth="1.4" />
         <path d="M3 10.5V3.5A1 1 0 0 1 4 2.5h6.5" fill="none" stroke="currentColor" strokeWidth="1.4" />

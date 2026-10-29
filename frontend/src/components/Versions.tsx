@@ -3,8 +3,9 @@
 import Link from 'next/link';
 import { useEffect, useState } from 'react';
 
+import { Button } from './ui';
 import { fetchAnswer } from '@/lib/api';
-import { type VersionRow, answerDiff, comparable } from '@/lib/versions';
+import { type VersionRow, answerDiff } from '@/lib/versions';
 
 const DOT: Record<VersionRow['status'], string> = {
   running: 'bg-running animate-pulse',
@@ -25,7 +26,9 @@ export function Versions({ rows }: { readonly rows: readonly VersionRow[] }): Re
   }
   return (
     <section aria-label="Versions" className="border-b border-line p-3">
-      <h3 className="mb-1.5 text-2xs uppercase tracking-wide text-ink-faint">Versions · {rows.length}</h3>
+      <h3 className="mb-1.5 text-2xs font-semibold text-ink-muted">
+        Versions <span className="font-normal text-ink-faint">{rows.length}</span>
+      </h3>
       <ol className="space-y-1">
         {rows.map((row) => {
           const body = (
@@ -65,84 +68,88 @@ export function Versions({ rows }: { readonly rows: readonly VersionRow[] }): Re
 
 type Fetched = { readonly runId: string; readonly answer: string | null };
 
-/** This answer against another version's, word by word. */
-export function Compare({
-  rows,
+/**
+ * The versions this answer can be compared with, the one it revises first. A
+ * button each, pressed while its comparison is shown.
+ */
+export function CompareControl({
+  options,
+  chosen,
+  onChoose,
+}: {
+  readonly options: readonly VersionRow[];
+  readonly chosen: string | null;
+  readonly onChoose: (runId: string) => void;
+}): React.JSX.Element | null {
+  if (options.length === 0) return null;
+  return (
+    <div role="group" aria-label="Compare with" className="flex items-center gap-1">
+      <span aria-hidden="true" className="text-2xs text-ink-muted">
+        Compare with
+      </span>
+      {options.map((row) => (
+        <Button
+          key={row.runId}
+          variant="secondary"
+          size="sm"
+          aria-label={`Compare with v${row.number}`}
+          aria-pressed={chosen === row.runId}
+          title={row.title}
+          onClick={() => onChoose(row.runId)}
+          className={chosen === row.runId ? '!border-accent !text-accent' : ''}
+        >
+          v{row.number}
+        </Button>
+      ))}
+    </div>
+  );
+}
+
+/**
+ * This answer against another version's, word by word. Fetched for the version
+ * named, and shown only under its name: mounted per version, so the changes of
+ * one are never on screen while another loads.
+ */
+export function Diff({
+  chosen,
   answer,
 }: {
-  readonly rows: readonly VersionRow[];
-  readonly answer: string | null;
-}): React.JSX.Element | null {
-  const [against, setAgainst] = useState<string | null>(null);
+  readonly chosen: VersionRow;
+  readonly answer: string;
+}): React.JSX.Element {
   const [fetched, setFetched] = useState<Fetched | null>(null);
 
   useEffect(() => {
-    if (against === null) return;
     let live = true;
-    void fetchAnswer(against).then((other) => {
-      if (live) setFetched({ runId: against, answer: other });
+    void fetchAnswer(chosen.runId).then((other) => {
+      if (live) setFetched({ runId: chosen.runId, answer: other });
     });
     return () => {
       live = false;
     };
-  }, [against]);
+  }, [chosen.runId]);
 
-  const options = comparable(rows);
-  if (answer === null || options.length === 0) return null;
-  const chosen = options.find((row) => row.runId === against) ?? null;
-
-  return (
-    <section className="space-y-2">
-      <label className="flex items-center gap-2 text-2xs text-ink-faint">
-        Compare with
-        <select
-          value={against ?? ''}
-          onChange={(event) => setAgainst(event.target.value === '' ? null : event.target.value)}
-          className="rounded border border-line bg-canvas px-1.5 py-0.5 text-2xs text-ink"
-        >
-          <option value="">—</option>
-          {options.map((row) => (
-            <option key={row.runId} value={row.runId}>
-              v{row.number} · {row.title}
-            </option>
-          ))}
-        </select>
-      </label>
-      {chosen !== null && <Diff chosen={chosen} fetched={fetched} answer={answer} />}
-    </section>
-  );
-}
-
-function Diff({
-  chosen,
-  fetched,
-  answer,
-}: {
-  readonly chosen: VersionRow;
-  readonly fetched: Fetched | null;
-  readonly answer: string;
-}): React.JSX.Element {
-  if (fetched?.runId !== chosen.runId) return <p className="text-2xs text-ink-faint">Loading v{chosen.number}…</p>;
+  if (fetched?.runId !== chosen.runId) return <p className="text-xs text-ink-faint">Loading v{chosen.number}…</p>;
   if (fetched.answer === null) {
-    return <p className="text-2xs text-failed">The API could not return v{chosen.number}’s answer.</p>;
+    return <p className="text-xs text-failed">The API could not return v{chosen.number}’s answer.</p>;
   }
   const { parts, added, removed } = answerDiff(fetched.answer, answer);
   return (
-    <div className="rounded border border-line bg-canvas p-3">
-      <p className="mb-2 text-2xs text-ink-faint">
+    <div>
+      <p className="mb-3 text-2xs text-ink-muted">
         Since v{chosen.number}: <span className="text-done">+{added} words</span>,{' '}
         <span className="text-failed">−{removed} words</span>
       </p>
-      <p className="whitespace-pre-wrap text-xs leading-relaxed text-ink">
+      <p className="max-w-[68ch] whitespace-pre-wrap text-base leading-relaxed text-ink">
         {parts.map((part, index) =>
           part.kind === 'same' ? (
             <span key={index}>{part.text}</span>
           ) : part.kind === 'added' ? (
-            <ins key={index} className="bg-done/15 text-done no-underline">
+            <ins key={index} className="rounded-sm bg-done/15 text-done no-underline">
               {part.text}
             </ins>
           ) : (
-            <del key={index} className="bg-failed/10 text-failed">
+            <del key={index} className="rounded-sm bg-failed/10 text-failed">
               {part.text}
             </del>
           ),

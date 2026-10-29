@@ -35,6 +35,8 @@ const ORDER: readonly PaneId[] = ['evolution', 'graph', 'result'];
 export function Workspace({
   panes,
   preferredTab = 'graph',
+  picked: shownPick,
+  onPick,
 }: {
   readonly panes: readonly PaneSpec[];
   /**
@@ -42,9 +44,14 @@ export function Workspace({
    * works, the answer once there is one.
    */
   readonly preferredTab?: PaneId;
+  /** The tab picked, when the page keeps it: so an action in one pane can open another. */
+  readonly picked?: PaneId | null;
+  readonly onPick?: (pane: PaneId) => void;
 }): React.JSX.Element {
   const wide = useMediaQuery('(min-width: 1024px)', true);
-  const [picked, setTab] = useState<PaneId | null>(null);
+  const [ownPick, setOwnPick] = useState<PaneId | null>(null);
+  const picked = shownPick === undefined ? ownPick : shownPick;
+  const setTab = onPick ?? setOwnPick;
   const tab = picked ?? preferredTab;
   const group = useRef<ImperativePanelGroupHandle>(null);
   const [maximised, setMaximised] = useState<PaneId | null>(null);

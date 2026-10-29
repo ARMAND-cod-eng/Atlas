@@ -61,8 +61,8 @@ export default function RunPage({
 
   const followUp =
     finished && state.threadId !== null ? (
-      <section>
-        <h2 className="mb-2 text-2xs uppercase tracking-wide text-ink-faint">follow up</h2>
+      <section className="rounded-xl border border-line bg-surface p-4">
+        <h2 className="mb-2 text-xs font-semibold text-ink">Ask a follow-up</h2>
         <QuestionForm
           threadId={state.threadId}
           parentRunId={runId}

@@ -30,14 +30,19 @@ export function RunHeader({
   const status = runStatus(state, now);
   return (
     <header className="shrink-0 border-b border-line bg-surface">
-      <div className="flex items-center gap-3 px-4 py-2.5">
+      {/* On a phone the question takes a line of its own, under the controls, rather than none. */}
+      <div className="flex flex-wrap items-center gap-x-2 gap-y-1.5 px-4 py-2.5 sm:flex-nowrap sm:gap-x-3">
         <Link href="/" className="shrink-0 text-sm font-semibold text-ink hover:text-accent">
           Atlas
         </Link>
-        <span aria-hidden="true" className="h-4 w-px shrink-0 bg-line" />
-        <h1 className="min-w-0 flex-1 truncate text-base font-medium text-ink" title={state.query ?? undefined}>
+        <span aria-hidden="true" className="h-4 w-px shrink-0 bg-line max-sm:hidden" />
+        <h1
+          className="order-last line-clamp-2 basis-full text-sm font-medium text-ink sm:order-none sm:line-clamp-none sm:min-w-0 sm:flex-1 sm:basis-auto sm:truncate sm:text-base"
+          title={state.query ?? undefined}
+        >
           {state.query ?? 'Loading the run…'}
         </h1>
+        <span className="flex-1 sm:hidden" />
         {badges}
         <Badge tone={status.tone}>
           {status.tone === 'running' && (
@@ -46,7 +51,7 @@ export function RunHeader({
           {status.text}
         </Badge>
         {actions}
-        <Link href="/" className={`${buttonClass('secondary', 'sm')} hidden sm:inline-flex`}>
+        <Link href="/" className={`${buttonClass('secondary', 'sm')} max-sm:hidden`}>
           New question
         </Link>
         <ThemeToggle />
