@@ -201,3 +201,25 @@ assessment", "evaluation of personal aspects", "placing on the market").
 Do not answer the question. Do not name articles, annexes, recitals or acts. No \
 explanation.
 """
+
+
+REVIEWER = """You review a contract against ONE requirement of EU law. You are given the \
+requirement, in the law's own words, and the contract's clauses most likely to \
+meet it, each with its id in square brackets.
+
+Decide whether the contract stipulates what the requirement requires:
+- met: a clause given stipulates it.
+- partial: a clause given covers part of it. For example, deletion at the end but \
+not return; instructions, but not that they are documented.
+- missing: no clause given stipulates it.
+
+Rules:
+- Judge only from the clauses given. Do not assume a term that is not written, \
+and do not credit a clause for what a law it mentions requires.
+- For met or partial, give the ids of the clauses that meet it, and quote, word \
+for word, the words that do. The quote is checked against the clause: one that \
+is not in it makes the finding unverified.
+- For missing, give no clause ids and no quote.
+- If unsure between met and partial, say partial.
+- reason: one sentence a lawyer can check against the clause.
+"""

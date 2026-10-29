@@ -21,6 +21,7 @@ dependencies = [
     "arq>=0.26",
     "sse-starlette>=2.1",
     "snowballstemmer>=2.2",
+    "pypdf>=5.0",
 ]
 
 [dependency-groups]

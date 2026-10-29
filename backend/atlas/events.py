@@ -56,6 +56,10 @@ CITATION_CHECK = "citation_check"
 # says what its sentence says (atlas.library.support). Once per critic round,
 # and only for citations that passed the check against the law.
 CITATION_SUPPORT = "citation_support"
+# A contract review (atlas.review): what it reviews against, and the contract's
+# clauses as read; then one finding per requirement, as each is judged.
+REVIEW_STARTED = "review_started"
+REQUIREMENT_JUDGED = "requirement_judged"
 # One call an agent made, to a model or a search (atlas.trace). Nodes emit the
 # full record; the runner stores it and streams a summary under the same type.
 AGENT_CALL = "agent_call"

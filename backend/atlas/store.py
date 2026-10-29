@@ -27,7 +27,7 @@ from atlas.events import AgentEvent
 from atlas.graph.state import Revision
 from atlas.trace import AgentCall
 
-RunKind = Literal["question", "revision"]
+RunKind = Literal["question", "revision", "review"]
 RunStatusName = Literal["running", "completed", "failed"]
 
 

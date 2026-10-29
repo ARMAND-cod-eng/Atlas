@@ -20,13 +20,14 @@ A terminal event is always written, exactly once.
 from __future__ import annotations
 
 import logging
-from collections.abc import Awaitable, Callable
+from collections.abc import Awaitable, Callable, Mapping
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from typing import Any
 
 from langchain_core.runnables import RunnableConfig
 from langgraph.graph.state import CompiledStateGraph
+from pydantic import BaseModel
 
 from atlas import eventlog
 from atlas.config import get_settings
@@ -42,7 +43,9 @@ from atlas.events import (
 from atlas.graph.builder import recursion_limit
 from atlas.graph.state import AtlasState
 from atlas.metrics import DEGRADED_AUDIT_INCOMPLETE, RunMetrics
-from atlas.result import build_response, response_payload
+from atlas.result import build_response
+from atlas.review.graph import review_result
+from atlas.review.requirements import GDPR_ART_28
 from atlas.revision import final_checkpoint, fork_for_revision, revision_started_payload
 from atlas.store import RunKind, RunRecord, RunStore
 from atlas.trace import AgentCall
@@ -103,13 +106,50 @@ class _Sequencer:
 
 
 Graph = CompiledStateGraph[AtlasState, Any, AtlasState, AtlasState]
+# Any graph the runner can run: research, or a contract review (atlas.review.graph).
+AnyGraph = CompiledStateGraph[Any, Any, Any, Any]
+
+
+@dataclass(frozen=True, slots=True)
+class _Response:
+    """What a run produced: the result kept and served, and the summary its stream ends on."""
+
+    result: BaseModel
+    # The result's own metrics, so a marker added here is in what is served.
+    metrics: RunMetrics
+    # run_completed's payload, besides the degraded markers and total tokens.
+    summary: dict[str, Any]
+
+
+def _research_response(final_state: dict[str, Any], thread_id: str) -> _Response:
+    response = build_response(final_state, thread_id)
+    return _Response(
+        result=response,
+        metrics=response.metrics,
+        summary={
+            "answer": response.answer,
+            "thread_id": thread_id,
+            "iterations": response.iterations,
+            "subtask_count": len(response.subtasks),
+            "source_count": len(response.sources),
+        },
+    )
+
+
+def _review_response(final_state: dict[str, Any], thread_id: str) -> _Response:
+    review = review_result(final_state, thread_id)
+    return _Response(
+        result=review,
+        metrics=review.metrics,
+        summary={"thread_id": thread_id, "framework": review.framework, "counts": review.counts},
+    )
 
 
 @dataclass(frozen=True, slots=True)
 class _Start:
     """How a run begins: what goes into the graph, and what the record says."""
 
-    graph_input: AtlasState | None
+    graph_input: Mapping[str, Any] | None
     config: RunnableConfig
     record: RunRecord
     # Events written after run_started and before the graph's first.
@@ -156,7 +196,7 @@ async def execute_run(
         )
 
     fallback = _record(run_id, thread_id, "question", query, parent_run_id, domain)
-    return await _execute(run_id, thread_id, graph, start, fallback, store)
+    return await _execute(run_id, thread_id, graph, start, fallback, store, _research_response)
 
 
 async def execute_revision(
@@ -194,7 +234,43 @@ async def execute_revision(
     # The question is the parent's, and is not known until its state is read. A
     # revision refused before then is recorded without one.
     fallback = _record(run_id, thread_id, "revision", "", parent_run_id, domain)
-    return await _execute(run_id, thread_id, graph, start, fallback, store)
+    return await _execute(run_id, thread_id, graph, start, fallback, store, _research_response)
+
+
+async def execute_review(
+    run_id: str,
+    thread_id: str,
+    graph: AnyGraph,
+    *,
+    filename: str,
+    text: str,
+    framework: str = GDPR_ART_28.id,
+    store: RunStore | None = None,
+) -> dict[str, Any]:
+    """Review a contract against a framework's requirements. See :mod:`atlas.review`.
+
+    Against the law, so in the compliance domain whatever the server's default.
+    """
+
+    async def start() -> _Start:
+        return _Start(
+            graph_input={
+                "filename": filename,
+                "text": text,
+                "framework": framework,
+                "clauses": [],
+                "findings": [],
+                "run_metrics": RunMetrics(),
+            },
+            config={
+                "configurable": {"thread_id": thread_id, "run_id": run_id, "domain": "compliance"},
+                "recursion_limit": recursion_limit(),
+            },
+            record=_record(run_id, thread_id, "review", filename, None, "compliance"),
+        )
+
+    fallback = _record(run_id, thread_id, "review", filename, None, "compliance")
+    return await _execute(run_id, thread_id, graph, start, fallback, store, _review_response)
 
 
 def _record(
@@ -236,10 +312,11 @@ async def _audited(write: Awaitable[None], run_id: str) -> bool:
 async def _execute(
     run_id: str,
     thread_id: str,
-    graph: Graph,
+    graph: AnyGraph,
     begin: Callable[[], Awaitable[_Start]],
     fallback: RunRecord,
     store: RunStore | None,
+    respond: Callable[[dict[str, Any], str], _Response],
 ) -> dict[str, Any]:
     """Run the graph, streaming events to the log, and return the final result.
 
@@ -310,13 +387,15 @@ async def _execute(
         if final_state is None:
             raise RuntimeError("the graph produced no state")
 
-        response = build_response(final_state, thread_id)
+        response = respond(final_state, thread_id)
         if store is not None:
-            finished = store.finished(run_id, status="completed", result=response_payload(response))
+            finished = store.finished(
+                run_id, status="completed", result=response.result.model_dump(mode="json")
+            )
             audit_complete = await _audited(finished, run_id) and audit_complete
         if not audit_complete:
             response.metrics.degraded.append(DEGRADED_AUDIT_INCOMPLETE)
-        result = response_payload(response)
+        result = response.result.model_dump(mode="json")
         await eventlog.store_result(run_id, result)
 
         # A summary, not the whole response. The full sources list and per-call
@@ -324,16 +403,12 @@ async def _execute(
         # replayed on every reconnect.
         await events.write(
             RUN_COMPLETED,
-            answer=response.answer,
-            thread_id=thread_id,
-            iterations=response.iterations,
-            subtask_count=len(response.subtasks),
-            source_count=len(response.sources),
+            **response.summary,
             degraded=response.metrics.degraded,
             total_tokens=response.metrics.total_tokens,
         )
         terminal_written = True
-        logger.info("run completed", extra={"run_id": run_id, "iterations": response.iterations})
+        logger.info("run completed", extra={"run_id": run_id})
         return result
 
     except BaseException as exc:
