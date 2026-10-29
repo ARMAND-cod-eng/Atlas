@@ -2,6 +2,7 @@
 
 import { useRef, useState } from 'react';
 
+import { Button } from './ui';
 import { startRun } from '@/lib/api';
 
 interface Props {
@@ -17,6 +18,8 @@ interface Props {
   readonly examples?: readonly string[];
   readonly hint: string;
   readonly submitLabel: string;
+  /** The home page's box is the page; a follow-up's sits under an answer. */
+  readonly size?: 'lg' | 'md';
   readonly onStarted: (runId: string) => void;
 }
 
@@ -34,6 +37,7 @@ export function QuestionForm({
   examples = [],
   hint,
   submitLabel,
+  size = 'md',
   onStarted,
 }: Props): React.JSX.Element {
   const [query, setQuery] = useState('');
@@ -67,46 +71,52 @@ export function QuestionForm({
 
   return (
     <form onSubmit={submit}>
-      <textarea
-        ref={box}
-        aria-label="Your question"
-        value={query}
-        onChange={(event) => setQuery(event.target.value)}
-        onKeyDown={(event) => {
-          if (event.key === 'Enter' && (event.metaKey || event.ctrlKey)) void submit(event);
-        }}
-        rows={3}
-        maxLength={2000}
-        placeholder={placeholder}
-        className="w-full resize-none rounded-md border border-line bg-canvas px-3 py-2 text-sm leading-relaxed text-ink placeholder:text-ink-faint focus:border-accent focus:outline-none"
-      />
-      <div className="mt-2 flex items-center justify-between gap-3">
-        <span className="text-2xs text-ink-faint">{hint}</span>
-        <button
-          type="submit"
-          disabled={submitting || query.trim() === ''}
-          className="shrink-0 rounded border border-line-strong px-3 py-1.5 text-xs text-ink hover:border-ink-faint disabled:opacity-40"
-        >
-          {submitting ? 'starting…' : submitLabel}
-        </button>
+      {/* One box: the question and what sends it, so focus on either lights the whole. */}
+      <div className="rounded-xl border border-line-strong bg-surface shadow-sm transition-colors focus-within:border-accent focus-within:ring-2 focus-within:ring-accent/25">
+        <textarea
+          ref={box}
+          aria-label="Your question"
+          value={query}
+          onChange={(event) => setQuery(event.target.value)}
+          onKeyDown={(event) => {
+            if (event.key === 'Enter' && (event.metaKey || event.ctrlKey)) void submit(event);
+          }}
+          rows={size === 'lg' ? 3 : 2}
+          maxLength={2000}
+          placeholder={placeholder}
+          className={`block w-full resize-none rounded-t-xl bg-transparent px-4 pt-3 leading-relaxed text-ink placeholder:text-ink-faint focus:outline-none focus-visible:outline-none ${
+            size === 'lg' ? 'text-base' : 'text-sm'
+          }`}
+        />
+        <div className="flex items-center justify-between gap-3 px-3 pb-3 pt-1">
+          <span className="pl-1 text-2xs text-ink-faint">{hint}</span>
+          <Button type="submit" variant="primary" size={size === 'lg' ? 'md' : 'sm'} disabled={submitting || query.trim() === ''}>
+            {submitting ? 'Starting…' : submitLabel}
+          </Button>
+        </div>
       </div>
       {examples.length > 0 && (
-        <ul aria-label="Example questions" className="mt-4 space-y-1.5">
-          {examples.map((example) => (
-            <li key={example}>
-              <button
-                type="button"
-                onClick={() => {
-                  setQuery(example);
-                  box.current?.focus();
-                }}
-                className="text-left text-xs text-ink-muted hover:text-accent"
-              >
-                {example}
-              </button>
-            </li>
-          ))}
-        </ul>
+        <div className="mt-4">
+          <p id="examples-label" className="text-2xs font-medium text-ink-muted">
+            Try one
+          </p>
+          <ul aria-labelledby="examples-label" className="mt-2 flex flex-wrap gap-2">
+            {examples.map((example) => (
+              <li key={example}>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setQuery(example);
+                    box.current?.focus();
+                  }}
+                  className="rounded-full border border-line bg-surface px-3 py-1 text-left text-2xs text-ink-muted transition-colors hover:border-accent hover:text-ink"
+                >
+                  {example}
+                </button>
+              </li>
+            ))}
+          </ul>
+        </div>
       )}
       {notice !== null && (
         <p

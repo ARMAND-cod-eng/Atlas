@@ -5,6 +5,8 @@ import { useRouter } from 'next/navigation';
 
 import { Disclaimer } from '@/components/Disclaimer';
 import { QuestionForm } from '@/components/QuestionForm';
+import { ThemeToggle } from '@/components/ThemeToggle';
+import { Badge, buttonClass } from '@/components/ui';
 
 const EXAMPLES = [
   'Is a CV-screening tool high-risk under the AI Act, and what must its provider do?',
@@ -12,37 +14,109 @@ const EXAMPLES = [
   'Which AI Act obligations apply to a provider of a general-purpose AI model, and from when?',
 ];
 
+/** What sets the answers apart, each in a line: the three things a reader can check or do. */
+const POINTS: readonly { readonly title: string; readonly text: string; readonly icon: React.JSX.Element }[] = [
+  {
+    title: 'Citations checked',
+    text: 'Each article it cites is looked up in the law: that it exists, that it was read, and, by a second reading, that it says what it is cited for.',
+    icon: (
+      <path d="M8 1.5 2.5 3.75v4c0 3.2 2.3 5.6 5.5 6.75 3.2-1.15 5.5-3.55 5.5-6.75v-4L8 1.5Zm-2.25 6.5 1.6 1.6 3-3.1" />
+    ),
+  },
+  {
+    title: 'Every agent, open',
+    text: 'Read the exact prompt each agent was sent, what it produced, and every attempt it made.',
+    icon: (
+      <>
+        <path d="M1.5 8s2.4-4.5 6.5-4.5S14.5 8 14.5 8s-2.4 4.5-6.5 4.5S1.5 8 1.5 8Z" />
+        <circle cx="8" cy="8" r="2" />
+      </>
+    ),
+  },
+  {
+    title: 'Redirect a branch',
+    text: 'Rewrite one branch’s question: only it is researched again, and the two answers can be compared word by word.',
+    icon: (
+      <>
+        <circle cx="4" cy="3.5" r="1.5" />
+        <circle cx="4" cy="12.5" r="1.5" />
+        <circle cx="12" cy="6" r="1.5" />
+        <path d="M4 5v6M12 7.5c0 2.5-2.5 3-6.6 4.2" />
+      </>
+    ),
+  },
+];
+
 export default function Home(): React.JSX.Element {
   const router = useRouter();
 
   return (
-    <main className="mx-auto flex min-h-screen w-full max-w-2xl flex-col justify-center px-6 py-12">
-      <h1 className="text-sm font-medium tracking-wide text-ink">Atlas</h1>
-      <p className="mt-1 text-base text-ink">
-        EU AI Act and GDPR research, with every citation checked against the law.
-      </p>
-      <p className="mt-3 text-sm leading-relaxed text-ink-muted">
-        A planner splits your question into branches. Researchers read the regulations and official
-        guidance in parallel. A critic checks the answer&apos;s citations: that each article exists,
-        that it was actually read, and that any quotation is its own words. Every agent&apos;s
-        prompt and output can be opened, and any branch redirected and re-run.
-      </p>
+    <div className="flex min-h-screen flex-col">
+      <header className="mx-auto flex w-full max-w-5xl items-center gap-3 px-4 py-3 sm:px-6">
+        <span className="text-sm font-semibold text-ink">Atlas</span>
+        <Link href="/demo" className={`${buttonClass('ghost', 'sm')} ml-auto`}>
+          Recorded run
+        </Link>
+        <ThemeToggle />
+      </header>
 
-      <div className="mt-6">
-        <QuestionForm
-          placeholder="Ask about the AI Act or the GDPR, from a provider's or a deployer's side."
-          examples={EXAMPLES}
-          hint="a run takes about a minute"
-          submitLabel="Research"
-          onStarted={(runId) => router.push(`/runs/${runId}`)}
-        />
-      </div>
+      <main className="mx-auto flex w-full max-w-3xl flex-1 flex-col justify-center px-4 py-10 sm:px-6 sm:py-16">
+        <Badge tone="law" className="self-start">
+          EU AI Act · GDPR
+        </Badge>
+        <h1 className="mt-4 text-2xl font-semibold tracking-tight text-ink sm:text-3xl">
+          Research the law, with every citation checked against it.
+        </h1>
+        <p className="mt-3 max-w-[60ch] text-base leading-relaxed text-ink-muted">
+          Atlas splits your question into branches, researches them in parallel from the regulations
+          and official guidance, and checks each article it cites before you read the answer.
+        </p>
 
-      <Link href="/demo" className="mt-6 self-start text-xs text-accent hover:underline">
-        Watch a recorded run, no API needed →
-      </Link>
+        <div className="mt-8">
+          <QuestionForm
+            size="lg"
+            placeholder="Ask about the AI Act or the GDPR, from a provider's or a deployer's side."
+            examples={EXAMPLES}
+            hint="Ctrl + Enter to send · a run takes about a minute"
+            submitLabel="Research"
+            onStarted={(runId) => router.push(`/runs/${runId}`)}
+          />
+        </div>
 
-      <Disclaimer className="mt-10 border-t border-line pt-4" />
-    </main>
+        <ul className="mt-12 grid gap-6 sm:grid-cols-3">
+          {POINTS.map((point) => (
+            <li key={point.title}>
+              <span className="inline-flex h-8 w-8 items-center justify-center rounded-lg bg-accent/10 text-accent">
+                <svg
+                  viewBox="0 0 16 16"
+                  aria-hidden="true"
+                  className="h-4 w-4"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="1.4"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                >
+                  {point.icon}
+                </svg>
+              </span>
+              <h2 className="mt-2.5 text-sm font-semibold text-ink">{point.title}</h2>
+              <p className="mt-1 text-xs leading-relaxed text-ink-muted">{point.text}</p>
+            </li>
+          ))}
+        </ul>
+
+        <div className="mt-10 flex flex-wrap items-center gap-3">
+          <Link href="/demo" className={buttonClass('secondary', 'md')}>
+            Watch a recorded run
+          </Link>
+          <span className="text-2xs text-ink-faint">No API key needed: a recorded run, replayed in the browser.</span>
+        </div>
+      </main>
+
+      <footer className="mx-auto w-full max-w-3xl px-4 pb-8 sm:px-6">
+        <Disclaimer className="border-t border-line pt-4" />
+      </footer>
+    </div>
   );
 }
