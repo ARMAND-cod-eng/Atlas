@@ -154,6 +154,25 @@ def test_numbered_clauses_are_labelled_as_the_document_numbers_them() -> None:
     )
 
 
+def test_a_wrapped_line_that_starts_with_a_reference_or_a_number_starts_no_clause() -> None:
+    """Found in the first sample contract: Clause 4's text wraps onto "Article 32 of the GDPR"."""
+    text = (
+        "4. Security\n"
+        "The Processor shall implement the measures required pursuant to\n"
+        "Article 32 of the GDPR, as described in Annex 2.\n"
+        "\n"
+        "5. Volumes\n"
+        "The Processor handles up to\n"
+        "2.1 million records a year.\n"
+    )
+
+    clauses = clauses_of(text)
+
+    assert [c.label for c in clauses] == ["Clause 4", "Clause 5"]
+    assert clauses[0].text.endswith("Article 32 of the GDPR, as described in Annex 2.")
+    assert clauses[1].text.endswith("2.1 million records a year.")
+
+
 def test_articles_and_sections_keep_their_own_word() -> None:
     labels = [c.label for c in clauses_of("Article 1 Scope\nText.\nSection 2. Term\nText.")]
 

@@ -123,6 +123,35 @@ def _heading_of(line: str) -> tuple[str, str] | None:
     return None
 
 
+# How a sentence ends. A line that does not end one is continued on the next.
+_SENTENCE_ENDS = (".", ";", ":", "!", "?", ")")
+
+
+def _headings(lines: list[str]) -> list[tuple[int, tuple[str, str]]]:
+    """Where clauses start: (line index, (label, rest of the line)).
+
+    A line that only looks like a heading is running text when both say so: the
+    line before it does not finish a sentence, and what follows its number is
+    lowercase. Found in the first sample contract, whose Clause 4 wraps onto
+    "Article 32 of the GDPR"; "2.1 million records" is the same mistake.
+    """
+    found: list[tuple[int, tuple[str, str]]] = []
+    unfinished = False
+    for index, line in enumerate(lines):
+        stripped = line.strip()
+        if not stripped:
+            unfinished = False
+            continue
+        heading = _heading_of(stripped)
+        running_text = heading is not None and unfinished and heading[1][:1].islower()
+        if heading is not None and not running_text:
+            found.append((index, heading))
+            unfinished = False
+        else:
+            unfinished = not stripped.endswith(_SENTENCE_ENDS)
+    return found
+
+
 def _is_title(rest: str) -> bool:
     """A heading's title, not the clause's first sentence: short, and not a sentence."""
     return 0 < len(rest) <= 80 and not rest.endswith((".", ";", ":", ","))
@@ -130,9 +159,8 @@ def _is_title(rest: str) -> bool:
 
 def clauses_of(text: str) -> list[Clause]:
     """The contract's clauses, in order, each with a label and a stable id."""
-    starts = [(index, _heading_of(line)) for index, line in enumerate(text.split("\n"))]
-    headings = [(index, found) for index, found in starts if found is not None]
     lines = text.split("\n")
+    headings = _headings(lines)
     if not headings:
         return _paragraphs(text)
 

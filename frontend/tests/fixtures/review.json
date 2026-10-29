@@ -1,0 +1,727 @@
+[
+  {
+    "run_id": "review",
+    "seq": 1,
+    "ts": "2026-10-29T14:31:19.380270Z",
+    "type": "run_started",
+    "node": null,
+    "payload": {
+      "query": "dpa-01.md",
+      "thread_id": "thread",
+      "domain": "compliance"
+    }
+  },
+  {
+    "run_id": "review",
+    "seq": 2,
+    "ts": "2026-10-29T14:31:19.380270Z",
+    "type": "node_started",
+    "node": "reader",
+    "payload": {
+      "subtask_id": null,
+      "span_id": "d86ac64578d5"
+    }
+  },
+  {
+    "run_id": "review",
+    "seq": 3,
+    "ts": "2026-10-29T14:31:19.380270Z",
+    "type": "node_completed",
+    "node": "reader",
+    "payload": {
+      "subtask_id": null,
+      "span_id": "d86ac64578d5"
+    }
+  },
+  {
+    "run_id": "review",
+    "seq": 4,
+    "ts": "2026-10-29T14:31:19.380270Z",
+    "type": "review_started",
+    "node": "reader",
+    "payload": {
+      "framework": "gdpr-art-28",
+      "title": "GDPR Art. 28: processor contracts",
+      "filename": "dpa-01.md",
+      "requirements": [
+        {
+          "id": "details",
+          "label": "GDPR Art. 28(3)",
+          "title": "What is processed: subject-matter, duration, nature and purpose, types of data, categories of data subjects, the controller's obligations and rights"
+        },
+        {
+          "id": "instructions",
+          "label": "GDPR Art. 28(3)(a)",
+          "title": "Only on documented instructions"
+        },
+        {
+          "id": "confidentiality",
+          "label": "GDPR Art. 28(3)(b)",
+          "title": "Staff bound to confidentiality"
+        },
+        {
+          "id": "security",
+          "label": "GDPR Art. 28(3)(c)",
+          "title": "Security measures (Article 32)"
+        },
+        {
+          "id": "sub-processors",
+          "label": "GDPR Art. 28(3)(d)",
+          "title": "Conditions for sub-processors"
+        },
+        {
+          "id": "data-subject-rights",
+          "label": "GDPR Art. 28(3)(e)",
+          "title": "Help with data subjects' requests"
+        },
+        {
+          "id": "assistance",
+          "label": "GDPR Art. 28(3)(f)",
+          "title": "Help with security, breaches and impact assessments (Articles 32 to 36)"
+        },
+        {
+          "id": "end",
+          "label": "GDPR Art. 28(3)(g)",
+          "title": "Delete or return the data at the end"
+        },
+        {
+          "id": "audits",
+          "label": "GDPR Art. 28(3)(h)",
+          "title": "Information and audits"
+        }
+      ],
+      "clauses": [
+        {
+          "id": "c1",
+          "label": "Preamble",
+          "heading": null,
+          "text": "DATA PROCESSING AGREEMENT\n\nbetween Northwind Retail Ltd (the Controller) and Cloudline Support SA (the Processor)\n\nThis agreement forms part of the support services agreement between the parties (the Services\nAgreement)."
+        },
+        {
+          "id": "c2",
+          "label": "Clause 1",
+          "heading": "Subject matter and duration",
+          "text": "The Processor processes personal data on behalf of the Controller to operate the Controller's\ncustomer support desk, for the duration of the Services Agreement."
+        },
+        {
+          "id": "c3",
+          "label": "Clause 1.1",
+          "heading": null,
+          "text": "The personal data processed are the names, e-mail addresses, telephone numbers and support\nmessages of the Controller's customers, who are the data subjects. The nature and purpose of\nthe processing are the storage, routing and answering of support requests."
+        },
+        {
+          "id": "c4",
+          "label": "Clause 1.2",
+          "heading": "The Controller determines the purposes and means of the processing and may give",
+          "text": "instructions to the Processor at any time."
+        },
+        {
+          "id": "c5",
+          "label": "Clause 2",
+          "heading": "Instructions",
+          "text": "The Processor shall process the personal data only on documented instructions from the\nController, including with regard to transfers of personal data to a third country, unless\nrequired to do so by Union or Member State law."
+        },
+        {
+          "id": "c6",
+          "label": "Clause 3",
+          "heading": "Confidentiality",
+          "text": "The Processor shall ensure that persons authorised to process the personal data have committed\nthemselves to confidentiality."
+        },
+        {
+          "id": "c7",
+          "label": "Clause 4",
+          "heading": "Security",
+          "text": "The Processor shall implement the technical and organisational measures required pursuant to\nArticle 32 of the GDPR, as described in Annex 2."
+        },
+        {
+          "id": "c8",
+          "label": "Clause 5",
+          "heading": "Sub-processors",
+          "text": "The Processor may engage other processors with the general written authorisation of the\nController. The Processor shall impose on any other processor the same data protection\nobligations as set out in this agreement."
+        },
+        {
+          "id": "c9",
+          "label": "Clause 6",
+          "heading": "Requests from data subjects",
+          "text": "Taking into account the nature of the processing, the Processor shall assist the Controller by\nappropriate technical and organisational measures in responding to requests from data subjects\nto exercise their rights."
+        },
+        {
+          "id": "c10",
+          "label": "Clause 7",
+          "heading": "End of the services",
+          "text": "Upon termination of the Services Agreement, the Processor shall delete all personal data\nprocessed on behalf of the Controller within 30 days."
+        },
+        {
+          "id": "c11",
+          "label": "Clause 8",
+          "heading": "Liability",
+          "text": "Each party's liability under this agreement is limited as set out in the Services Agreement."
+        },
+        {
+          "id": "c12",
+          "label": "Clause 9",
+          "heading": "Governing law",
+          "text": "This agreement is governed by the law of Ireland."
+        }
+      ]
+    }
+  },
+  {
+    "run_id": "review",
+    "seq": 5,
+    "ts": "2026-10-29T14:31:19.654629Z",
+    "type": "node_started",
+    "node": "reviewer",
+    "payload": {
+      "subtask_id": "details",
+      "span_id": "9c2f8bf34b2c"
+    }
+  },
+  {
+    "run_id": "review",
+    "seq": 6,
+    "ts": "2026-10-29T14:31:19.654629Z",
+    "type": "node_started",
+    "node": "reviewer",
+    "payload": {
+      "subtask_id": "instructions",
+      "span_id": "c24272024f53"
+    }
+  },
+  {
+    "run_id": "review",
+    "seq": 7,
+    "ts": "2026-10-29T14:31:19.654629Z",
+    "type": "node_started",
+    "node": "reviewer",
+    "payload": {
+      "subtask_id": "confidentiality",
+      "span_id": "081c3604f15e"
+    }
+  },
+  {
+    "run_id": "review",
+    "seq": 8,
+    "ts": "2026-10-29T14:31:19.654629Z",
+    "type": "node_started",
+    "node": "reviewer",
+    "payload": {
+      "subtask_id": "security",
+      "span_id": "2af00d74661c"
+    }
+  },
+  {
+    "run_id": "review",
+    "seq": 9,
+    "ts": "2026-10-29T14:31:19.654629Z",
+    "type": "node_started",
+    "node": "reviewer",
+    "payload": {
+      "subtask_id": "sub-processors",
+      "span_id": "b594b9218305"
+    }
+  },
+  {
+    "run_id": "review",
+    "seq": 10,
+    "ts": "2026-10-29T14:31:19.654629Z",
+    "type": "node_started",
+    "node": "reviewer",
+    "payload": {
+      "subtask_id": "data-subject-rights",
+      "span_id": "d54351168ac9"
+    }
+  },
+  {
+    "run_id": "review",
+    "seq": 11,
+    "ts": "2026-10-29T14:31:19.654629Z",
+    "type": "node_started",
+    "node": "reviewer",
+    "payload": {
+      "subtask_id": "assistance",
+      "span_id": "07f45cb9e23a"
+    }
+  },
+  {
+    "run_id": "review",
+    "seq": 12,
+    "ts": "2026-10-29T14:31:19.654629Z",
+    "type": "node_started",
+    "node": "reviewer",
+    "payload": {
+      "subtask_id": "end",
+      "span_id": "7a89e5a2e6e5"
+    }
+  },
+  {
+    "run_id": "review",
+    "seq": 13,
+    "ts": "2026-10-29T14:31:19.654629Z",
+    "type": "node_started",
+    "node": "reviewer",
+    "payload": {
+      "subtask_id": "audits",
+      "span_id": "991ec0308546"
+    }
+  },
+  {
+    "run_id": "review",
+    "seq": 14,
+    "ts": "2026-10-29T14:31:19.654629Z",
+    "type": "agent_call",
+    "node": "reviewer",
+    "payload": {
+      "call_id": "7c40bf4866764d2384a06d0b2a79c86d",
+      "span_id": "9c2f8bf34b2c",
+      "subtask_id": "details",
+      "kind": "model",
+      "name": "scripted",
+      "duration_s": 0.08512520001386292,
+      "input_tokens": null,
+      "output_tokens": null,
+      "error": null,
+      "preview": "{\"status\": \"met\", \"clause_ids\": [\"c2\", \"c3\"], \"quote\": \"for the duration of the Services Agreement\", \"reason\": \"Clauses 1 and 1.1 set out the subject-matter, duration, nature, purpose and data.\"}"
+    }
+  },
+  {
+    "run_id": "review",
+    "seq": 15,
+    "ts": "2026-10-29T14:31:19.654629Z",
+    "type": "node_completed",
+    "node": "reviewer",
+    "payload": {
+      "subtask_id": "details",
+      "span_id": "9c2f8bf34b2c"
+    }
+  },
+  {
+    "run_id": "review",
+    "seq": 16,
+    "ts": "2026-10-29T14:31:19.654629Z",
+    "type": "requirement_judged",
+    "node": "reviewer",
+    "payload": {
+      "requirement_id": "details",
+      "label": "GDPR Art. 28(3)",
+      "title": "What is processed: subject-matter, duration, nature and purpose, types of data, categories of data subjects, the controller's obligations and rights",
+      "status": "met",
+      "clause_ids": [
+        "c2",
+        "c3"
+      ],
+      "quote": "for the duration of the Services Agreement",
+      "found_in": "c2",
+      "reason": "Clauses 1 and 1.1 set out the subject-matter, duration, nature, purpose and data."
+    }
+  },
+  {
+    "run_id": "review",
+    "seq": 17,
+    "ts": "2026-10-29T14:31:19.654629Z",
+    "type": "agent_call",
+    "node": "reviewer",
+    "payload": {
+      "call_id": "478ea73a6d20425bbc978b4545223b77",
+      "span_id": "c24272024f53",
+      "subtask_id": "instructions",
+      "kind": "model",
+      "name": "scripted",
+      "duration_s": 0.07582870000624098,
+      "input_tokens": null,
+      "output_tokens": null,
+      "error": null,
+      "preview": "{\"status\": \"met\", \"clause_ids\": [\"c5\"], \"quote\": \"only on documented instructions from the Controller\", \"reason\": \"Clause 2 restates Art. 28(3)(a), transfers included.\"}"
+    }
+  },
+  {
+    "run_id": "review",
+    "seq": 18,
+    "ts": "2026-10-29T14:31:19.654629Z",
+    "type": "node_completed",
+    "node": "reviewer",
+    "payload": {
+      "subtask_id": "instructions",
+      "span_id": "c24272024f53"
+    }
+  },
+  {
+    "run_id": "review",
+    "seq": 19,
+    "ts": "2026-10-29T14:31:19.654629Z",
+    "type": "requirement_judged",
+    "node": "reviewer",
+    "payload": {
+      "requirement_id": "instructions",
+      "label": "GDPR Art. 28(3)(a)",
+      "title": "Only on documented instructions",
+      "status": "met",
+      "clause_ids": [
+        "c5"
+      ],
+      "quote": "only on documented instructions from the Controller",
+      "found_in": "c5",
+      "reason": "Clause 2 restates Art. 28(3)(a), transfers included."
+    }
+  },
+  {
+    "run_id": "review",
+    "seq": 20,
+    "ts": "2026-10-29T14:31:19.654629Z",
+    "type": "agent_call",
+    "node": "reviewer",
+    "payload": {
+      "call_id": "9e7c3b18c2e74e928442e09cb66a784b",
+      "span_id": "081c3604f15e",
+      "subtask_id": "confidentiality",
+      "kind": "model",
+      "name": "scripted",
+      "duration_s": 0.06728729998576455,
+      "input_tokens": null,
+      "output_tokens": null,
+      "error": null,
+      "preview": "{\"status\": \"met\", \"clause_ids\": [\"c6\"], \"quote\": \"have committed themselves to confidentiality\", \"reason\": \"Clause 3 binds the people who process the data.\"}"
+    }
+  },
+  {
+    "run_id": "review",
+    "seq": 21,
+    "ts": "2026-10-29T14:31:19.654629Z",
+    "type": "node_completed",
+    "node": "reviewer",
+    "payload": {
+      "subtask_id": "confidentiality",
+      "span_id": "081c3604f15e"
+    }
+  },
+  {
+    "run_id": "review",
+    "seq": 22,
+    "ts": "2026-10-29T14:31:19.654629Z",
+    "type": "requirement_judged",
+    "node": "reviewer",
+    "payload": {
+      "requirement_id": "confidentiality",
+      "label": "GDPR Art. 28(3)(b)",
+      "title": "Staff bound to confidentiality",
+      "status": "met",
+      "clause_ids": [
+        "c6"
+      ],
+      "quote": "have committed themselves to confidentiality",
+      "found_in": "c6",
+      "reason": "Clause 3 binds the people who process the data."
+    }
+  },
+  {
+    "run_id": "review",
+    "seq": 23,
+    "ts": "2026-10-29T14:31:19.654629Z",
+    "type": "agent_call",
+    "node": "reviewer",
+    "payload": {
+      "call_id": "5eaa976020cf438ca933d46e28b748a3",
+      "span_id": "2af00d74661c",
+      "subtask_id": "security",
+      "kind": "model",
+      "name": "scripted",
+      "duration_s": 0.059645600005751476,
+      "input_tokens": null,
+      "output_tokens": null,
+      "error": null,
+      "preview": "{\"status\": \"met\", \"clause_ids\": [\"c7\"], \"quote\": \"the technical and organisational measures required pursuant to\", \"reason\": \"Clause 4 requires the Article 32 measures.\"}"
+    }
+  },
+  {
+    "run_id": "review",
+    "seq": 24,
+    "ts": "2026-10-29T14:31:19.654629Z",
+    "type": "node_completed",
+    "node": "reviewer",
+    "payload": {
+      "subtask_id": "security",
+      "span_id": "2af00d74661c"
+    }
+  },
+  {
+    "run_id": "review",
+    "seq": 25,
+    "ts": "2026-10-29T14:31:19.654629Z",
+    "type": "requirement_judged",
+    "node": "reviewer",
+    "payload": {
+      "requirement_id": "security",
+      "label": "GDPR Art. 28(3)(c)",
+      "title": "Security measures (Article 32)",
+      "status": "met",
+      "clause_ids": [
+        "c7"
+      ],
+      "quote": "the technical and organisational measures required pursuant to",
+      "found_in": "c7",
+      "reason": "Clause 4 requires the Article 32 measures."
+    }
+  },
+  {
+    "run_id": "review",
+    "seq": 26,
+    "ts": "2026-10-29T14:31:19.654629Z",
+    "type": "agent_call",
+    "node": "reviewer",
+    "payload": {
+      "call_id": "33ae845a53814f1184e67a39ab7ee94a",
+      "span_id": "b594b9218305",
+      "subtask_id": "sub-processors",
+      "kind": "model",
+      "name": "scripted",
+      "duration_s": 0.04561260002083145,
+      "input_tokens": null,
+      "output_tokens": null,
+      "error": null,
+      "preview": "{\"status\": \"partial\", \"clause_ids\": [\"c8\"], \"quote\": \"with the general written authorisation of the Controller\", \"reason\": \"General authorisation, but no duty to tell the Controller of changes so it can object, as Art. 28(2) requires.\"}"
+    }
+  },
+  {
+    "run_id": "review",
+    "seq": 27,
+    "ts": "2026-10-29T14:31:19.654629Z",
+    "type": "node_completed",
+    "node": "reviewer",
+    "payload": {
+      "subtask_id": "sub-processors",
+      "span_id": "b594b9218305"
+    }
+  },
+  {
+    "run_id": "review",
+    "seq": 28,
+    "ts": "2026-10-29T14:31:19.654629Z",
+    "type": "requirement_judged",
+    "node": "reviewer",
+    "payload": {
+      "requirement_id": "sub-processors",
+      "label": "GDPR Art. 28(3)(d)",
+      "title": "Conditions for sub-processors",
+      "status": "partial",
+      "clause_ids": [
+        "c8"
+      ],
+      "quote": "with the general written authorisation of the Controller",
+      "found_in": "c8",
+      "reason": "General authorisation, but no duty to tell the Controller of changes so it can object, as Art. 28(2) requires."
+    }
+  },
+  {
+    "run_id": "review",
+    "seq": 29,
+    "ts": "2026-10-29T14:31:19.654629Z",
+    "type": "agent_call",
+    "node": "reviewer",
+    "payload": {
+      "call_id": "be45f2f18a1349b1aa9409de2b25c596",
+      "span_id": "d54351168ac9",
+      "subtask_id": "data-subject-rights",
+      "kind": "model",
+      "name": "scripted",
+      "duration_s": 0.03563990001566708,
+      "input_tokens": null,
+      "output_tokens": null,
+      "error": null,
+      "preview": "{\"status\": \"met\", \"clause_ids\": [\"c9\"], \"quote\": \"in responding to requests from data subjects\", \"reason\": \"Clause 6 restates Art. 28(3)(e).\"}"
+    }
+  },
+  {
+    "run_id": "review",
+    "seq": 30,
+    "ts": "2026-10-29T14:31:19.654629Z",
+    "type": "node_completed",
+    "node": "reviewer",
+    "payload": {
+      "subtask_id": "data-subject-rights",
+      "span_id": "d54351168ac9"
+    }
+  },
+  {
+    "run_id": "review",
+    "seq": 31,
+    "ts": "2026-10-29T14:31:19.654629Z",
+    "type": "requirement_judged",
+    "node": "reviewer",
+    "payload": {
+      "requirement_id": "data-subject-rights",
+      "label": "GDPR Art. 28(3)(e)",
+      "title": "Help with data subjects' requests",
+      "status": "met",
+      "clause_ids": [
+        "c9"
+      ],
+      "quote": "in responding to requests from data subjects",
+      "found_in": "c9",
+      "reason": "Clause 6 restates Art. 28(3)(e)."
+    }
+  },
+  {
+    "run_id": "review",
+    "seq": 32,
+    "ts": "2026-10-29T14:31:19.654629Z",
+    "type": "agent_call",
+    "node": "reviewer",
+    "payload": {
+      "call_id": "277925a48bc64cd9b322af56d9de6146",
+      "span_id": "07f45cb9e23a",
+      "subtask_id": "assistance",
+      "kind": "model",
+      "name": "scripted",
+      "duration_s": 0.02191569999558851,
+      "input_tokens": null,
+      "output_tokens": null,
+      "error": null,
+      "preview": "{\"status\": \"met\", \"clause_ids\": [\"c9\"], \"quote\": \"assist the Controller in ensuring compliance with Articles 32 to 36\", \"reason\": \"Clause 6 covers assistance with Articles 32 to 36.\"}"
+    }
+  },
+  {
+    "run_id": "review",
+    "seq": 33,
+    "ts": "2026-10-29T14:31:19.654629Z",
+    "type": "node_completed",
+    "node": "reviewer",
+    "payload": {
+      "subtask_id": "assistance",
+      "span_id": "07f45cb9e23a"
+    }
+  },
+  {
+    "run_id": "review",
+    "seq": 34,
+    "ts": "2026-10-29T14:31:19.654629Z",
+    "type": "requirement_judged",
+    "node": "reviewer",
+    "payload": {
+      "requirement_id": "assistance",
+      "label": "GDPR Art. 28(3)(f)",
+      "title": "Help with security, breaches and impact assessments (Articles 32 to 36)",
+      "status": "unverified",
+      "clause_ids": [
+        "c9"
+      ],
+      "quote": "assist the Controller in ensuring compliance with Articles 32 to 36",
+      "found_in": null,
+      "reason": "Judged met, but its quote is not in the clause it cites. The model said: Clause 6 covers assistance with Articles 32 to 36."
+    }
+  },
+  {
+    "run_id": "review",
+    "seq": 35,
+    "ts": "2026-10-29T14:31:19.654629Z",
+    "type": "agent_call",
+    "node": "reviewer",
+    "payload": {
+      "call_id": "ee96769d9f1d4734ab7864306b5c18f6",
+      "span_id": "7a89e5a2e6e5",
+      "subtask_id": "end",
+      "kind": "model",
+      "name": "scripted",
+      "duration_s": 0.012909000011859462,
+      "input_tokens": null,
+      "output_tokens": null,
+      "error": null,
+      "preview": "{\"status\": \"partial\", \"clause_ids\": [\"c10\"], \"quote\": \"the Processor shall delete all personal data\", \"reason\": \"Deletion only: the Controller's choice to have the data returned is missing.\"}"
+    }
+  },
+  {
+    "run_id": "review",
+    "seq": 36,
+    "ts": "2026-10-29T14:31:19.654629Z",
+    "type": "node_completed",
+    "node": "reviewer",
+    "payload": {
+      "subtask_id": "end",
+      "span_id": "7a89e5a2e6e5"
+    }
+  },
+  {
+    "run_id": "review",
+    "seq": 37,
+    "ts": "2026-10-29T14:31:19.654629Z",
+    "type": "requirement_judged",
+    "node": "reviewer",
+    "payload": {
+      "requirement_id": "end",
+      "label": "GDPR Art. 28(3)(g)",
+      "title": "Delete or return the data at the end",
+      "status": "partial",
+      "clause_ids": [
+        "c10"
+      ],
+      "quote": "the Processor shall delete all personal data",
+      "found_in": "c10",
+      "reason": "Deletion only: the Controller's choice to have the data returned is missing."
+    }
+  },
+  {
+    "run_id": "review",
+    "seq": 38,
+    "ts": "2026-10-29T14:31:19.654629Z",
+    "type": "agent_call",
+    "node": "reviewer",
+    "payload": {
+      "call_id": "7542be50ac224ce7befcdc1255e41494",
+      "span_id": "991ec0308546",
+      "subtask_id": "audits",
+      "kind": "model",
+      "name": "scripted",
+      "duration_s": 0.0030186999938450754,
+      "input_tokens": null,
+      "output_tokens": null,
+      "error": null,
+      "preview": "{\"status\": \"missing\", \"clause_ids\": [], \"quote\": null, \"reason\": \"No clause gives the Controller information or audits.\"}"
+    }
+  },
+  {
+    "run_id": "review",
+    "seq": 39,
+    "ts": "2026-10-29T14:31:19.654629Z",
+    "type": "node_completed",
+    "node": "reviewer",
+    "payload": {
+      "subtask_id": "audits",
+      "span_id": "991ec0308546"
+    }
+  },
+  {
+    "run_id": "review",
+    "seq": 40,
+    "ts": "2026-10-29T14:31:19.654629Z",
+    "type": "requirement_judged",
+    "node": "reviewer",
+    "payload": {
+      "requirement_id": "audits",
+      "label": "GDPR Art. 28(3)(h)",
+      "title": "Information and audits",
+      "status": "missing",
+      "clause_ids": [],
+      "quote": null,
+      "found_in": null,
+      "reason": "No clause gives the Controller information or audits."
+    }
+  },
+  {
+    "run_id": "review",
+    "seq": 41,
+    "ts": "2026-10-29T14:31:19.654629Z",
+    "type": "run_completed",
+    "node": null,
+    "payload": {
+      "thread_id": "thread",
+      "framework": "gdpr-art-28",
+      "counts": {
+        "met": 5,
+        "partial": 2,
+        "missing": 1,
+        "unverified": 1
+      },
+      "degraded": [],
+      "total_tokens": 0
+    }
+  }
+]

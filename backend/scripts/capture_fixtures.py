@@ -52,7 +52,11 @@ from atlas.graph.state import CriticVerdict, PlannerOutput, Source, Subtask, Sub
 from atlas.library.support import SupportJudgement, SupportJudgements
 from atlas.metrics import RunMetrics
 from atlas.offline import no_fallback, scripted_llm, scripted_structured
-from atlas.runner import execute_revision, execute_run
+from atlas.review.contract import text_of
+from atlas.review.graph import build_review_graph
+from atlas.review.judge import RequirementJudgement
+from atlas.review.requirements import GDPR_ART_28
+from atlas.runner import execute_review, execute_revision, execute_run
 from atlas.store import InMemoryRunStore
 from atlas_eval.runner import install_offline_budget
 
@@ -402,6 +406,7 @@ async def main() -> None:
     )
 
     await capture_declined()
+    await capture_review()
 
     await write_demo(compliance)
     write_citation_cases()
@@ -418,6 +423,113 @@ async def capture_declined() -> None:
         question="What is the history of Cameroon?",
         out_of_scope="The question is about the history of Cameroon.",
     )
+
+
+SAMPLE_CONTRACT = Path(__file__).resolve().parents[1] / "atlas_eval/data/contracts/dpa-01.md"
+
+# The reviewer's judgments of the sample contract, as a careful reader would make
+# them, and one that is not: "assistance" quotes words the contract does not
+# have, which the check reports as unverified.
+REVIEW_SCRIPT: dict[str, tuple[str, list[str], str | None, str]] = {
+    "details": (
+        "met",
+        ["c2", "c3"],
+        "for the duration of the Services Agreement",
+        "Clauses 1 and 1.1 set out the subject-matter, duration, nature, purpose and data.",
+    ),
+    "instructions": (
+        "met",
+        ["c5"],
+        "only on documented instructions from the Controller",
+        "Clause 2 restates Art. 28(3)(a), transfers included.",
+    ),
+    "confidentiality": (
+        "met",
+        ["c6"],
+        "have committed themselves to confidentiality",
+        "Clause 3 binds the people who process the data.",
+    ),
+    "security": (
+        "met",
+        ["c7"],
+        "the technical and organisational measures required pursuant to",
+        "Clause 4 requires the Article 32 measures.",
+    ),
+    "sub-processors": (
+        "partial",
+        ["c8"],
+        "with the general written authorisation of the Controller",
+        "General authorisation, but no duty to tell the Controller of changes so it can "
+        "object, as Art. 28(2) requires.",
+    ),
+    "data-subject-rights": (
+        "met",
+        ["c9"],
+        "in responding to requests from data subjects",
+        "Clause 6 restates Art. 28(3)(e).",
+    ),
+    "assistance": (
+        "met",
+        ["c9"],
+        "assist the Controller in ensuring compliance with Articles 32 to 36",
+        "Clause 6 covers assistance with Articles 32 to 36.",
+    ),
+    "end": (
+        "partial",
+        ["c10"],
+        "the Processor shall delete all personal data",
+        "Deletion only: the Controller's choice to have the data returned is missing.",
+    ),
+    "audits": ("missing", [], None, "No clause gives the Controller information or audits."),
+}
+
+
+async def scripted_review(
+    node: str, messages: list[Any], schema: type[BaseModel], metrics: RunMetrics
+) -> BaseModel:
+    label = (
+        str(messages[-1].content).split("\n", 1)[0].removeprefix("Requirement: ").split(" — ")[0]
+    )
+    requirement = next(r for r in GDPR_ART_28.requirements if r.label == label)
+    status, clause_ids, quote, reason = REVIEW_SCRIPT[requirement.id]
+    return RequirementJudgement.model_validate(
+        {"status": status, "clause_ids": clause_ids, "quote": quote, "reason": reason}
+    )
+
+
+async def capture_review() -> None:
+    """The sample contract reviewed against GDPR Art. 28: every status a finding can have."""
+    collected: list[AgentEvent] = []
+
+    async def record(event: AgentEvent) -> None:
+        collected.append(event)
+
+    async def no_store(run_id: str, result: dict[str, Any]) -> None:
+        """The fixture is the event stream."""
+
+    saved = (
+        eventlog.append,
+        eventlog.store_result,
+        models.get_structured_llm,
+        models.get_structured_fallback,
+    )
+    eventlog.append = record
+    eventlog.store_result = no_store
+    models.get_structured_llm = scripted_structured(scripted_review)
+    models.get_structured_fallback = no_fallback
+    try:
+        text = text_of(SAMPLE_CONTRACT.name, SAMPLE_CONTRACT.read_bytes())
+        await execute_review(
+            "review", "thread", build_review_graph(), filename="dpa-01.md", text=text
+        )
+    finally:
+        (
+            eventlog.append,
+            eventlog.store_result,
+            models.get_structured_llm,
+            models.get_structured_fallback,
+        ) = saved
+    write("review", collected)
 
 
 async def write_demo(store: InMemoryRunStore) -> None:
