@@ -16,21 +16,21 @@
   --line-strong: #cbcbc3;
   --ink: #1b1b19;
   --ink-muted: #55554f;
-  --ink-faint: #8a8a83;
+  --ink-faint: #6b6b64;
   --accent: #4f46e5;
   --accent-ink: #ffffff;
 
-  --running: #0284c7;
-  --done: #059669;
-  --failed: #dc2626;
+  --running: #0369a1;
+  --done: #047857;
+  --failed: #b91c1c;
   --idle: #a8a8a0;
-  --retry: #d97706;
-  --edited: #c026d3;
+  --retry: #9c4a0a;
+  --edited: #a21caf;
 
   /* How much a source can say about the law. */
   --law: #6d28d9;
   --guidance: #0f766e;
-  --secondary: #78786f;
+  --secondary: #66665f;
 
   color-scheme: light;
 }
@@ -44,7 +44,7 @@
     --line-strong: #3a3a40;
     --ink: #ececea;
     --ink-muted: #a6a6a1;
-    --ink-faint: #6c6c68;
+    --ink-faint: #8e8e89;
     --accent: #8b85f5;
     --accent-ink: #0b0b0c;
     --running: #38bdf8;
@@ -68,7 +68,7 @@
   --line-strong: #3a3a40;
   --ink: #ececea;
   --ink-muted: #a6a6a1;
-  --ink-faint: #6c6c68;
+  --ink-faint: #8e8e89;
   --accent: #8b85f5;
   --accent-ink: #0b0b0c;
   --running: #38bdf8;
@@ -109,24 +109,39 @@
 }
 
 /*
- * A dense type scale for an analyst's workstation: a lot on screen, all of it
- * legible. Replaces the arbitrary 10–13px sizes each component used to pick.
+ * The type scale. Nothing on screen is smaller than 12px: an analyst reads this
+ * for an hour, and 11px labels were the first thing a reader squinted at.
+ * lg and xl are for the answer and the page's title.
  */
 @theme {
-  --text-2xs: 0.6875rem;
-  --text-2xs--line-height: 1rem;
-  --text-xs: 0.75rem;
-  --text-xs--line-height: 1.125rem;
-  --text-sm: 0.8125rem;
-  --text-sm--line-height: 1.25rem;
-  --text-base: 0.875rem;
-  --text-base--line-height: 1.375rem;
+  --text-2xs: 0.75rem;
+  --text-2xs--line-height: 1.125rem;
+  --text-xs: 0.8125rem;
+  --text-xs--line-height: 1.25rem;
+  --text-sm: 0.875rem;
+  --text-sm--line-height: 1.375rem;
+  --text-base: 0.9375rem;
+  --text-base--line-height: 1.5rem;
+  --text-lg: 1.0625rem;
+  --text-lg--line-height: 1.65rem;
+  --text-xl: 1.25rem;
+  --text-xl--line-height: 1.75rem;
 }
 
 body {
   font-family: var(--font-geist-sans), system-ui, sans-serif;
   background: var(--canvas);
   color: var(--ink);
+}
+
+/*
+ * Where the keyboard is, always visible. Only for keyboard focus
+ * (:focus-visible), so a mouse click does not leave a ring behind.
+ */
+:where(a, button, input, select, textarea, summary, [tabindex]):focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+  border-radius: 4px;
 }
 
 /*
