@@ -301,9 +301,7 @@ async def capture(
         graph = build_state_graph().compile(checkpointer=MemorySaver(serde=checkpoint_serde()))
         with using_domain(domain):
             try:
-                await execute_run(
-                    name, question or QUESTION[domain], "thread", graph, store=store
-                )
+                await execute_run(name, question or QUESTION[domain], "thread", graph, store=store)
                 if revise_branch is not None:
                     collected.clear()
                     subtask_id, question = revise_branch
