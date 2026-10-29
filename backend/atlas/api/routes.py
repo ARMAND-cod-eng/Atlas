@@ -10,6 +10,8 @@ can substitute them without standing up Postgres or Redis.
 
 from __future__ import annotations
 
+import base64
+import binascii
 import logging
 from datetime import datetime
 from typing import Any, Literal
@@ -29,9 +31,11 @@ from atlas.domains import DomainName
 from atlas.events import RUN_FAILED
 from atlas.graph.state import Revision
 from atlas.result import QueryResponse
+from atlas.review.contract import MAX_BYTES, UnreadableContract, text_of
+from atlas.review.graph import ReviewResult
 from atlas.store import RunKind, RunRecord, RunStatusName, RunStore
 from atlas.trace import AgentCall
-from atlas.worker import FORGET_THREAD, QUERY_WAIT_SECONDS, RUN_RESEARCH, RUN_REVISION
+from atlas.worker import FORGET_THREAD, QUERY_WAIT_SECONDS, RUN_RESEARCH, RUN_REVIEW, RUN_REVISION
 
 logger = logging.getLogger(__name__)
 
@@ -146,6 +150,29 @@ class RunStatus(BaseModel):
     status: Literal["running", "completed", "failed"]
     result: QueryResponse | None = None
     # The error the run ended on, when status is "failed".
+    error: str | None = None
+
+
+class ReviewRequest(BaseModel):
+    """A contract to review: its text, or its file as base64. One of the two."""
+
+    filename: str = Field(min_length=1, max_length=255, description="Its name, with its extension.")
+    text: str | None = Field(default=None, description="The contract's text, pasted.")
+    content_base64: str | None = Field(
+        default=None,
+        # Base64 of 5 MB, and a little: the file's own limit is checked once decoded.
+        max_length=4 * (MAX_BYTES // 3) + 8,
+        description="The file, base64: .txt, .md, .docx or a PDF with text in it.",
+    )
+    framework: Literal["gdpr-art-28"] = "gdpr-art-28"
+
+
+class ReviewStatus(BaseModel):
+    """Where a review has got to, and its findings once there are some."""
+
+    run_id: str
+    status: Literal["running", "completed", "failed"]
+    result: ReviewResult | None = None
     error: str | None = None
 
 
@@ -475,6 +502,65 @@ async def get_run(request: Request, run_id: str) -> RunStatus:
             error=record.error,
         )
     raise HTTPException(status_code=404, detail=f"unknown run: {run_id}")
+
+
+def _contract_text(payload: ReviewRequest) -> str:
+    """The contract's text, or 422 saying why it cannot be read."""
+    if (payload.text is None) == (payload.content_base64 is None):
+        raise HTTPException(
+            status_code=422, detail="Send the contract's text or its file, one of the two."
+        )
+    if payload.text is not None:
+        data = payload.text.encode("utf-8")
+    else:
+        try:
+            data = base64.b64decode(payload.content_base64 or "", validate=True)
+        except (binascii.Error, ValueError) as exc:
+            raise HTTPException(
+                status_code=422, detail=f"{payload.filename} could not be decoded."
+            ) from exc
+    # Pasted text is text, whatever the name it came with.
+    name = payload.filename if payload.content_base64 is not None else f"{payload.filename}.txt"
+    try:
+        return text_of(name, data)
+    except UnreadableContract as exc:
+        raise HTTPException(
+            status_code=422, detail=str(exc).replace(name, payload.filename)
+        ) from exc
+
+
+@router.post("/reviews", response_model=RunAccepted, status_code=202)
+async def start_review(request: Request, payload: ReviewRequest) -> RunAccepted:
+    """Review a contract against GDPR Art. 28, and return at once.
+
+    The contract is read here, so a file that cannot be read is refused before
+    anything is queued or spent. Its findings stream like any run's events, and
+    ``GET /reviews/{run_id}`` serves them once finished.
+    """
+    text = _contract_text(payload)
+    thread_id = str(uuid4())
+    _job, run_id = await _enqueue(
+        request, thread_id, RUN_REVIEW, thread_id, payload.filename, text, domain="compliance"
+    )
+    return RunAccepted(run_id=run_id, thread_id=thread_id, events_url=f"/runs/{run_id}/events")
+
+
+@router.get("/reviews/{run_id}", response_model=ReviewStatus)
+async def get_review(request: Request, run_id: str) -> ReviewStatus:
+    """A review's findings, from the run's stored result, or its record once Redis forgets it."""
+    result = await eventlog.load_result(run_id)
+    if result is not None and "findings" in result:
+        return ReviewStatus(run_id=run_id, status="completed", result=ReviewResult(**result))
+    store: RunStore | None = getattr(request.app.state, "store", None)
+    record = await store.get(run_id) if store is not None else None
+    if record is None or record.kind != "review":
+        raise HTTPException(status_code=404, detail=f"unknown review: {run_id}")
+    return ReviewStatus(
+        run_id=run_id,
+        status=record.status,
+        result=ReviewResult(**record.result) if record.result is not None else None,
+        error=record.error,
+    )
 
 
 @router.post("/query", response_model=QueryResponse)

@@ -139,10 +139,11 @@ def test_the_worker_runs_the_forget_job_by_the_name_the_api_queues_it_under() ->
     """A renamed job would leave every DELETE queued for a function nobody runs."""
     from arq.worker import Function
 
-    from atlas.worker import FORGET_THREAD, WorkerSettings, purge_expired_job
+    from atlas.worker import FORGET_THREAD, RUN_REVIEW, WorkerSettings, purge_expired_job
 
     names = [f.name for f in WorkerSettings.functions if isinstance(f, Function)]
     [nightly] = WorkerSettings.cron_jobs
 
-    assert names == [FORGET_THREAD]
+    # Reviews are queued by name too (POST /reviews), and held to it the same way.
+    assert names == [RUN_REVIEW, FORGET_THREAD]
     assert (nightly.coroutine, nightly.hour, nightly.minute) == (purge_expired_job, {3}, {0})

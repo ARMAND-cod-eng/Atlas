@@ -34,7 +34,8 @@ from atlas.domains import DomainName
 from atlas.graph.builder import build_graph
 from atlas.offline import install_offline
 from atlas.retention import forget_thread, purge_expired
-from atlas.runner import execute_revision, execute_run
+from atlas.review.graph import build_review_graph
+from atlas.runner import execute_review, execute_revision, execute_run
 from atlas.runtime import configure_logging
 from atlas.store import PostgresRunStore
 
@@ -44,6 +45,7 @@ logger = logging.getLogger(__name__)
 # disconnect the producer from the consumer.
 RUN_RESEARCH = "run_research"
 RUN_REVISION = "run_revision"
+RUN_REVIEW = "run_review"
 FORGET_THREAD = "forget_thread"
 
 # Ceiling on a single run. A run is bounded by MAX_CRITIC_ITERATIONS and the token
@@ -106,6 +108,21 @@ async def run_revision(
     )
 
 
+async def run_review(
+    ctx: dict[str, Any],
+    run_id: str,
+    thread_id: str,
+    filename: str,
+    text: str,
+    *,
+    domain: DomainName | None = None,
+) -> dict[str, Any]:
+    """Review one contract against GDPR Art. 28. See atlas.review. Always against the law."""
+    return await execute_review(
+        run_id, thread_id, ctx["review_graph"], filename=filename, text=text, store=ctx["store"]
+    )
+
+
 async def forget_thread_job(ctx: dict[str, Any], thread_id: str) -> list[str]:
     """Delete a thread everywhere it lives. See atlas.retention."""
     return await forget_thread(thread_id, ctx["store"], ctx["graph"].checkpointer)
@@ -132,6 +149,8 @@ async def startup(ctx: dict[str, Any]) -> None:
         install_offline()
         logger.warning("offline mode: every model and the web are scripted, and answers say so")
     ctx["graph"] = await build_graph()
+    # A review has no conversation to continue, so no checkpointer.
+    ctx["review_graph"] = build_review_graph()
     # The worker owns the schema, as it owns the checkpointer's: the API only
     # reads and writes rows, and two processes racing CREATE TABLE at boot can
     # collide on Postgres's own catalog.
@@ -175,7 +194,12 @@ class WorkerSettings(WorkerSettingsBase):
 
     # A tuple, not a list: arq only reads it, and a mutable class attribute is a
     # shared-state footgun the linter is right to flag.
-    functions = (run_research, run_revision, func(forget_thread_job, name=FORGET_THREAD))
+    functions = (
+        run_research,
+        run_revision,
+        func(run_review, name=RUN_REVIEW),
+        func(forget_thread_job, name=FORGET_THREAD),
+    )
     # 03:00 every night, when a deployment is least likely to be busy.
     cron_jobs = (cron(purge_expired_job, hour={3}, minute={0}),)
     on_startup = staticmethod(startup)
