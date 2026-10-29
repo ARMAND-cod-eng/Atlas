@@ -74,6 +74,12 @@
       "conditional": true
     },
     {
+      "id": "planner->__end__",
+      "source": "planner",
+      "target": "__end__",
+      "conditional": true
+    },
+    {
       "id": "researcher->synthesizer",
       "source": "researcher",
       "target": "synthesizer",

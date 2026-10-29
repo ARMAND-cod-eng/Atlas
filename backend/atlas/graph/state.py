@@ -99,6 +99,13 @@ class PlannerOutput(BaseModel):
     """
 
     subtasks: list[Subtask] = Field(default_factory=list)
+    out_of_scope: str | None = Field(
+        default=None,
+        description=(
+            "Only when your instructions say the question is outside what this system "
+            "researches: one sentence on what it is about instead. Otherwise null."
+        ),
+    )
 
     @model_validator(mode="before")
     @classmethod
@@ -246,6 +253,12 @@ class AtlasState(TypedDict):
     # Set only on a run that revises another (see atlas.revision). No reducer, so
     # a new question's input (``revision: None``) replaces the last edit outright.
     revision: Revision | None
+    # Whether the planner's scope judgment is acted on: a conversation's first
+    # question only (see atlas.runner). Graph input, replaced every run.
+    check_scope: bool
+    # Why a question was not researched, when the planner judged it outside the
+    # domain's scope; None otherwise. Written by the planner on every question.
+    declined: str | None
 
 
 class ResearcherInput(TypedDict):

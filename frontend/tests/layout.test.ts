@@ -46,6 +46,7 @@ const TOPOLOGY: Topology = {
     { id: '__start__->planner', source: '__start__', target: PLANNER, conditional: false },
     { id: 'planner->researcher', source: PLANNER, target: RESEARCHER, conditional: true },
     { id: 'planner->synthesizer', source: PLANNER, target: SYNTHESIZER, conditional: true },
+    { id: 'planner->__end__', source: PLANNER, target: '__end__', conditional: true },
     { id: 'researcher->synthesizer', source: RESEARCHER, target: SYNTHESIZER, conditional: false },
     { id: 'synthesizer->critic', source: SYNTHESIZER, target: CRITIC, conditional: false },
     { id: 'critic->researcher', source: CRITIC, target: RESEARCHER, conditional: true },

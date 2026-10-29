@@ -143,7 +143,8 @@ def build_state_graph(
     # Send per subtask and LangGraph runs them concurrently. path_map lists both
     # possible destinations, because fan_out short-circuits to the synthesizer
     # when there is nothing to research.
-    builder.add_conditional_edges(PLANNER, fan_out, [RESEARCHER, SYNTHESIZER])
+    # END: a compliance question judged to be about neither act (see nodes.fan_out).
+    builder.add_conditional_edges(PLANNER, fan_out, [RESEARCHER, SYNTHESIZER, END])
     # Every researcher branch converges here. The reducers on research_results and
     # run_metrics are what let concurrent branches merge instead of colliding —
     # and on a retry, merge_research_results replaces rather than duplicates.

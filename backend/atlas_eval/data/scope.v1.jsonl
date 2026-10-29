@@ -1,0 +1,54 @@
+{"id": "s01", "query": "what is a DPIA", "in_scope": true, "drafted_by": "model", "reviewed_by": null}
+{"id": "s02", "query": "can my company use AI to screen job applicants?", "in_scope": true, "drafted_by": "model", "reviewed_by": null}
+{"id": "s03", "query": "do I need consent to process employee data?", "in_scope": true, "drafted_by": "model", "reviewed_by": null}
+{"id": "s04", "query": "how long can we keep CVs of rejected candidates?", "in_scope": true, "drafted_by": "model", "reviewed_by": null}
+{"id": "s05", "query": "is facial recognition in public spaces banned in the EU?", "in_scope": true, "drafted_by": "model", "reviewed_by": null}
+{"id": "s06", "query": "what counts as personal data?", "in_scope": true, "drafted_by": "model", "reviewed_by": null}
+{"id": "s07", "query": "we had a data breach, who do we have to tell and how fast?", "in_scope": true, "drafted_by": "model", "reviewed_by": null}
+{"id": "s08", "query": "does the AI Act apply to ChatGPT?", "in_scope": true, "drafted_by": "model", "reviewed_by": null}
+{"id": "s09", "query": "what is a general-purpose AI model?", "in_scope": true, "drafted_by": "model", "reviewed_by": null}
+{"id": "s10", "query": "do chatbots have to say they are AI?", "in_scope": true, "drafted_by": "model", "reviewed_by": null}
+{"id": "s11", "query": "deepfakes: do they need to be labelled?", "in_scope": true, "drafted_by": "model", "reviewed_by": null}
+{"id": "s12", "query": "right to be forgotten", "in_scope": true, "drafted_by": "model", "reviewed_by": null}
+{"id": "s13", "query": "can a bank use AI to decide on loans?", "in_scope": true, "drafted_by": "model", "reviewed_by": null}
+{"id": "s14", "query": "what fines can the GDPR impose?", "in_scope": true, "drafted_by": "model", "reviewed_by": null}
+{"id": "s15", "query": "when does the AI Act start to apply?", "in_scope": true, "drafted_by": "model", "reviewed_by": null}
+{"id": "s16", "query": "do I need a data protection officer?", "in_scope": true, "drafted_by": "model", "reviewed_by": null}
+{"id": "s17", "query": "is emotion recognition at work allowed?", "in_scope": true, "drafted_by": "model", "reviewed_by": null}
+{"id": "s18", "query": "can we transfer customer data to the US?", "in_scope": true, "drafted_by": "model", "reviewed_by": null}
+{"id": "s19", "query": "what is a high-risk AI system?", "in_scope": true, "drafted_by": "model", "reviewed_by": null}
+{"id": "s20", "query": "what are the obligations of a deployer?", "in_scope": true, "drafted_by": "model", "reviewed_by": null}
+{"id": "s21", "query": "social scoring", "in_scope": true, "drafted_by": "model", "reviewed_by": null}
+{"id": "s22", "query": "Who is a controller and who is a processor?", "in_scope": true, "drafted_by": "model", "reviewed_by": null}
+{"id": "s23", "query": "Do users have a right to an explanation of an automated decision?", "in_scope": true, "drafted_by": "model", "reviewed_by": null}
+{"id": "s24", "query": "Is biometric categorisation by race prohibited?", "in_scope": true, "drafted_by": "model", "reviewed_by": null}
+{"id": "s25", "query": "history of cameroon", "in_scope": false, "drafted_by": "model", "reviewed_by": null}
+{"id": "s26", "query": "Who won the 2018 FIFA World Cup?", "in_scope": false, "drafted_by": "model", "reviewed_by": null}
+{"id": "s27", "query": "How do I make sourdough bread at home?", "in_scope": false, "drafted_by": "model", "reviewed_by": null}
+{"id": "s28", "query": "What is the capital of Australia?", "in_scope": false, "drafted_by": "model", "reviewed_by": null}
+{"id": "s29", "query": "What are the symptoms of type 2 diabetes?", "in_scope": false, "drafted_by": "model", "reviewed_by": null}
+{"id": "s30", "query": "How do I file my income taxes in the United States?", "in_scope": false, "drafted_by": "model", "reviewed_by": null}
+{"id": "s31", "query": "What caused the fall of the Roman Empire?", "in_scope": false, "drafted_by": "model", "reviewed_by": null}
+{"id": "s32", "query": "Recommend a good science fiction novel.", "in_scope": false, "drafted_by": "model", "reviewed_by": null}
+{"id": "s33", "query": "How does photosynthesis work?", "in_scope": false, "drafted_by": "model", "reviewed_by": null}
+{"id": "s34", "query": "What is the best way to learn French quickly?", "in_scope": false, "drafted_by": "model", "reviewed_by": null}
+{"id": "s35", "query": "How do I change a flat tyre?", "in_scope": false, "drafted_by": "model", "reviewed_by": null}
+{"id": "s36", "query": "What is the difference between a stock and a bond?", "in_scope": false, "drafted_by": "model", "reviewed_by": null}
+{"id": "s37", "query": "Explain the rules of cricket.", "in_scope": false, "drafted_by": "model", "reviewed_by": null}
+{"id": "s38", "query": "What does the Digital Services Act require of very large online platforms?", "in_scope": false, "drafted_by": "model", "reviewed_by": null}
+{"id": "s39", "query": "Under US copyright law, how long does copyright last?", "in_scope": false, "drafted_by": "model", "reviewed_by": null}
+{"id": "s40", "query": "How do I write a cover letter for a software job?", "in_scope": false, "drafted_by": "model", "reviewed_by": null}
+{"id": "s41", "query": "What is the population of Lagos?", "in_scope": false, "drafted_by": "model", "reviewed_by": null}
+{"id": "s42", "query": "How do vaccines train the immune system?", "in_scope": false, "drafted_by": "model", "reviewed_by": null}
+{"id": "s43", "query": "What are the main tourist attractions in Paris?", "in_scope": false, "drafted_by": "model", "reviewed_by": null}
+{"id": "s44", "query": "Is coffee bad for your heart?", "in_scope": false, "drafted_by": "model", "reviewed_by": null}
+{"id": "s45", "query": "How do I set up a React project with Vite?", "in_scope": false, "drafted_by": "model", "reviewed_by": null}
+{"id": "s46", "query": "What is the plot of Hamlet?", "in_scope": false, "drafted_by": "model", "reviewed_by": null}
+{"id": "s47", "query": "Translate good morning into Spanish.", "in_scope": false, "drafted_by": "model", "reviewed_by": null}
+{"id": "s48", "query": "What is quantum entanglement?", "in_scope": false, "drafted_by": "model", "reviewed_by": null}
+{"id": "s49", "query": "How should I invest 10,000 euros?", "in_scope": false, "drafted_by": "model", "reviewed_by": null}
+{"id": "s50", "query": "What are the NIS2 incident reporting deadlines?", "in_scope": false, "drafted_by": "model", "reviewed_by": null}
+{"id": "s51", "query": "Who painted the Mona Lisa?", "in_scope": false, "drafted_by": "model", "reviewed_by": null}
+{"id": "s52", "query": "How many calories should I eat per day?", "in_scope": false, "drafted_by": "model", "reviewed_by": null}
+{"id": "s53", "query": "What is the weather like in Yaounde in July?", "in_scope": false, "drafted_by": "model", "reviewed_by": null}
+{"id": "s54", "query": "Write a poem about the sea.", "in_scope": false, "drafted_by": "model", "reviewed_by": null}

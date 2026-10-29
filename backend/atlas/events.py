@@ -40,6 +40,9 @@ NODE_STARTED = "node_started"
 NODE_COMPLETED = "node_completed"
 NODE_FAILED = "node_failed"
 FAN_OUT = "fan_out"
+# A compliance question the planner judged to be about neither act: the run ends
+# at the plan, with the reason, instead of researching the nearest-sounding law.
+SCOPE_DECLINED = "scope_declined"
 ITERATION_STARTED = "iteration_started"
 CRITIC_VERDICT = "critic_verdict"
 # A run that revises another: which branch was edited, and which were carried

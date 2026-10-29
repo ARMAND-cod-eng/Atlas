@@ -81,6 +81,11 @@ def _acts_named(query: str) -> list[str]:
     return named or list(ACTS)
 
 
+def names_an_act(query: str) -> bool:
+    """Whether the question names the AI Act or the GDPR, by name or by number."""
+    return any(pattern.search(query) for pattern in _ACT_NAMES.values())
+
+
 def _subdivisions(raw: str) -> list[str]:
     return re.findall(r"\(\s*([0-9a-z]{1,4})\s*\)", raw.lower())
 

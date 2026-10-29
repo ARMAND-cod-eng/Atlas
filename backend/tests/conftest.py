@@ -351,4 +351,6 @@ def initial_state(query: str = "what is retrieval-augmented generation?") -> Atl
         "iteration": 0,
         "critic_feedback": [],
         "revision": None,
+        "check_scope": False,
+        "declined": None,
     }

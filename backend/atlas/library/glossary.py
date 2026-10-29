@@ -49,6 +49,9 @@ GLOSSARY: tuple[tuple[re.Pattern[str], str], ...] = tuple(
             r"\b(countr(y|ies)|states?) outside\b|\bnon-eu countr(y|ies)\b",
             "third country",
         ),
+        # Abbreviations practice uses and the acts never do: GDPR Art. 35, AI Act Art. 27.
+        (r"\bdpias?\b", "data protection impact assessment"),
+        (r"\bfrias?\b", "fundamental rights impact assessment"),
         # The "right to explanation", in the GDPR's words and the AI Act's.
         (
             r"\bright to (an )?explanation\b",

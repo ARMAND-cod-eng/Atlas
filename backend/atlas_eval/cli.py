@@ -59,6 +59,15 @@ from atlas_eval.gate import (
 )
 from atlas_eval.retrieval import ItemRecall, Searcher
 from atlas_eval.runner import RunRecord, Variant, run_item, run_items
+from atlas_eval.scope_eval import (
+    Decision,
+    by_guard,
+    by_offline_stand_in,
+    by_planner,
+    compliance_planner,
+    load_scope_cases,
+    tally,
+)
 from atlas_eval.score import SuiteScore, score_all
 from atlas_eval.support_eval import load_support_cases, run_support, score_support
 
@@ -765,6 +774,84 @@ def cmd_support(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_scope(args: argparse.Namespace) -> int:
+    """How the scope check decides on labelled in-scope and off-topic questions."""
+    cases = load_scope_cases()
+    if args.only:
+        wanted = {i.strip() for i in args.only.split(",") if i.strip()}
+        cases = [case for case in cases if case.id in wanted]
+    if args.split != "all":
+        cases = [case for case in cases if case.split == args.split]
+    inside = sum(case.in_scope for case in cases)
+    print(f"{len(cases)} questions: {inside} about the law, {len(cases) - inside} off-topic")
+
+    decisions: list[Decision] = [
+        *(by_guard(case) for case in cases),
+        *(by_offline_stand_in(case) for case in cases),
+    ]
+    metrics = RunMetrics()
+    spend: Spend = {}
+    if args.planner:
+        with measured_spend() as spend:
+            decisions += asyncio.run(by_planner(cases, compliance_planner(metrics)))
+
+    print(f"\n{'method':<9}{'set':<12}{'split':<7}{'questions':>10}{'declined':>10}")
+    for row in tally(cases, decisions):
+        print(
+            f"{row.method:<9}{row.source:<12}{row.split:<7}{row.questions:>10}{row.declined:>10}"
+            + (
+                "   <- turned away"
+                if row.in_scope and row.declined and row.method != "guard"
+                else ""
+            )
+        )
+    print(
+        "\nguard: a question it does not decline is planned whatever the planner says;"
+        " it must decline every off-topic one."
+    )
+    wrong = [
+        (decision, case)
+        for decision in decisions
+        for case in cases
+        if decision.id == case.id
+        and decision.method != "guard"
+        and decision.declined == case.in_scope
+    ]
+    for decision, case in sorted(wrong, key=lambda pair: (pair[0].method, pair[1].id)):
+        verdict = "turned away" if case.in_scope else "let through"
+        print(f"  {decision.method:<8} {case.id:<4} {verdict:<12} {case.query[:80]}")
+
+    if not args.planner:
+        print(
+            "\nthe planner's judgment was not measured: --planner calls the model, once a question"
+        )
+        return 0
+
+    primary = primary_provider()
+    on_fallback, calls = _off_primary([c.provider for c in metrics.llm_calls], primary)
+    RUNS_DIR.mkdir(parents=True, exist_ok=True)
+    path = RUNS_DIR / f"scope-{args.name}.json"
+    payload = {
+        "name": args.name,
+        "created": _now(),
+        "commit": _git_commit(),
+        "primary_provider": primary,
+        "models": sorted({c.model for c in metrics.llm_calls}),
+        "spend": spend,
+        "tally": [row.model_dump() for row in tally(cases, decisions)],
+        "decisions": [d.model_dump() for d in decisions if d.method == "planner"],
+    }
+    path.write_text(json.dumps(payload, indent=2) + "\n", encoding="utf-8", newline="\n")
+    print(f"\nspend: {spend}\nwrote {path}")
+    if calls and on_fallback / calls > FALLBACK_LIMIT:
+        print(
+            f"\nFAIL: {on_fallback} of {calls} plans came from the fallback, not {primary}."
+            " This measures the fallback's judgment, not the planner's."
+        )
+        return 1
+    return 0
+
+
 def cmd_noise(args: argparse.Namespace) -> int:
     """Run-to-run noise from reruns of identical code, and what the gate can catch."""
     runs = [_load_run(name) for name in args.runs]
@@ -954,6 +1041,23 @@ def build_parser() -> argparse.ArgumentParser:
     support.add_argument("--only", default=None, help="comma-separated case ids")
     support.set_defaults(func=cmd_support)
 
+    scope = sub.add_parser(
+        "scope", help="how the scope check decides on in-scope and off-topic questions"
+    )
+    scope.add_argument(
+        "--planner",
+        action="store_true",
+        help="also measure the planner's judgment: one model call per question (costs)",
+    )
+    scope.add_argument("--name", default="latest")
+    scope.add_argument("--only", default=None, help="comma-separated ids, for a small first run")
+    scope.add_argument(
+        "--split",
+        choices=["all", "dev", "test"],
+        default="all",
+        help="dev (odd ids) to change the planner prompt on; test (even ids) to measure it once",
+    )
+    scope.set_defaults(func=cmd_scope)
     citations = sub.add_parser(
         "citations", help="citation metrics of compliance runs, each against a reference"
     )

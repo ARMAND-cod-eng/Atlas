@@ -48,11 +48,13 @@ from atlas.trace import AgentCall
 logger = logging.getLogger(__name__)
 
 
-def initial_state(query: str) -> AtlasState:
+def initial_state(query: str, *, check_scope: bool = False) -> AtlasState:
     """A fresh graph input.
 
     Typed as ``AtlasState`` so the graph's input contract is checked here, at the
-    boundary, instead of failing inside a node.
+    boundary, instead of failing inside a node. ``check_scope`` acts on the
+    planner's judgment of whether the question is one for the domain at all;
+    ``execute_run`` sets it for a conversation's first question.
     """
     return {
         "query": query,
@@ -64,7 +66,15 @@ def initial_state(query: str) -> AtlasState:
         "iteration": 0,
         "critic_feedback": [],
         "revision": None,
+        "check_scope": check_scope,
+        "declined": None,
     }
+
+
+async def _has_history(graph: Graph, thread_id: str) -> bool:
+    """Whether the thread already holds a conversation: a question asked before."""
+    snapshot = await graph.aget_state({"configurable": {"thread_id": thread_id}})
+    return bool(snapshot.values.get("messages"))
 
 
 class _Sequencer:
@@ -119,6 +129,10 @@ async def execute_run(
     names a run to continue from instead. After a revision the latest state is
     the revision's, and a person reading the original and asking a follow-up
     there means the original.
+
+    Only a conversation's first question is judged for scope. A follow-up reads
+    in the light of the conversation ("and from when?"), and asking a declined
+    question again in its conversation is how a person researches it anyway.
     """
 
     async def start() -> _Start:
@@ -126,8 +140,9 @@ async def execute_run(
         if parent_run_id is not None:
             parent = await final_checkpoint(graph, thread_id, parent_run_id)
             configurable["checkpoint_id"] = parent["configurable"]["checkpoint_id"]
+        first = parent_run_id is None and not await _has_history(graph, thread_id)
         return _Start(
-            graph_input=initial_state(query),
+            graph_input=initial_state(query, check_scope=first),
             # thread_id keys the checkpointer (the conversation); run_id keys the
             # token budget (this one question). See atlas.budget.
             config={"configurable": configurable, "recursion_limit": recursion_limit()},

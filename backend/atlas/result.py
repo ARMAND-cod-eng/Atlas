@@ -38,6 +38,9 @@ class QueryResponse(BaseModel):
     # Each branch's research, whole: what the inspector shows a branch produced.
     # ``sources`` above is the same sources merged and deduplicated for the answer.
     research_results: list[ResearchResult] = Field(default_factory=list)
+    # Why the question was not researched, when the planner judged it outside the
+    # domain's scope (the answer then says so); None for every researched run.
+    declined: str | None = None
 
 
 def validate_list[ModelT: BaseModel](raw: object, model: type[ModelT]) -> list[ModelT]:
@@ -89,6 +92,7 @@ def build_response(state: dict[str, Any], thread_id: str) -> QueryResponse:
         metrics=validate_metrics(state.get("run_metrics")),
         iterations=raw_iterations if isinstance(raw_iterations, int) else 0,
         research_results=results,
+        declined=state.get("declined") or None,
     )
 
 

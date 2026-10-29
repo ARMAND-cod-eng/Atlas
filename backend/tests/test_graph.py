@@ -39,6 +39,8 @@ def test_state_schema_keys() -> None:
         "iteration",
         "critic_feedback",
         "revision",
+        "check_scope",
+        "declined",
     }
 
 

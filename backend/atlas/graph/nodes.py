@@ -33,6 +33,7 @@ from atlas.events import (
     CRITIC_VERDICT,
     FAN_OUT,
     ITERATION_STARTED,
+    SCOPE_DECLINED,
     emit,
     node_span,
 )
@@ -48,6 +49,7 @@ from atlas.graph.state import (
 from atlas.library import load_library
 from atlas.library.citations import CitationReport, check_citations
 from atlas.library.rewrite import statutory_terms
+from atlas.library.scope import declined_answer, declined_reason
 from atlas.library.sources import law_sources, with_authority
 from atlas.library.support import SupportJudgements, SupportReport, check_support
 from atlas.metrics import (
@@ -100,7 +102,7 @@ def _single_subtask(query: str) -> Subtask:
     )
 
 
-async def _plan(query: str, history: list[Any], metrics: RunMetrics) -> list[Subtask]:
+async def _plan(query: str, history: list[Any], metrics: RunMetrics) -> PlannerOutput:
     """Decompose the query, or degrade to a single subtask.
 
     A planner failure must not end the run: it is one structured-output parse
@@ -124,11 +126,29 @@ async def _plan(query: str, history: list[Any], metrics: RunMetrics) -> list[Sub
             extra={"error_type": type(exc).__name__, "error": str(exc)[:300]},
         )
         metrics.degraded.append(DEGRADED_PLANNER_FALLBACK)
-        return [_single_subtask(query)]
+        return PlannerOutput(subtasks=[_single_subtask(query)])
 
     # Truncate rather than reject: a planner that returns seven good subtasks
     # should not fail the run over a config limit.
-    return _with_server_ids(output.subtasks[: settings.max_subtasks])
+    return output.model_copy(
+        update={"subtasks": _with_server_ids(output.subtasks[: settings.max_subtasks])}
+    )
+
+
+def _declined(state: AtlasState, plan: PlannerOutput) -> str | None:
+    """Why the question is not researched, or None: the planner's judgment, held to account.
+
+    Acted on only where it can be right: in a domain with a library, which has a
+    scope; on a conversation's first question (``check_scope``), since a
+    follow-up reads in the light of the conversation; and never for a question
+    that names an act, cites a provision or asks what a defined term means.
+    """
+    if not state.get("check_scope", False) or not current_domain().library:
+        return None
+    declined = declined_reason(plan.out_of_scope, state["query"])
+    if declined is None and plan.out_of_scope:
+        logger.info("planner judged a question out of scope that names the law; planning it")
+    return declined
 
 
 def _with_server_ids(subtasks: list[Subtask]) -> list[Subtask]:
@@ -145,13 +165,28 @@ def _with_server_ids(subtasks: list[Subtask]) -> list[Subtask]:
 
 
 async def planner(state: AtlasState) -> dict[str, Any]:
-    """Decompose the query into independent, parallelizable subtasks."""
+    """Decompose the query into independent, parallelizable subtasks.
+
+    Or, for a compliance question about neither act, decline it: see ``_declined``.
+    """
     async with node_span(PLANNER) as span:
-        subtasks = await _plan(state["query"], list(state["messages"]), span.metrics)
+        plan = await _plan(state["query"], list(state["messages"]), span.metrics)
         metrics = span.metrics
-    logger.info("planned subtasks", extra={"subtask_count": len(subtasks)})
+    declined = _declined(state, plan)
+    subtasks = [] if declined is not None else plan.subtasks
+    if declined is None and not subtasks and plan.out_of_scope:
+        # A judgment not acted on leaves no branches; the question is researched as one.
+        subtasks = [_single_subtask(state["query"])]
+    logger.info(
+        "planned subtasks", extra={"subtask_count": len(subtasks), "declined": declined is not None}
+    )
+    update: dict[str, Any] = {} if declined is None else {"answer": declined_answer(declined)}
     return {
+        **update,
         "subtasks": subtasks,
+        # None unless declined. Graph input clears it too (atlas.runner.initial_state):
+        # either alone keeps a follow-up from inheriting the last question's.
+        "declined": declined,
         # A thread holds many runs, and these three keys belong to one of them.
         # Graph input cannot clear them: LangGraph applies input through each
         # key's reducer, and merging [] into the previous run's results keeps
@@ -173,11 +208,17 @@ def fan_out(state: AtlasState) -> list[Send] | str:
     one schedules an independent invocation of the researcher node, and LangGraph
     runs them concurrently.
 
-    An empty subtask list routes straight to the synthesizer instead. Returning an
+    A declined question ends the run here, with its reason in a ``scope_declined``
+    event. An empty subtask list routes straight to the synthesizer instead. Returning an
     empty list would mean no researcher ever runs and the synthesizer receives an
     empty ``research_results`` with no indication of why — a silent no-op rather
     than a stated outcome.
     """
+    declined = state.get("declined")
+    if declined:
+        # Nothing to research, write or review: the run ends with the reason.
+        emit(SCOPE_DECLINED, PLANNER, reason=declined)
+        return END
     subtasks = state["subtasks"]
     if not subtasks:
         logger.warning("no subtasks to research; routing straight to synthesis")

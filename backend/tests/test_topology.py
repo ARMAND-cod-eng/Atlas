@@ -33,6 +33,8 @@ EXPECTED_EDGES = {
     ("__start__", nodes.PLANNER, False),
     (nodes.PLANNER, nodes.RESEARCHER, True),
     (nodes.PLANNER, nodes.SYNTHESIZER, True),
+    # A compliance question judged to be about neither act ends at the plan.
+    (nodes.PLANNER, "__end__", True),
     (nodes.RESEARCHER, nodes.SYNTHESIZER, False),
     (nodes.SYNTHESIZER, nodes.CRITIC, False),
     (nodes.CRITIC, nodes.RESEARCHER, True),

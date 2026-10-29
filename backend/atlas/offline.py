@@ -39,6 +39,7 @@ from pydantic import BaseModel
 from atlas import models, trace
 from atlas.graph import nodes
 from atlas.graph.state import CriticVerdict, PlannerOutput, Source, Subtask
+from atlas.library.scope import OFFLINE_FLOOR, OFFLINE_REASON, closest_match, names_the_law
 from atlas.library.support import SupportJudgements
 from atlas.metrics import RunMetrics
 
@@ -147,13 +148,21 @@ PER_BRANCH = 2
 
 
 def plan_of(question: str) -> PlannerOutput:
-    """One branch per clause of the question, as asked."""
+    """One branch per clause of the question, as asked.
+
+    And the planner's scope judgment, scripted: a question that neither names the
+    law nor comes near anything in it is judged to be about neither act (see
+    atlas.library.scope.OFFLINE_FLOOR). Branches either way, so a judgment the
+    graph does not act on, a follow-up's, still researches.
+    """
     clauses = [c.strip(" ,?") for c in _CLAUSE.split(question) if c.strip(" ,?")][:MAX_BRANCHES]
+    off_topic = not names_the_law(question) and closest_match(question) < OFFLINE_FLOOR
     return PlannerOutput(
         subtasks=[
             Subtask(id=f"s{i}", question=clause[0].upper() + clause[1:] + "?", rationale=SCRIPTED)
             for i, clause in enumerate(clauses or [question])
-        ]
+        ],
+        out_of_scope=OFFLINE_REASON if off_topic else None,
     )
 
 

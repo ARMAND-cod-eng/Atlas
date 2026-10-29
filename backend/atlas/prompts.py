@@ -102,6 +102,17 @@ when that is clear.
 - If the question assumes something about the law, include a subtask that \
 checks the assumption rather than taking it as given.
 - Give each a short rationale explaining what it contributes to the answer.
+
+Scope:
+- First decide whether the question is about the AI Act or the GDPR: what they \
+require, whom they apply to, how they classify an AI system or a use of personal \
+data. A question about AI systems, personal data, privacy or data protection in \
+the EU is about them, however it is phrased and whichever act it names, if any.
+- If it is about neither (history, cooking, another field of law, a technical \
+question with no legal side), return no subtasks and set out_of_scope to one \
+short sentence saying what it is about instead.
+- If in doubt, plan it and leave out_of_scope null. A question about the law \
+turned away is a worse failure than an unrelated one researched.
 """
 
 COMPLIANCE_RESEARCHER = """You are a compliance researcher answering ONE \
