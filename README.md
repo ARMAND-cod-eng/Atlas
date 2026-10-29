@@ -47,6 +47,13 @@ that. A check that knows the law does.
   A draft that fails either check is sent back with the failures listed. In the UI each citation is
   a chip carrying its verdict; hover it to read the article, and why it was or was not judged to
   support its sentence.
+- **It says when a question is not about the law.** Asked "history of cameroon", Atlas used to
+  research it, cite GDPR Recital 35 (it mentions a medical "history") and mark the citation
+  verified, because it exists and was retrieved. Now the planner judges, in the plan it writes
+  anyway, whether a conversation's first question is about either act. One that is not ends at the
+  plan, with the reason, and **Research anyway** asks it again in its conversation, where it is
+  planned like any follow-up. A question that names an act, cites a provision or asks what a
+  defined term means is always researched, whatever the planner says.
 - **It reads the law, not a search engine's idea of it.**
   - Both regulations are ingested from the Publications Office's official XHTML into provisions with
     stable ids. Golden counts are tested: the AI Act's 113 articles, 13 annexes and 180 recitals; the
@@ -550,6 +557,13 @@ uv run python -m atlas_eval citations --runs atlas-v1 plain-v1 single-v1 --refer
 
 `citations` costs nothing. It re-scores saved answers with today's scorer and pairs each system with
 the reference item by item. `retrieval` measures the library search alone, also for free.
+
+**The scope check is measured on its own.** `atlas_eval scope` runs it on 64 questions about the
+law (the 40 compliance questions, and 24 casual ones such as "right to be forgotten") and 80 that
+are not (the 50 general research questions, and 30 everyday ones, among them the DSA and NIS2,
+which the library does not hold). Free by default: the guard and offline mode's stand-in. With
+`--planner` it measures the planner's judgment, one call per question. Counted both ways: a
+question about the law turned away, the worse failure, and an off-topic one caught.
 
 **The support check is measured on its own.** Its verdicts are counted against 24 labelled cases,
 one model call each:

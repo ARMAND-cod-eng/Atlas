@@ -284,6 +284,40 @@ Three systems answer the 40 compliance questions:
   for tool-use checks it cannot pass and graded its grounding against no evidence. Grounding and tool
   use are marked as not applying to it.
 
+### 3.10 A question about neither act
+
+Asked "history of cameroon", Atlas researched it, cited GDPR Recital 35, which mentions a medical
+"history", and marked the citation verified: it exists, and it was retrieved. The citation check
+answers whether a citation is real, not whether the answer is about the question.
+
+**Word overlap cannot make the call.** Measured before anything was built, on 64 questions about
+the law and 80 that are not: the best-matching off-topic question (the DSA, 27.9) outscored 56 of
+the 64 in-scope ones, and the core GDPR question "we had a data breach, who do we
+have to tell and how fast?" shared less of its words with the law than "How do I file my income
+taxes in the United States?".
+
+**So the planner judges, in the plan it writes anyway.** `PlannerOutput` gained one field,
+`out_of_scope`, and the compliance planner one rule, biased to plan when in doubt. A question
+judged out of scope ends at the plan with a `scope_declined` event and an answer that says why.
+Three things hold the judgment to account:
+
+- **The guard.** A question that names an act, cites a provision or asks what a defined term means
+  is planned whatever the planner says. Measured, it holds for 37 of the 40 compliance questions
+  and 6 of the 24 casual ones, and for none of the 80 off-topic ones.
+- **Only a conversation's first question is judged**, found from the thread's checkpoint. A
+  follow-up reads in the light of what came before ("and from when?").
+- **Research anyway** asks the question again in its conversation, which makes it a follow-up. No
+  flag reaches the worker; the rule above is the override.
+
+Offline mode has no model to judge, so it scripts the judgment from the library's best match, with
+a floor set below every in-scope question measured. It turns away none of the 64 in-scope questions
+and catches only 9 of the 80 off-topic ones, in-sample, since the floor was chosen looking at every
+set. The planner's judgment, which does the real work, is not measured yet.
+
+The measurement also found a retrieval gap: "what is a DPIA" matched nothing at all. The glossary
+now knows DPIA and FRIA. No eval question uses either abbreviation, so the measured retrieval
+numbers are unchanged, and the held-out half is still measured once.
+
 ## 4. Failures that looked like success
 
 The class of bug this project keeps producing is the component that silently does nothing, or the
@@ -304,6 +338,8 @@ wrong thing, while everything looks fine. These were found during this work:
 | The demo's citations were "supported" | The demo's scripted judge said "supported" for any provision it had no script for. After the glossary improved retrieval, it passed Art. 6(1) for a CV tool | Re-recording after the search change and reading the new first draft. An unscripted provision now stops the recording, and offline mode judges nothing |
 | A deleted run's stream was gone | The Redis test double's DEL ignored streams, so the tests could not tell | Making the double behave like Redis |
 | `DELETE /threads/{id}` was queued | A renamed worker function would have left every deletion queued for nobody | A test pinning the job's registered name |
+| An off-topic question got a verified answer | "history of cameroon" was researched, and GDPR Recital 35 cited and marked verified: real, retrieved, and about health data | A person asking it in the app. The planner now judges scope (§3.10) |
+| "What is a DPIA" was a short question | It matched no provision: the abbreviation is practice's, not the GDPR's | Measuring the scope check, which needed every in-scope question's best match |
 
 ## 5. Measured and not measured
 
@@ -311,9 +347,10 @@ wrong thing, while everything looks fine. These were found during this work:
 |---|---|
 | Library retrieval, one search per question | recall@10 0.900 (held-out half 0.875, measured once), recall@5 0.713, all must-cites for 32 of 40 |
 | Engine regression gate, 50 general questions | completion 0.995, grounding 0.955, tool use 0.963; thresholds 5 / 4 / 3 pp from a measured noise floor |
-| Tests | 563 backend, 13 more against Postgres, 196 frontend; no network, no spend |
+| Tests | 581 backend, 13 more against Postgres, 203 frontend; no network, no spend |
 | **Not measured: the domain eval** | Built and tested; needs about $12–15 of model calls (estimated) |
 | **Not measured: Atlas's own retrieval** | One search per branch, rather than per question |
+| **Not measured: the planner's scope judgment** | `atlas_eval scope --planner` on 144 labelled questions, one planner call each: about 150k tokens, roughly $1 (estimated) |
 | **Not measured: the support check's accuracy** | `atlas_eval support` measures it on 24 labelled cases (12 supported, 12 near misses), each "supports" label proved by the provision's own words; needs credit |
 | **Not done: dataset review** | The 40 compliance questions were drafted by a model; none has been reviewed by a person |
 
@@ -343,7 +380,7 @@ wrong thing, while everything looks fine. These were found during this work:
 From `backend/`:
 
 ```powershell
-uv run pytest -q                                          # 563 tests, offline
+uv run pytest -q                                          # 581 tests, offline
 uv run pytest -q -m postgres                              # with ATLAS_TEST_DATABASE_URL set
 uv run python -m atlas_eval retrieval                     # recall@10, free
 uv run python -m atlas_eval claim --dataset compliance    # what the dataset supports claiming
