@@ -2,7 +2,7 @@
   {
     "run_id": "review",
     "seq": 1,
-    "ts": "2026-10-29T14:31:19.380270Z",
+    "ts": "2026-10-29T14:55:35.522440Z",
     "type": "run_started",
     "node": null,
     "payload": {
@@ -14,29 +14,29 @@
   {
     "run_id": "review",
     "seq": 2,
-    "ts": "2026-10-29T14:31:19.380270Z",
+    "ts": "2026-10-29T14:55:35.536001Z",
     "type": "node_started",
     "node": "reader",
     "payload": {
       "subtask_id": null,
-      "span_id": "d86ac64578d5"
+      "span_id": "f89e37f1f968"
     }
   },
   {
     "run_id": "review",
     "seq": 3,
-    "ts": "2026-10-29T14:31:19.380270Z",
+    "ts": "2026-10-29T14:55:35.536983Z",
     "type": "node_completed",
     "node": "reader",
     "payload": {
       "subtask_id": null,
-      "span_id": "d86ac64578d5"
+      "span_id": "f89e37f1f968"
     }
   },
   {
     "run_id": "review",
     "seq": 4,
-    "ts": "2026-10-29T14:31:19.380270Z",
+    "ts": "2026-10-29T14:55:35.536983Z",
     "type": "review_started",
     "node": "reader",
     "payload": {
@@ -112,8 +112,8 @@
         {
           "id": "c4",
           "label": "Clause 1.2",
-          "heading": "The Controller determines the purposes and means of the processing and may give",
-          "text": "instructions to the Processor at any time."
+          "heading": null,
+          "text": "The Controller determines the purposes and means of the processing and may give\ninstructions to the Processor at any time."
         },
         {
           "id": "c5",
@@ -169,115 +169,115 @@
   {
     "run_id": "review",
     "seq": 5,
-    "ts": "2026-10-29T14:31:19.654629Z",
+    "ts": "2026-10-29T14:55:35.964854Z",
     "type": "node_started",
     "node": "reviewer",
     "payload": {
       "subtask_id": "details",
-      "span_id": "9c2f8bf34b2c"
+      "span_id": "83741dd0991a"
     }
   },
   {
     "run_id": "review",
     "seq": 6,
-    "ts": "2026-10-29T14:31:19.654629Z",
+    "ts": "2026-10-29T14:55:35.964854Z",
     "type": "node_started",
     "node": "reviewer",
     "payload": {
       "subtask_id": "instructions",
-      "span_id": "c24272024f53"
+      "span_id": "db624a9b748f"
     }
   },
   {
     "run_id": "review",
     "seq": 7,
-    "ts": "2026-10-29T14:31:19.654629Z",
+    "ts": "2026-10-29T14:55:35.964854Z",
     "type": "node_started",
     "node": "reviewer",
     "payload": {
       "subtask_id": "confidentiality",
-      "span_id": "081c3604f15e"
+      "span_id": "6dcf6812435d"
     }
   },
   {
     "run_id": "review",
     "seq": 8,
-    "ts": "2026-10-29T14:31:19.654629Z",
+    "ts": "2026-10-29T14:55:35.964854Z",
     "type": "node_started",
     "node": "reviewer",
     "payload": {
       "subtask_id": "security",
-      "span_id": "2af00d74661c"
+      "span_id": "9faf646969da"
     }
   },
   {
     "run_id": "review",
     "seq": 9,
-    "ts": "2026-10-29T14:31:19.654629Z",
+    "ts": "2026-10-29T14:55:35.964854Z",
     "type": "node_started",
     "node": "reviewer",
     "payload": {
       "subtask_id": "sub-processors",
-      "span_id": "b594b9218305"
+      "span_id": "083fb06d684b"
     }
   },
   {
     "run_id": "review",
     "seq": 10,
-    "ts": "2026-10-29T14:31:19.654629Z",
+    "ts": "2026-10-29T14:55:35.964854Z",
     "type": "node_started",
     "node": "reviewer",
     "payload": {
       "subtask_id": "data-subject-rights",
-      "span_id": "d54351168ac9"
+      "span_id": "3b015b52ca1c"
     }
   },
   {
     "run_id": "review",
     "seq": 11,
-    "ts": "2026-10-29T14:31:19.654629Z",
+    "ts": "2026-10-29T14:55:35.964854Z",
     "type": "node_started",
     "node": "reviewer",
     "payload": {
       "subtask_id": "assistance",
-      "span_id": "07f45cb9e23a"
+      "span_id": "408d8a24aaeb"
     }
   },
   {
     "run_id": "review",
     "seq": 12,
-    "ts": "2026-10-29T14:31:19.654629Z",
+    "ts": "2026-10-29T14:55:35.964854Z",
     "type": "node_started",
     "node": "reviewer",
     "payload": {
       "subtask_id": "end",
-      "span_id": "7a89e5a2e6e5"
+      "span_id": "56624ee5aa93"
     }
   },
   {
     "run_id": "review",
     "seq": 13,
-    "ts": "2026-10-29T14:31:19.654629Z",
+    "ts": "2026-10-29T14:55:35.964854Z",
     "type": "node_started",
     "node": "reviewer",
     "payload": {
       "subtask_id": "audits",
-      "span_id": "991ec0308546"
+      "span_id": "4ab18de340e6"
     }
   },
   {
     "run_id": "review",
     "seq": 14,
-    "ts": "2026-10-29T14:31:19.654629Z",
+    "ts": "2026-10-29T14:55:35.969916Z",
     "type": "agent_call",
     "node": "reviewer",
     "payload": {
-      "call_id": "7c40bf4866764d2384a06d0b2a79c86d",
-      "span_id": "9c2f8bf34b2c",
+      "call_id": "09e26cbdb1c741db8248f19a063aae21",
+      "span_id": "83741dd0991a",
       "subtask_id": "details",
       "kind": "model",
       "name": "scripted",
-      "duration_s": 0.08512520001386292,
+      "duration_s": 0.12043320000520907,
       "input_tokens": null,
       "output_tokens": null,
       "error": null,
@@ -287,18 +287,18 @@
   {
     "run_id": "review",
     "seq": 15,
-    "ts": "2026-10-29T14:31:19.654629Z",
+    "ts": "2026-10-29T14:55:35.969916Z",
     "type": "node_completed",
     "node": "reviewer",
     "payload": {
       "subtask_id": "details",
-      "span_id": "9c2f8bf34b2c"
+      "span_id": "83741dd0991a"
     }
   },
   {
     "run_id": "review",
     "seq": 16,
-    "ts": "2026-10-29T14:31:19.654629Z",
+    "ts": "2026-10-29T14:55:35.969916Z",
     "type": "requirement_judged",
     "node": "reviewer",
     "payload": {
@@ -318,16 +318,16 @@
   {
     "run_id": "review",
     "seq": 17,
-    "ts": "2026-10-29T14:31:19.654629Z",
+    "ts": "2026-10-29T14:55:35.969916Z",
     "type": "agent_call",
     "node": "reviewer",
     "payload": {
-      "call_id": "478ea73a6d20425bbc978b4545223b77",
-      "span_id": "c24272024f53",
+      "call_id": "baf7645bbdcb41afba75790a930c98fd",
+      "span_id": "db624a9b748f",
       "subtask_id": "instructions",
       "kind": "model",
       "name": "scripted",
-      "duration_s": 0.07582870000624098,
+      "duration_s": 0.106713299988769,
       "input_tokens": null,
       "output_tokens": null,
       "error": null,
@@ -337,18 +337,18 @@
   {
     "run_id": "review",
     "seq": 18,
-    "ts": "2026-10-29T14:31:19.654629Z",
+    "ts": "2026-10-29T14:55:35.969916Z",
     "type": "node_completed",
     "node": "reviewer",
     "payload": {
       "subtask_id": "instructions",
-      "span_id": "c24272024f53"
+      "span_id": "db624a9b748f"
     }
   },
   {
     "run_id": "review",
     "seq": 19,
-    "ts": "2026-10-29T14:31:19.654629Z",
+    "ts": "2026-10-29T14:55:35.969916Z",
     "type": "requirement_judged",
     "node": "reviewer",
     "payload": {
@@ -367,16 +367,16 @@
   {
     "run_id": "review",
     "seq": 20,
-    "ts": "2026-10-29T14:31:19.654629Z",
+    "ts": "2026-10-29T14:55:35.970441Z",
     "type": "agent_call",
     "node": "reviewer",
     "payload": {
-      "call_id": "9e7c3b18c2e74e928442e09cb66a784b",
-      "span_id": "081c3604f15e",
+      "call_id": "7dc6a26d1b9a425b9f4f9fc7a6bff076",
+      "span_id": "6dcf6812435d",
       "subtask_id": "confidentiality",
       "kind": "model",
       "name": "scripted",
-      "duration_s": 0.06728729998576455,
+      "duration_s": 0.0918039999960456,
       "input_tokens": null,
       "output_tokens": null,
       "error": null,
@@ -386,18 +386,18 @@
   {
     "run_id": "review",
     "seq": 21,
-    "ts": "2026-10-29T14:31:19.654629Z",
+    "ts": "2026-10-29T14:55:35.970441Z",
     "type": "node_completed",
     "node": "reviewer",
     "payload": {
       "subtask_id": "confidentiality",
-      "span_id": "081c3604f15e"
+      "span_id": "6dcf6812435d"
     }
   },
   {
     "run_id": "review",
     "seq": 22,
-    "ts": "2026-10-29T14:31:19.654629Z",
+    "ts": "2026-10-29T14:55:35.970441Z",
     "type": "requirement_judged",
     "node": "reviewer",
     "payload": {
@@ -416,16 +416,16 @@
   {
     "run_id": "review",
     "seq": 23,
-    "ts": "2026-10-29T14:31:19.654629Z",
+    "ts": "2026-10-29T14:55:35.970441Z",
     "type": "agent_call",
     "node": "reviewer",
     "payload": {
-      "call_id": "5eaa976020cf438ca933d46e28b748a3",
-      "span_id": "2af00d74661c",
+      "call_id": "a3f74172f0de420f83293606082b4307",
+      "span_id": "9faf646969da",
       "subtask_id": "security",
       "kind": "model",
       "name": "scripted",
-      "duration_s": 0.059645600005751476,
+      "duration_s": 0.07758650000323541,
       "input_tokens": null,
       "output_tokens": null,
       "error": null,
@@ -435,18 +435,18 @@
   {
     "run_id": "review",
     "seq": 24,
-    "ts": "2026-10-29T14:31:19.654629Z",
+    "ts": "2026-10-29T14:55:35.970441Z",
     "type": "node_completed",
     "node": "reviewer",
     "payload": {
       "subtask_id": "security",
-      "span_id": "2af00d74661c"
+      "span_id": "9faf646969da"
     }
   },
   {
     "run_id": "review",
     "seq": 25,
-    "ts": "2026-10-29T14:31:19.654629Z",
+    "ts": "2026-10-29T14:55:35.970441Z",
     "type": "requirement_judged",
     "node": "reviewer",
     "payload": {
@@ -465,16 +465,16 @@
   {
     "run_id": "review",
     "seq": 26,
-    "ts": "2026-10-29T14:31:19.654629Z",
+    "ts": "2026-10-29T14:55:35.970441Z",
     "type": "agent_call",
     "node": "reviewer",
     "payload": {
-      "call_id": "33ae845a53814f1184e67a39ab7ee94a",
-      "span_id": "b594b9218305",
+      "call_id": "76772046a72b454b9da3ba6d4349d483",
+      "span_id": "083fb06d684b",
       "subtask_id": "sub-processors",
       "kind": "model",
       "name": "scripted",
-      "duration_s": 0.04561260002083145,
+      "duration_s": 0.06453960001817904,
       "input_tokens": null,
       "output_tokens": null,
       "error": null,
@@ -484,18 +484,18 @@
   {
     "run_id": "review",
     "seq": 27,
-    "ts": "2026-10-29T14:31:19.654629Z",
+    "ts": "2026-10-29T14:55:35.970441Z",
     "type": "node_completed",
     "node": "reviewer",
     "payload": {
       "subtask_id": "sub-processors",
-      "span_id": "b594b9218305"
+      "span_id": "083fb06d684b"
     }
   },
   {
     "run_id": "review",
     "seq": 28,
-    "ts": "2026-10-29T14:31:19.654629Z",
+    "ts": "2026-10-29T14:55:35.970441Z",
     "type": "requirement_judged",
     "node": "reviewer",
     "payload": {
@@ -514,16 +514,16 @@
   {
     "run_id": "review",
     "seq": 29,
-    "ts": "2026-10-29T14:31:19.654629Z",
+    "ts": "2026-10-29T14:55:35.970441Z",
     "type": "agent_call",
     "node": "reviewer",
     "payload": {
-      "call_id": "be45f2f18a1349b1aa9409de2b25c596",
-      "span_id": "d54351168ac9",
+      "call_id": "76d410eaf14b4789939d4d24262ab3ad",
+      "span_id": "3b015b52ca1c",
       "subtask_id": "data-subject-rights",
       "kind": "model",
       "name": "scripted",
-      "duration_s": 0.03563990001566708,
+      "duration_s": 0.050896699976874515,
       "input_tokens": null,
       "output_tokens": null,
       "error": null,
@@ -533,18 +533,18 @@
   {
     "run_id": "review",
     "seq": 30,
-    "ts": "2026-10-29T14:31:19.654629Z",
+    "ts": "2026-10-29T14:55:35.970441Z",
     "type": "node_completed",
     "node": "reviewer",
     "payload": {
       "subtask_id": "data-subject-rights",
-      "span_id": "d54351168ac9"
+      "span_id": "3b015b52ca1c"
     }
   },
   {
     "run_id": "review",
     "seq": 31,
-    "ts": "2026-10-29T14:31:19.654629Z",
+    "ts": "2026-10-29T14:55:35.970441Z",
     "type": "requirement_judged",
     "node": "reviewer",
     "payload": {
@@ -563,16 +563,16 @@
   {
     "run_id": "review",
     "seq": 32,
-    "ts": "2026-10-29T14:31:19.654629Z",
+    "ts": "2026-10-29T14:55:35.970441Z",
     "type": "agent_call",
     "node": "reviewer",
     "payload": {
-      "call_id": "277925a48bc64cd9b322af56d9de6146",
-      "span_id": "07f45cb9e23a",
+      "call_id": "9f6dafc7c78a40d189ec5e365e2fb81c",
+      "span_id": "408d8a24aaeb",
       "subtask_id": "assistance",
       "kind": "model",
       "name": "scripted",
-      "duration_s": 0.02191569999558851,
+      "duration_s": 0.03568470000755042,
       "input_tokens": null,
       "output_tokens": null,
       "error": null,
@@ -582,18 +582,18 @@
   {
     "run_id": "review",
     "seq": 33,
-    "ts": "2026-10-29T14:31:19.654629Z",
+    "ts": "2026-10-29T14:55:35.970441Z",
     "type": "node_completed",
     "node": "reviewer",
     "payload": {
       "subtask_id": "assistance",
-      "span_id": "07f45cb9e23a"
+      "span_id": "408d8a24aaeb"
     }
   },
   {
     "run_id": "review",
     "seq": 34,
-    "ts": "2026-10-29T14:31:19.654629Z",
+    "ts": "2026-10-29T14:55:35.970441Z",
     "type": "requirement_judged",
     "node": "reviewer",
     "payload": {
@@ -612,16 +612,16 @@
   {
     "run_id": "review",
     "seq": 35,
-    "ts": "2026-10-29T14:31:19.654629Z",
+    "ts": "2026-10-29T14:55:35.970441Z",
     "type": "agent_call",
     "node": "reviewer",
     "payload": {
-      "call_id": "ee96769d9f1d4734ab7864306b5c18f6",
-      "span_id": "7a89e5a2e6e5",
+      "call_id": "4592411107c5491d9b113f8393d4704d",
+      "span_id": "56624ee5aa93",
       "subtask_id": "end",
       "kind": "model",
       "name": "scripted",
-      "duration_s": 0.012909000011859462,
+      "duration_s": 0.02022079998278059,
       "input_tokens": null,
       "output_tokens": null,
       "error": null,
@@ -631,18 +631,18 @@
   {
     "run_id": "review",
     "seq": 36,
-    "ts": "2026-10-29T14:31:19.654629Z",
+    "ts": "2026-10-29T14:55:35.970441Z",
     "type": "node_completed",
     "node": "reviewer",
     "payload": {
       "subtask_id": "end",
-      "span_id": "7a89e5a2e6e5"
+      "span_id": "56624ee5aa93"
     }
   },
   {
     "run_id": "review",
     "seq": 37,
-    "ts": "2026-10-29T14:31:19.654629Z",
+    "ts": "2026-10-29T14:55:35.970441Z",
     "type": "requirement_judged",
     "node": "reviewer",
     "payload": {
@@ -661,16 +661,16 @@
   {
     "run_id": "review",
     "seq": 38,
-    "ts": "2026-10-29T14:31:19.654629Z",
+    "ts": "2026-10-29T14:55:35.970441Z",
     "type": "agent_call",
     "node": "reviewer",
     "payload": {
-      "call_id": "7542be50ac224ce7befcdc1255e41494",
-      "span_id": "991ec0308546",
+      "call_id": "8a5e73ae944749d1be689114a10ed0f4",
+      "span_id": "4ab18de340e6",
       "subtask_id": "audits",
       "kind": "model",
       "name": "scripted",
-      "duration_s": 0.0030186999938450754,
+      "duration_s": 0.00510849998681806,
       "input_tokens": null,
       "output_tokens": null,
       "error": null,
@@ -680,18 +680,18 @@
   {
     "run_id": "review",
     "seq": 39,
-    "ts": "2026-10-29T14:31:19.654629Z",
+    "ts": "2026-10-29T14:55:35.970441Z",
     "type": "node_completed",
     "node": "reviewer",
     "payload": {
       "subtask_id": "audits",
-      "span_id": "991ec0308546"
+      "span_id": "4ab18de340e6"
     }
   },
   {
     "run_id": "review",
     "seq": 40,
-    "ts": "2026-10-29T14:31:19.654629Z",
+    "ts": "2026-10-29T14:55:35.970441Z",
     "type": "requirement_judged",
     "node": "reviewer",
     "payload": {
@@ -708,7 +708,7 @@
   {
     "run_id": "review",
     "seq": 41,
-    "ts": "2026-10-29T14:31:19.654629Z",
+    "ts": "2026-10-29T14:55:35.971447Z",
     "type": "run_completed",
     "node": null,
     "payload": {

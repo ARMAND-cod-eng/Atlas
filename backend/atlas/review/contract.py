@@ -152,9 +152,19 @@ def _headings(lines: list[str]) -> list[tuple[int, tuple[str, str]]]:
     return found
 
 
-def _is_title(rest: str) -> bool:
-    """A heading's title, not the clause's first sentence: short, and not a sentence."""
-    return 0 < len(rest) <= 80 and not rest.endswith((".", ";", ":", ","))
+# A title names a clause in a few words; a sentence that wraps is longer.
+_TITLE_WORDS = 8
+
+
+def _is_title(rest: str, following: str) -> bool:
+    """A heading's title, not the clause's first sentence: a few words, not a sentence, and
+    not continued in lowercase on the next line, as a wrapped sentence is."""
+    return (
+        0 < len(rest) <= 80
+        and len(rest.split()) <= _TITLE_WORDS
+        and not rest.endswith((".", ";", ":", ","))
+        and not following.strip()[:1].islower()
+    )
 
 
 def clauses_of(text: str) -> list[Clause]:
@@ -171,7 +181,7 @@ def clauses_of(text: str) -> list[Clause]:
     for position, (index, (label, rest)) in enumerate(headings):
         end = headings[position + 1][0] if position + 1 < len(headings) else len(lines)
         body = [line for line in lines[index + 1 : end]]
-        if _is_title(rest):
+        if _is_title(rest, body[0] if body else ""):
             heading: str | None = rest
         else:
             heading = None

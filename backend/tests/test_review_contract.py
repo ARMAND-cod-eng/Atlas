@@ -173,6 +173,42 @@ def test_a_wrapped_line_that_starts_with_a_reference_or_a_number_starts_no_claus
     assert clauses[1].text.endswith("2.1 million records a year.")
 
 
+def test_a_first_line_that_wraps_is_text_not_a_title() -> None:
+    """Found in the sample contract: Clause 1.2's first sentence wraps, unpunctuated."""
+    text = (
+        "1.2 The Controller determines the purposes and means of the processing and may give\n"
+        "instructions to the Processor at any time.\n"
+        "2. Instructions\n"
+        "The Processor acts on instructions.\n"
+    )
+
+    [wrapped, titled] = clauses_of(text)
+
+    assert (wrapped.heading, wrapped.text) == (
+        None,
+        "The Controller determines the purposes and means of the processing and may give\n"
+        "instructions to the Processor at any time.",
+    )
+    assert titled.heading == "Instructions"
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        # Too many words for a title, though the next line starts a new sentence.
+        "4.1 The Processor must notify the Controller without undue delay of any breach\n"
+        "After that, it helps.",
+        # Few words, but the next line goes on in lowercase.
+        "4.2 Processing may end\nwhen the services end.",
+    ],
+    ids=["long", "continued"],
+)
+def test_either_sign_of_a_sentence_keeps_it_from_being_a_title(text: str) -> None:
+    [clause] = clauses_of(text)
+
+    assert clause.heading is None
+
+
 def test_articles_and_sections_keep_their_own_word() -> None:
     labels = [c.label for c in clauses_of("Article 1 Scope\nText.\nSection 2. Term\nText.")]
 

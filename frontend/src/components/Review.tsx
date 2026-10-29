@@ -62,7 +62,8 @@ export function ReviewWorkspace({
   runId,
   state,
 }: {
-  readonly runId: string;
+  /** Null for a replay: no API behind it to keep decisions or serve prompts. */
+  readonly runId: string | null;
   readonly state: RunState;
 }): React.JSX.Element {
   const view = reviewOf(state.timeline);
@@ -73,7 +74,7 @@ export function ReviewWorkspace({
   const contract = useRef<HTMLElement>(null);
 
   useEffect(() => {
-    if (!finished) return;
+    if (!finished || runId === null) return;
     let live = true;
     void fetchDecisions(runId).then((current) => {
       if (live) setDecisions(current);
@@ -94,6 +95,7 @@ export function ReviewWorkspace({
   }
 
   async function decide(requirementId: string, decision: 'agree' | 'disagree', note: string): Promise<boolean> {
+    if (runId === null) return false;
     const kept = await putDecision(runId, requirementId, { decision, note, reviewer: reviewer.trim() });
     if (kept !== null) setDecisions((current) => ({ ...current, [requirementId]: kept }));
     return kept !== null;
@@ -112,15 +114,19 @@ export function ReviewWorkspace({
             ))}
           </p>
         </div>
-        <label className="ml-auto flex items-center gap-2 text-2xs text-ink-muted">
-          Your name
-          <input
-            value={reviewer}
-            onChange={(event) => setReviewer(event.target.value)}
-            placeholder="to sign off each finding"
-            className="w-48 rounded-md border border-line-strong bg-surface px-2 py-1 text-xs text-ink"
-          />
-        </label>
+        {runId === null ? (
+          <span className="ml-auto text-2xs text-ink-faint">A recording: sign-off needs a live review.</span>
+        ) : (
+          <label className="ml-auto flex items-center gap-2 text-2xs text-ink-muted">
+            Your name
+            <input
+              value={reviewer}
+              onChange={(event) => setReviewer(event.target.value)}
+              placeholder="to sign off each finding"
+              className="w-48 rounded-md border border-line-strong bg-surface px-2 py-1 text-xs text-ink"
+            />
+          </label>
+        )}
         <CopyButton label="Copy report" text={() => reviewMarkdown(view, decisions, LAW_AS_OF)} />
       </section>
 
@@ -169,6 +175,15 @@ export function ReviewWorkspace({
   );
 }
 
+/**
+ * A clause's text for reading: the file's hard line breaks inside a sentence
+ * joined, a list item's and a paragraph's kept. Quotes are matched whatever the
+ * whitespace, so the mark lands the same either way.
+ */
+function reflow(text: string): string {
+  return text.replace(/([^\n])\n(?!\n|\s*(?:\(?[a-z0-9]{1,3}\)|[-–•*])\s)/gi, '$1 ');
+}
+
 function ClauseText({
   clause,
   marked,
@@ -178,7 +193,8 @@ function ClauseText({
   readonly marked: boolean;
   readonly quote: string | null;
 }): React.JSX.Element {
-  const span = quote === null ? null : quoteSpan(clause.text, quote);
+  const text = reflow(clause.text);
+  const span = quote === null ? null : quoteSpan(text, quote);
   return (
     <div
       id={`clause-${clause.id}`}
@@ -188,14 +204,14 @@ function ClauseText({
         {clause.label}
         {clause.heading !== null && <span className="ml-1.5 font-normal text-ink-faint">{clause.heading}</span>}
       </h3>
-      <p className="mt-0.5 whitespace-pre-wrap text-xs leading-relaxed text-ink">
+      <p className="mt-0.5 whitespace-pre-line text-xs leading-relaxed text-ink">
         {span === null ? (
-          clause.text
+          text
         ) : (
           <>
-            {clause.text.slice(0, span[0])}
-            <mark className="rounded-sm bg-done/20 px-0.5 text-ink">{clause.text.slice(span[0], span[1])}</mark>
-            {clause.text.slice(span[1])}
+            {text.slice(0, span[0])}
+            <mark className="rounded-sm bg-done/20 px-0.5 text-ink">{text.slice(span[0], span[1])}</mark>
+            {text.slice(span[1])}
           </>
         )}
       </p>
@@ -215,7 +231,7 @@ function FindingCard({
   canDecide,
   onDecide,
 }: {
-  readonly runId: string;
+  readonly runId: string | null;
   readonly requirement: ReviewRequirement;
   readonly finding: ReviewFinding | undefined;
   readonly clauses: readonly ReviewClause[];
@@ -282,41 +298,43 @@ function FindingCard({
           )}
           <p className="text-xs leading-relaxed text-ink-muted">{finding.reason}</p>
 
-          <div className="flex flex-wrap items-center gap-2 border-t border-line pt-2.5">
-            {(['agree', 'disagree'] as const).map((choice) => (
-              <Button
-                key={choice}
-                size="sm"
-                variant={decision?.decision === choice ? 'primary' : 'secondary'}
-                aria-label={`${choice === 'agree' ? 'Agree' : 'Disagree'} with ${requirement.label}`}
-                aria-pressed={decision?.decision === choice}
-                disabled={!canDecide || saving}
-                title={canDecide ? undefined : 'Add your name above to sign off'}
-                onClick={() => void decide(choice)}
-              >
-                {choice === 'agree' ? 'Agree' : 'Disagree'}
-              </Button>
-            ))}
-            <input
-              aria-label={`Note on ${requirement.label}`}
-              value={note}
-              onChange={(event) => setNote(event.target.value)}
-              placeholder="Note (optional)"
-              maxLength={2000}
-              className="min-w-0 flex-1 rounded-md border border-line bg-canvas px-2 py-1 text-2xs text-ink"
-            />
-            {decision !== undefined && (
-              <span className="text-2xs text-ink-faint">
-                {decision.decision === 'agree' ? 'Agreed' : 'Disagreed'} by {decision.reviewer}
-              </span>
-            )}
-            {failed && (
-              <span role="alert" className="text-2xs text-failed">
-                Not saved. Try again.
-              </span>
-            )}
-          </div>
-          {callId !== null && <PromptPeek runId={runId} callId={callId} />}
+          {runId !== null && (
+            <div className="flex flex-wrap items-center gap-2 border-t border-line pt-2.5">
+              {(['agree', 'disagree'] as const).map((choice) => (
+                <Button
+                  key={choice}
+                  size="sm"
+                  variant={decision?.decision === choice ? 'primary' : 'secondary'}
+                  aria-label={`${choice === 'agree' ? 'Agree' : 'Disagree'} with ${requirement.label}`}
+                  aria-pressed={decision?.decision === choice}
+                  disabled={!canDecide || saving}
+                  title={canDecide ? undefined : 'Add your name above to sign off'}
+                  onClick={() => void decide(choice)}
+                >
+                  {choice === 'agree' ? 'Agree' : 'Disagree'}
+                </Button>
+              ))}
+              <input
+                aria-label={`Note on ${requirement.label}`}
+                value={note}
+                onChange={(event) => setNote(event.target.value)}
+                placeholder="Note (optional)"
+                maxLength={2000}
+                className="min-w-0 flex-1 rounded-md border border-line bg-canvas px-2 py-1 text-2xs text-ink"
+              />
+              {decision !== undefined && (
+                <span className="text-2xs text-ink-faint">
+                  {decision.decision === 'agree' ? 'Agreed' : 'Disagreed'} by {decision.reviewer}
+                </span>
+              )}
+              {failed && (
+                <span role="alert" className="text-2xs text-failed">
+                  Not saved. Try again.
+                </span>
+              )}
+            </div>
+          )}
+          {runId !== null && callId !== null && <PromptPeek runId={runId} callId={callId} />}
         </div>
       )}
     </article>

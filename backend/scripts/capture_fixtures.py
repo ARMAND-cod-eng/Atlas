@@ -530,6 +530,11 @@ async def capture_review() -> None:
             models.get_structured_fallback,
         ) = saved
     write("review", collected)
+    # And for the frontend's /demo/review page, which replays it with no API behind it.
+    DEMO.mkdir(parents=True, exist_ok=True)
+    (DEMO / "review.json").write_text(
+        (FIXTURES / "review.json").read_text(encoding="utf-8"), encoding="utf-8", newline="\n"
+    )
 
 
 async def write_demo(store: InMemoryRunStore) -> None:

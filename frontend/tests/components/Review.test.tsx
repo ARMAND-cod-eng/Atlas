@@ -103,6 +103,8 @@ describe('the review page', () => {
     expect([...contract.querySelectorAll('mark')].map((mark) => mark.textContent)).toEqual([
       'the Processor shall delete all personal data',
     ]);
+    // The file's hard line breaks inside a sentence are joined for reading.
+    expect(contract.textContent).toContain("to operate the Controller's customer support desk, for the duration");
   });
 
   it('says a quote the contract does not have is not in it', () => {
