@@ -27,6 +27,9 @@ export const REVISION_STARTED = 'revision_started';
 export const CITATION_CHECK = 'citation_check';
 /** The same draft's citations, judged by a model for whether each says what it is cited for. */
 export const CITATION_SUPPORT = 'citation_support';
+/** A contract review: what it is against and the contract as read; then a finding per term. */
+export const REVIEW_STARTED = 'review_started';
+export const REQUIREMENT_JUDGED = 'requirement_judged';
 
 /** A stream ends deliberately with one of these, or it broke. */
 export const TERMINAL_TYPES = [RUN_COMPLETED, RUN_FAILED] as const;
@@ -99,6 +102,35 @@ interface Base<T extends string, P> {
   readonly type: T;
   readonly node: string | null;
   readonly payload: P;
+}
+
+/** A clause of a reviewed contract, as Atlas read it. */
+export interface ReviewClause {
+  readonly id: string;
+  readonly label: string;
+  readonly heading: string | null;
+  readonly text: string;
+}
+
+/** A term the law requires a contract to stipulate. */
+export interface ReviewRequirement {
+  readonly id: string;
+  readonly label: string;
+  readonly title: string;
+}
+
+export type FindingStatus = 'met' | 'partial' | 'missing' | 'unverified';
+
+/** What one term came to: "met" and "partial" only with a quote found in the clause cited. */
+export interface ReviewFinding {
+  readonly requirement_id: string;
+  readonly label: string;
+  readonly title: string;
+  readonly status: FindingStatus;
+  readonly clause_ids: readonly string[];
+  readonly quote: string | null;
+  readonly found_in: string | null;
+  readonly reason: string;
 }
 
 export type AgentEvent =
@@ -193,15 +225,28 @@ export type AgentEvent =
       }
     >
   | Base<
+      typeof REVIEW_STARTED,
+      {
+        readonly framework: string;
+        readonly title: string;
+        readonly filename: string;
+        readonly requirements: readonly ReviewRequirement[];
+        readonly clauses: readonly ReviewClause[];
+      }
+    >
+  | Base<typeof REQUIREMENT_JUDGED, ReviewFinding>
+  | Base<
       typeof RUN_COMPLETED,
       {
-        readonly answer: string;
         readonly thread_id: string;
-        readonly iterations: number;
-        readonly subtask_count: number;
-        readonly source_count: number;
         readonly degraded: readonly string[];
         readonly total_tokens: number;
+        /** A research run's; a review ends on its counts instead. */
+        readonly answer?: string;
+        readonly iterations?: number;
+        readonly subtask_count?: number;
+        readonly source_count?: number;
+        readonly counts?: Readonly<Record<FindingStatus, number>>;
       }
     >
   | Base<typeof RUN_FAILED, { readonly error: string; readonly error_type?: string }>;
@@ -227,6 +272,8 @@ export const EVENT_TYPES = [
   REVISION_STARTED,
   CITATION_CHECK,
   CITATION_SUPPORT,
+  REVIEW_STARTED,
+  REQUIREMENT_JUDGED,
   RUN_COMPLETED,
   RUN_FAILED,
 ] as const;

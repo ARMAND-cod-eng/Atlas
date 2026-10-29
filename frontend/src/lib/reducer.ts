@@ -383,11 +383,11 @@ function apply(state: RunState, event: AgentEvent): RunState {
         ...state,
         phase: 'completed',
         finishedAt: event.ts,
-        answer: event.payload.answer,
-        iteration: event.payload.iterations,
+        answer: event.payload.answer ?? null,
+        iteration: event.payload.iterations ?? state.iteration,
         degraded: event.payload.degraded,
         totalTokens: event.payload.total_tokens,
-        sourceCount: event.payload.source_count,
+        sourceCount: event.payload.source_count ?? null,
         // A run can end while a node is mid-flight only if something went wrong;
         // leaving a spinner running forever would be the visible symptom.
         nodes: settle(state.nodes),

@@ -61,7 +61,11 @@ export function useTopology(): Topology | null {
  * own and resends `Last-Event-ID`; we only intervene for a gap, where we need
  * the query-parameter form because `EventSource` cannot set headers.
  */
-export function useRunStream(runId: string): RunStream {
+export function useRunStream(
+  runId: string,
+  /** A review's result is not a research one: its page reads what it needs from the events. */
+  { fetchResult = true }: { readonly fetchResult?: boolean } = {},
+): RunStream {
   const [state, setState] = useState<RunState>(() => initialState(SKELETON));
   const [connection, setConnection] = useState<Connection>('connecting');
   const [result, setResult] = useState<RunResult | null>(null);
@@ -156,7 +160,7 @@ export function useRunStream(runId: string): RunStream {
   // The terminal event carries a summary; the full sources list and per-call
   // metrics are fetched once from here rather than replayed on every reconnect.
   useEffect(() => {
-    if (!isFinished(state)) return;
+    if (!fetchResult || !isFinished(state)) return;
     let cancelled = false;
     void fetch(`${API_BASE}/runs/${runId}`)
       .then((response) => (response.ok ? (response.json() as Promise<{ result: RunResult | null }>) : null))
@@ -170,7 +174,7 @@ export function useRunStream(runId: string): RunStream {
     return () => {
       cancelled = true;
     };
-  }, [runId, state]);
+  }, [runId, state, fetchResult]);
 
   return { state, connection, result, missing };
 }

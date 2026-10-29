@@ -6,6 +6,7 @@ import { useState } from 'react';
 
 import { Disclaimer } from '@/components/Disclaimer';
 import { QuestionForm } from '@/components/QuestionForm';
+import { ReviewForm } from '@/components/ReviewForm';
 import { ThemeToggle } from '@/components/ThemeToggle';
 import { Badge, buttonClass } from '@/components/ui';
 import type { Domain } from '@/lib/events';
@@ -80,8 +81,9 @@ const POINTS: readonly { readonly title: string; readonly text: string; readonly
 
 export default function Home(): React.JSX.Element {
   const router = useRouter();
-  const [mode, setMode] = useState<Domain>('compliance');
-  const shown = MODES[mode];
+  // Ask about the law, ask anything, or review a contract against it.
+  const [mode, setMode] = useState<Domain | 'review'>('compliance');
+  const shown = mode === 'review' ? null : MODES[mode];
 
   return (
     <div className="flex min-h-screen flex-col">
@@ -107,7 +109,7 @@ export default function Home(): React.JSX.Element {
 
         <div className="mt-8">
           <div role="group" aria-label="What to ask" className="mb-3 inline-flex rounded-lg bg-raised p-1">
-            {(Object.keys(MODES) as Domain[]).map((id) => (
+            {[...(Object.keys(MODES) as Domain[]), 'review' as const].map((id) => (
               <button
                 key={id}
                 type="button"
@@ -117,19 +119,23 @@ export default function Home(): React.JSX.Element {
                   mode === id ? 'bg-surface text-ink shadow-sm' : 'text-ink-muted hover:text-ink'
                 }`}
               >
-                {MODES[id].label}
+                {id === 'review' ? 'Review a contract' : MODES[id].label}
               </button>
             ))}
           </div>
-          <QuestionForm
-            size="lg"
-            domain={mode}
-            placeholder={shown.placeholder}
-            examples={shown.examples}
-            hint={shown.hint}
-            submitLabel="Research"
-            onStarted={(runId) => router.push(`/runs/${runId}`)}
-          />
+          {mode === 'review' || shown === null ? (
+            <ReviewForm onStarted={(runId) => router.push(`/reviews/${runId}`)} />
+          ) : (
+            <QuestionForm
+              size="lg"
+              domain={mode}
+              placeholder={shown.placeholder}
+              examples={shown.examples}
+              hint={shown.hint}
+              submitLabel="Research"
+              onStarted={(runId) => router.push(`/runs/${runId}`)}
+            />
+          )}
         </div>
 
         <ul className="mt-12 grid gap-6 sm:grid-cols-3">
